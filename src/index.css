@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+@theme {
+  --color-m7-orange: #FFB800;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-black text-white font-sans antialiased;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  --color-m7-orange: #FFB800;
+  --color-primary: #FFB800;
+  --color-secondary: #3B82F6;
+  --color-tertiary: #EF4444;
+  --color-surface: #1A1A1A;
+  --color-surface-variant: #2A2A2A;
+  --color-on-surface: #FFFFFF;
+  --color-on-surface-variant: #9CA3AF;
+  --color-on-background: #FFFFFF;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-headline: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-black text-white font-sans antialiased;
+  }
+}
+
+@layer utilities {
+  .m7-gradient {
+    @apply bg-gradient-to-r from-m7-orange to-yellow-500;
+  }
+  
+  .m7-glow {
+    box-shadow: 0 0 15px rgba(255, 184, 0, 0.3);
+  }
+  
+  .blue-glow {
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.2);
+  }
+  
+  .red-glow {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.2);
+  }
+  
+  .glass-panel {
+    @apply bg-black/60 backdrop-blur-sm;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #FFB800;
+  --color-on-primary: #000000;
+  --color-background: #0A0A0A;
+  --color-darkpreto: ##ff0000;
+  --color-surface: #121212;
+  --color-surface-variant: #1A1A1A;
+  --color-outline: #333333;
+  --color-on-background: #FFFFFF;
+  --color-on-surface: #E0E0E0;
+  --color-on-surface-variant: #A0A0A0;
+  --color-success: #00E676;
+
+  --font-headline: "Outfit", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Inter", sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-on-background font-body antialiased selection:bg-primary selection:text-on-primary;
+    background-image: linear-gradient(rgba(10, 10, 10, 0.95), rgba(10, 10, 10, 0.95)), url(https://lh3.googleusercontent.com/aida/ADBb0ujyf30HxOaBLCmJ2YtoJfDKmL9d03iCk3MR0Jpxdebv4EkE9CF_ln6SwcNHDu11HWTG5Dv8dtl10GKf_R3GjksqQZd2wyqk9elOZp1mPrOkE8Sn3idfdmQPQrhBaTuaPer9lWRY9MCMrIjIUYoVM5M1DPwnUgYnrrslvxnA23qwL8HI5wk_YxJgiI4qCMdCr-RJO5dYxT7vgTYt84pnDpjCCKm326ANG4Lvn_uBxU46VQDI3GDI-zZ4SM_c_RtqwpJlEJsZ8hil_A);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .m7-gradient {
+    background: linear-gradient(135deg, #FFB800 0%, #E6A600 100%);
+  }
+  .m7-success-gradient {
+    background: linear-gradient(135deg, #00E676 0%, #00C853 100%);
+  }
+  .m7-glow {
+    box-shadow: 0 0 20px -5px rgba(255, 184, 0, 0.4);
+  }
+}
+
+/* Global scrollbar defaults */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: #FFB800;
+  border-radius: 10px;
+}
+
+
+
+
