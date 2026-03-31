@@ -98,13 +98,15 @@ export default function Vincular() {
     try {
       if (!supabase) return;
       
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (user) {
-        const { error } = await supabase
+        const { error, count } = await supabase
           .from('contas_riot')
-          .delete()
+          .delete({ count: 'exact' })
           .eq('user_id', user.id);
-        
+
+        console.log('[desvincular] error:', error, '| linhas afetadas:', count);
         if (error) throw error;
         
         setPopup({
@@ -476,7 +478,7 @@ export default function Vincular() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onFocus={() => sugestoes.length > 0 && setShowSuggestions(true)}
-                className="w-full bg-white/[0.05] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-lg text-white placeholder:text-white/20 focus:outline-none focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all"
+                className="w-full bg-black/[0.50] border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-lg text-white placeholder:text-white/20 focus:outline-none focus:border-primary/100 focus:ring-4 focus:ring-primary/10 transition-all"
               />
             </div>
 

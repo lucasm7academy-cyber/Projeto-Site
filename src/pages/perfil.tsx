@@ -9,6 +9,7 @@ import {
   X,
   Users,
   Tv2,
+  Youtube,
   MessageSquare,
   Wallet,
   LogOut,
@@ -444,9 +445,10 @@ export default function Perfil() {
   // Redes sociais
   const [instagram,     setInstagram]     = useState('');
   const [twitch,        setTwitch]        = useState('');
+  const [youtube,       setYoutube]       = useState('');
   const [discord,       setDiscord]       = useState('');
   const [editandoRedes, setEditandoRedes] = useState(false);
-  const [redesTemp,     setRedesTemp]     = useState({ instagram: '', twitch: '', discord: '' });
+  const [redesTemp,     setRedesTemp]     = useState({ instagram: '', twitch: '', youtube: '', discord: '' });
 
   const navigate = useNavigate();
 
@@ -484,6 +486,7 @@ export default function Perfil() {
         setLane2(perfilData.lane2 ?? 'Support');
         setInstagram(perfilData.instagram ?? '');
         setTwitch(perfilData.twitch ?? '');
+        setYoutube(perfilData.youtube ?? '');
         setDiscord(perfilData.discord ?? '');
         setChavePix(perfilData.chave_pix ?? '');
         setTipoChavePix(perfilData.tipo_chave_pix ?? '');
@@ -551,9 +554,15 @@ export default function Perfil() {
   const handleSalvarRedes = async () => {
     setInstagram(redesTemp.instagram);
     setTwitch(redesTemp.twitch);
+    setYoutube(redesTemp.youtube);
     setDiscord(redesTemp.discord);
     setEditandoRedes(false);
-    await salvarCampo({ instagram: redesTemp.instagram, twitch: redesTemp.twitch, discord: redesTemp.discord });
+    await salvarCampo({ 
+      instagram: redesTemp.instagram, 
+      twitch: redesTemp.twitch, 
+      youtube: redesTemp.youtube,
+      discord: redesTemp.discord 
+    });
   };
 
   const handleSair = async () => {
@@ -575,7 +584,7 @@ export default function Perfil() {
 
   return (
     <div 
-      className="min-h-screen text-white"
+      className="min-h-screen text-white bg-[#1c1c1c]"
     >
       <ModalPix
         aberto={modalPixAberto}
@@ -643,9 +652,9 @@ export default function Perfil() {
                     {eloSolo ? `${eloSolo.tier} ${eloSolo.rank}` : eloFlex ? `${eloFlex.tier} ${eloFlex.rank}` : 'Sem Rank'}
                   </p>
 
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-4 mt-4">
+                  <div className="mt-4">
                     {/* Bio Compacta */}
-                    <div className="flex-1 min-w-0 max-w-[150px] sm:max-w-[200px] md:max-w-xs lg:max-w-md">
+                    <div className="max-w-md">
                       {editandoBio ? (
                         <div className="flex items-center gap-2">
                           <input autoFocus type="text" value={bioTemp}
@@ -664,35 +673,6 @@ export default function Perfil() {
                           <Pencil className="w-3 h-3 text-white/10 group-hover:text-primary transition-colors" />
                         </div>
                       )}
-                    </div>
-
-                    {/* Ícones de Redes Sociais */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <a 
-                        href={instagram ? `https://instagram.com/${instagram.replace('@', '')}` : '#'} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className={`p-1.5 rounded-sm border transition-all ${instagram ? 'border-primary/80 text-primary hover:scale-110' : 'border-white/10 text-white/10 pointer-events-none'}`}
-                        style={instagram ? { filter: 'drop-shadow(0 0 2px rgba(255,184,0,0.6))' } : {}}
-                      >
-                        <IgIcon className="w-3.5 h-3.5" />
-                      </a>
-                      <a 
-                        href={twitch ? `https://twitch.tv/${twitch}` : '#'} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className={`p-1.5 rounded-sm border transition-all ${twitch ? 'border-primary/80 text-primary hover:scale-110' : 'border-white/10 text-white/10 pointer-events-none'}`}
-                        style={twitch ? { filter: 'drop-shadow(0 0 2px rgba(255,184,0,0.6))' } : {}}
-                      >
-                        <Tv2 className="w-3.5 h-3.5" />
-                      </a>
-                      <div 
-                        className={`p-1.5 rounded-sm border transition-all ${discord ? 'border-primary/80 text-primary' : 'border-white/10 text-white/10'}`}
-                        style={discord ? { filter: 'drop-shadow(0 0 2px rgba(255,184,0,0.6))' } : {}}
-                        title={discord || 'Não informado'}
-                      >
-                        <MessageSquare className="w-3.5 h-3.5" />
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -882,7 +862,7 @@ export default function Perfil() {
             <div className="flex items-center justify-between">
               <span className={LABEL_CLASS}>Redes Sociais</span>
               {!editandoRedes ? (
-                <button onClick={() => { setRedesTemp({ instagram, twitch, discord }); setEditandoRedes(true); }}
+                <button onClick={() => { setRedesTemp({ instagram, twitch, youtube, discord }); setEditandoRedes(true); }}
                   className="text-white/30 hover:text-primary transition-colors">
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -896,9 +876,10 @@ export default function Perfil() {
 
             <div className="space-y-3">
               {[
-                { icon: <IgIcon className="w-4 h-4" />, key: 'instagram' as const, label: 'Instagram', placeholder: '@usuario', value: instagram },
-                { icon: <Tv2 className="w-4 h-4" />,    key: 'twitch'    as const, label: 'Twitch',    placeholder: 'usuario',   value: twitch   },
-                { icon: <MessageSquare className="w-4 h-4" />, key: 'discord' as const, label: 'Discord', placeholder: 'usuario#0000', value: discord },
+                { icon: <IgIcon className="w-4 h-4" />, key: 'instagram' as const, label: 'Instagram', placeholder: 'Cole o link do seu Instagram', value: instagram },
+                { icon: <Tv2 className="w-4 h-4" />,    key: 'twitch'    as const, label: 'Twitch',    placeholder: 'Cole o link da sua Twitch',   value: twitch   },
+                { icon: <Youtube className="w-4 h-4" />, key: 'youtube' as const, label: 'YouTube',   placeholder: 'Cole o link do seu YouTube',  value: youtube  },
+                { icon: <MessageSquare className="w-4 h-4" />, key: 'discord' as const, label: 'Discord', placeholder: 'Cole o seu Discord (usuario#0000)', value: discord },
               ].map(({ icon, key, placeholder, value }) => (
                 <div key={key} className="flex items-center gap-3">
                   <span className="text-white/30 flex-shrink-0">{icon}</span>

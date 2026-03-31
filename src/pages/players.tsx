@@ -1,0 +1,957 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Users, Crown, TrendingUp, Trophy, Search,
+  ShieldCheck, Gamepad2, X, Medal,
+  Calendar, Activity, Target, Eye, Check, RefreshCw, Star, Upload
+} from 'lucide-react';
+import { useSound } from '../hooks/useSound';
+import { supabase } from '../lib/supabase';
+
+// ── Tipos ──────────────────────────────────────────────────────────────────
+type Role = 'TOP' | 'JG' | 'MID' | 'ADC' | 'SUP' | 'RES';
+type EloType = 'Ferro' | 'Bronze' | 'Prata' | 'Ouro' | 'Platina' | 'Esmeralda' | 'Diamante' | 'Mestre' | 'Grão-Mestre' | 'Desafiante';
+
+interface Jogador {
+  id: string;
+  riotId: string;
+  nome: string;
+  nivel: number;
+  elo: EloType;
+  iconeId: number;
+  partidas: number;
+  winRate: number;
+  titulos: number;
+  rolePrincipal: Role;
+  roleSecundaria: Role;
+  isVIP: boolean;
+  isVerified: boolean;
+  kda: number;
+  csPorMinuto: number;
+  participacaoKill: number;
+  conquistas: string[];
+  timeTag?: string;
+  timeColor?: string;
+}
+
+// ── Configuração visual ───────────────────────────────────────────────────
+const ROLE_CONFIG: Record<Role, { label: string; img: string; color: string; bg: string }> = {
+  TOP: { label: 'TOP', img: '/lanes_brancas/Top_iconB.png', color: 'text-red-400', bg: 'bg-red-400/10' },
+  JG: { label: 'JG', img: '/lanes_brancas/Jungle_iconB.png', color: 'text-green-400', bg: 'bg-green-400/10' },
+  MID: { label: 'MID', img: '/lanes_brancas/Middle_iconB.png', color: 'text-blue-400', bg: 'bg-blue-400/10' },
+  ADC: { label: 'ADC', img: '/lanes_brancas/Bottom_iconB.png', color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
+  SUP: { label: 'SUP', img: '/lanes_brancas/Support_iconB.png', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  RES: { label: 'RES', img: '/lanes_brancas/icon-position-fillB.png', color: 'text-gray-400', bg: 'bg-gray-400/10' },
+};
+
+// Cores dos Elos (bordas e glow)
+const ELO_STYLES: Record<EloType, { border: string; glow: string; text: string; bg: string; gradient: string }> = {
+  Ferro: { border: '#6c757d', glow: '#6c757d40', text: 'text-gray-500', bg: 'bg-gray-500/10', gradient: 'linear-gradient(135deg, #6c757d, #495057, #6c757d)' },
+  Bronze: { border: '#cd7f32', glow: '#cd7f3240', text: 'text-amber-600', bg: 'bg-amber-600/10', gradient: 'linear-gradient(135deg, #cd7f32, #a0522d, #cd7f32)' },
+  Prata: { border: '#c0c0c0', glow: '#c0c0c040', text: 'text-gray-300', bg: 'bg-gray-300/10', gradient: 'linear-gradient(135deg, #c0c0c0, #808080, #c0c0c0)' },
+  Ouro: { border: '#ffd700', glow: '#ffd70040', text: 'text-yellow-400', bg: 'bg-yellow-400/10', gradient: 'linear-gradient(135deg, #ffd700, #daa520, #ffd700)' },
+  Platina: { border: '#00e5ff', glow: '#00e5ff40', text: 'text-cyan-400', bg: 'bg-cyan-400/10', gradient: 'linear-gradient(135deg, #00e5ff, #00acc1, #00e5ff)' },
+  Esmeralda: { border: '#2ecc71', glow: '#2ecc7140', text: 'text-emerald-400', bg: 'bg-emerald-400/10', gradient: 'linear-gradient(135deg, #2ecc71, #27ae60, #2ecc71)' },
+  Diamante: { border: '#3498db', glow: '#3498db60', text: 'text-blue-400', bg: 'bg-blue-400/10', gradient: 'linear-gradient(135deg, #3498db, #2980b9, #3498db)' },
+  Mestre: { border: '#9b59b6', glow: '#9b59b680', text: 'text-purple-400', bg: 'bg-purple-400/10', gradient: 'linear-gradient(135deg, #9b59b6, #8e44ad, #9b59b6)' },
+  'Grão-Mestre': { border: '#e74c3c', glow: '#e74c3c80', text: 'text-red-400', bg: 'bg-red-400/10', gradient: 'linear-gradient(135deg, #e74c3c, #c0392b, #e74c3c)' },
+  Desafiante: { border: '#f1c40f', glow: '#f1c40fa0', text: 'text-yellow-300', bg: 'bg-yellow-300/10', gradient: 'linear-gradient(135deg, #f1c40f, #f39c12, #f1c40f)' },
+};
+
+const ELOS_ORDER: EloType[] = ['Ferro', 'Bronze', 'Prata', 'Ouro', 'Platina', 'Esmeralda', 'Diamante', 'Mestre', 'Grão-Mestre', 'Desafiante'];
+const ROLES_ORDER: Role[] = ['TOP', 'JG', 'MID', 'ADC', 'SUP'];
+
+const getIconeUrl = (iconeId: number) => {
+  return `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${iconeId}.png`;
+};
+
+// ── Dados Mockados (com times e VIP) ───────────────────────────────────────
+const JOGADORES_MOCK: Jogador[] = [
+  {
+    id: '1', riotId: 'Faker#KR1', nome: 'Faker', nivel: 982, elo: 'Desafiante',
+    iconeId: 28, partidas: 12450, winRate: 72.5, titulos: 4,
+    rolePrincipal: 'MID', roleSecundaria: 'TOP',
+    isVIP: true, isVerified: true, kda: 4.8, csPorMinuto: 8.7, participacaoKill: 72.5,
+    conquistas: ['Campeão Mundial 3x', 'MVP Finals', 'All-Star 5x'],
+    timeTag: 'T1', timeColor: '#e74c3c',
+  },
+  {
+    id: '2', riotId: 'Caps#EUW', nome: 'Caps', nivel: 845, elo: 'Grão-Mestre',
+    iconeId: 29, partidas: 8920, winRate: 64.8, titulos: 2,
+    rolePrincipal: 'MID', roleSecundaria: 'ADC',
+    isVIP: true, isVerified: true, kda: 4.2, csPorMinuto: 8.5, participacaoKill: 68.3,
+    conquistas: ['Campeão Mundial', 'MVP LEC', 'All-Star 3x'],
+    timeTag: 'G2', timeColor: '#f1c40f',
+  },
+  {
+    id: '3', riotId: 'Chovy#KR2', nome: 'Chovy', nivel: 901, elo: 'Desafiante',
+    iconeId: 30, partidas: 10340, winRate: 68.1, titulos: 1,
+    rolePrincipal: 'MID', roleSecundaria: 'TOP',
+    isVIP: false, isVerified: true, kda: 5.2, csPorMinuto: 9.2, participacaoKill: 74.1,
+    conquistas: ['MVP LCK 2x', 'All-Star 2x'],
+    timeTag: 'GEN', timeColor: '#3498db',
+  },
+  {
+    id: '4', riotId: 'Jankos#EUW', nome: 'Jankos', nivel: 756, elo: 'Mestre',
+    iconeId: 33, partidas: 11230, winRate: 55.2, titulos: 1,
+    rolePrincipal: 'JG', roleSecundaria: 'SUP',
+    isVIP: false, isVerified: true, kda: 3.8, csPorMinuto: 6.2, participacaoKill: 75.3,
+    conquistas: ['Campeão Mundial', 'MVP LEC'],
+    timeTag: undefined, timeColor: '#00ff88',
+  },
+  {
+    id: '5', riotId: 'Uzi#CN2', nome: 'Uzi', nivel: 891, elo: 'Desafiante',
+    iconeId: 34, partidas: 13450, winRate: 69.2, titulos: 2,
+    rolePrincipal: 'ADC', roleSecundaria: 'MID',
+    isVIP: true, isVerified: true, kda: 5.5, csPorMinuto: 9.1, participacaoKill: 68.7,
+    conquistas: ['Campeão Mundial', 'MVP LPL', 'All-Star 4x'],
+    timeTag: 'RNG', timeColor: '#ff6b6b',
+  },
+  {
+    id: '6', riotId: 'Doublelift#NA1', nome: 'Doublelift', nivel: 723, elo: 'Diamante',
+    iconeId: 35, partidas: 9870, winRate: 61.8, titulos: 8,
+    rolePrincipal: 'ADC', roleSecundaria: 'SUP',
+    isVIP: false, isVerified: true, kda: 4.1, csPorMinuto: 8.3, participacaoKill: 65.2,
+    conquistas: ['Campeão LCS 8x', 'All-Star 7x'],
+    timeTag: 'TL', timeColor: '#00a6ff',
+  },
+  {
+    id: '7', riotId: 'CoreJJ#NA1', nome: 'CoreJJ', nivel: 678, elo: 'Mestre',
+    iconeId: 36, partidas: 7650, winRate: 64.2, titulos: 2,
+    rolePrincipal: 'SUP', roleSecundaria: 'ADC',
+    isVIP: false, isVerified: true, kda: 3.9, csPorMinuto: 1.8, participacaoKill: 78.5,
+    conquistas: ['Campeão Mundial', 'MVP LCS'],
+    timeTag: undefined, timeColor: '#00a6ff',
+  },
+  {
+    id: '8', riotId: 'Canyon#KR4', nome: 'Canyon', nivel: 823, elo: 'Desafiante',
+    iconeId: 38, partidas: 9120, winRate: 67.8, titulos: 1,
+    rolePrincipal: 'JG', roleSecundaria: 'TOP',
+    isVIP: true, isVerified: true, kda: 4.3, csPorMinuto: 6.8, participacaoKill: 73.2,
+    conquistas: ['Campeão Mundial', 'MVP LCK'],
+    timeTag: 'DK', timeColor: '#1e88e5',
+  },
+  {
+    id: '9', riotId: 'ShowMaker#KR1', nome: 'ShowMaker', nivel: 789, elo: 'Desafiante',
+    iconeId: 40, partidas: 8500, winRate: 65.5, titulos: 1,
+    rolePrincipal: 'MID', roleSecundaria: 'JG',
+    isVIP: false, isVerified: true, kda: 4.5, csPorMinuto: 8.2, participacaoKill: 70.1,
+    conquistas: ['Campeão Mundial'],
+    timeTag: 'DK', timeColor: '#1e88e5',
+  },
+  {
+    id: '10', riotId: 'Ruler#CN1', nome: 'Ruler', nivel: 812, elo: 'Desafiante',
+    iconeId: 41, partidas: 9200, winRate: 68.4, titulos: 1,
+    rolePrincipal: 'ADC', roleSecundaria: 'MID',
+    isVIP: true, isVerified: true, kda: 4.9, csPorMinuto: 8.9, participacaoKill: 69.5,
+    conquistas: ['Campeão Mundial', 'MVP LPL'],
+    timeTag: 'JDG', timeColor: '#ff0000',
+  },
+  {
+    id: '11', riotId: 'Knight#CN1', nome: 'Knight', nivel: 756, elo: 'Desafiante',
+    iconeId: 42, partidas: 7800, winRate: 66.2, titulos: 0,
+    rolePrincipal: 'MID', roleSecundaria: 'JG',
+    isVIP: false, isVerified: true, kda: 4.7, csPorMinuto: 8.4, participacaoKill: 71.2,
+    conquistas: ['MVP LPL'],
+    timeTag: 'BLG', timeColor: '#00d2ff',
+  },
+  {
+    id: '12', riotId: 'Bin#CN1', nome: 'Bin', nivel: 723, elo: 'Grão-Mestre',
+    iconeId: 43, partidas: 7100, winRate: 62.1, titulos: 0,
+    rolePrincipal: 'TOP', roleSecundaria: 'JG',
+    isVIP: false, isVerified: true, kda: 3.9, csPorMinuto: 7.8, participacaoKill: 64.5,
+    conquistas: ['Finalista Mundial'],
+    timeTag: 'BLG', timeColor: '#00d2ff',
+  },
+  {
+    id: '13', riotId: 'Keria#KR1', nome: 'Keria', nivel: 845, elo: 'Desafiante',
+    iconeId: 44, partidas: 8900, winRate: 67.5, titulos: 1,
+    rolePrincipal: 'SUP', roleSecundaria: 'MID',
+    isVIP: true, isVerified: true, kda: 4.1, csPorMinuto: 1.5, participacaoKill: 80.2,
+    conquistas: ['Campeão Mundial', 'All-Star'],
+    timeTag: 'T1', timeColor: '#e74c3c',
+  },
+  {
+    id: '14', riotId: 'Gumayusi#KR1', nome: 'Gumayusi', nivel: 832, elo: 'Desafiante',
+    iconeId: 45, partidas: 8700, winRate: 66.8, titulos: 1,
+    rolePrincipal: 'ADC', roleSecundaria: 'TOP',
+    isVIP: false, isVerified: true, kda: 4.6, csPorMinuto: 9.0, participacaoKill: 67.8,
+    conquistas: ['Campeão Mundial'],
+    timeTag: 'T1', timeColor: '#e74c3c',
+  },
+  {
+    id: '15', riotId: 'Oner#KR1', nome: 'Oner', nivel: 812, elo: 'Desafiante',
+    iconeId: 46, partidas: 8400, winRate: 65.2, titulos: 1,
+    rolePrincipal: 'JG', roleSecundaria: 'TOP',
+    isVIP: false, isVerified: true, kda: 4.0, csPorMinuto: 6.5, participacaoKill: 72.1,
+    conquistas: ['Campeão Mundial'],
+    timeTag: 'T1', timeColor: '#e74c3c',
+  },
+  {
+    id: '16', riotId: 'Zeus#KR1', nome: 'Zeus', nivel: 856, elo: 'Desafiante',
+    iconeId: 47, partidas: 9100, winRate: 69.1, titulos: 1,
+    rolePrincipal: 'TOP', roleSecundaria: 'MID',
+    isVIP: true, isVerified: true, kda: 4.2, csPorMinuto: 8.1, participacaoKill: 66.5,
+    conquistas: ['Campeão Mundial', 'MVP Finals'],
+    timeTag: 'T1', timeColor: '#e74c3c',
+  },
+  {
+    id: '17', riotId: 'BeryL#KR1', nome: 'BeryL', nivel: 745, elo: 'Mestre',
+    iconeId: 48, partidas: 10200, winRate: 58.5, titulos: 2,
+    rolePrincipal: 'SUP', roleSecundaria: 'MID',
+    isVIP: false, isVerified: true, kda: 3.5, csPorMinuto: 1.2, participacaoKill: 76.8,
+    conquistas: ['Campeão Mundial 2x'],
+    timeTag: undefined, timeColor: '#ffffff',
+  },
+  {
+    id: '18', riotId: 'Deft#KR1', nome: 'Deft', nivel: 892, elo: 'Desafiante',
+    iconeId: 49, partidas: 14500, winRate: 64.2, titulos: 1,
+    rolePrincipal: 'ADC', roleSecundaria: 'MID',
+    isVIP: true, isVerified: true, kda: 4.4, csPorMinuto: 8.8, participacaoKill: 65.1,
+    conquistas: ['Campeão Mundial', 'MVP LCK'],
+    timeTag: 'KT', timeColor: '#ff0000',
+  },
+  {
+    id: '19', riotId: 'Pyosik#KR1', nome: 'Pyosik', nivel: 712, elo: 'Diamante',
+    iconeId: 50, partidas: 8200, winRate: 56.4, titulos: 1,
+    rolePrincipal: 'JG', roleSecundaria: 'TOP',
+    isVIP: false, isVerified: true, kda: 3.7, csPorMinuto: 6.1, participacaoKill: 71.5,
+    conquistas: ['Campeão Mundial'],
+    timeTag: 'KT', timeColor: '#ff0000',
+  },
+  {
+    id: '20', riotId: 'Bdd#KR1', nome: 'Bdd', nivel: 767, elo: 'Grão-Mestre',
+    iconeId: 51, partidas: 9400, winRate: 61.2, titulos: 0,
+    rolePrincipal: 'MID', roleSecundaria: 'JG',
+    isVIP: false, isVerified: true, kda: 4.3, csPorMinuto: 8.1, participacaoKill: 69.8,
+    conquistas: ['MVP LCK'],
+    timeTag: 'KT', timeColor: '#ff0000',
+  },
+];
+
+// ── ModalBase ──────────────────────────────────────────────────────────────
+const ModalBase = ({ onClose, children, title, gradientFrom = '#FFB700' }: { 
+  onClose: () => void; 
+  children: React.ReactNode; 
+  title?: string;
+  gradientFrom?: string;
+}) => (
+  <motion.div 
+    initial={{ opacity: 0 }} 
+    animate={{ opacity: 1 }} 
+    exit={{ opacity: 0 }} 
+    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+    onClick={onClose}
+  >
+    <motion.div 
+      initial={{ opacity: 0, scale: 0.92, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.92, y: 20 }}
+      transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+      className="relative w-full max-w-2xl rounded-2xl overflow-hidden"
+      style={{ 
+        background: '#0d0d0d', 
+        border: `2px solid transparent`,
+        backgroundImage: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${gradientFrom}, ${gradientFrom}80) border-box`,
+        boxShadow: `0 0 45px -10px ${gradientFrom}60`
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {title && (
+        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+          <h2 className="text-white font-black text-lg tracking-tight uppercase">{title}</h2>
+          <button onClick={onClose} className="text-white/20 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+      <div className="p-6">{children}</div>
+    </motion.div>
+  </motion.div>
+);
+
+// ── PlayerDetailModal ──────────────────────────────────────────────────────
+const PlayerDetailModal = ({ jogador, puuid, onClose }: {
+  jogador: Jogador;
+  puuid?: string;
+  onClose: () => void;
+}) => {
+  const { playSound } = useSound();
+  const roleConfig = ROLE_CONFIG[jogador.rolePrincipal];
+  const PRIMARY_COLOR = '#FFB700';
+
+  const [stats, setStats] = useState<{
+    eloDisplay: string;
+    eloType: EloType;
+    partidas: number;
+    winRate: number;
+  } | null>(null);
+  const [loadingStats, setLoadingStats] = useState(!!puuid);
+
+  useEffect(() => {
+    if (!puuid) { setLoadingStats(false); return; }
+    buscarStatsModal(puuid).then(s => {
+      if (s) setStats({ eloDisplay: s.rank, eloType: s.elo, partidas: s.partidas, winRate: s.winRate });
+      setLoadingStats(false);
+    });
+  }, [puuid]);
+
+  const eloFinal: EloType = stats?.eloType ?? jogador.elo;
+  const eloStyle = ELO_STYLES[eloFinal];
+
+  return (
+    <ModalBase onClose={onClose} title={jogador.riotId} gradientFrom={eloStyle.border}>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center gap-5">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full blur-xl" style={{ background: eloStyle.border }} />
+            <img
+              src={getIconeUrl(jogador.iconeId)}
+              className="w-24 h-24 rounded-full border-3 relative z-10 shadow-2xl"
+              style={{ borderColor: eloStyle.border }}
+              alt={jogador.nome}
+            />
+            <div className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full text-[11px] font-bold text-black border-2 border-[#0a0a0a] z-20"
+              style={{ background: PRIMARY_COLOR }}>
+              {jogador.nivel}
+            </div>
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2">
+              <h3 className="text-2xl font-black text-white">{jogador.riotId}</h3>
+              {jogador.isVerified && <ShieldCheck className="w-5 h-5" style={{ color: eloStyle.border }} />}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${eloStyle.bg} ${eloStyle.text}`}>
+                {loadingStats ? '...' : (stats?.eloDisplay ?? eloFinal)}
+              </span>
+              {jogador.timeTag && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
+                  style={{ background: `${jogador.timeColor}20`, color: jogador.timeColor, border: `1px solid ${jogador.timeColor}40` }}>
+                  #{jogador.timeTag}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { icon: <Activity className="w-4 h-4" />, label: 'Partidas',  value: loadingStats ? '...' : (stats?.partidas ?? 0).toLocaleString() },
+            { icon: <TrendingUp className="w-4 h-4" />, label: 'Win Rate', value: loadingStats ? '...' : `${stats?.winRate ?? 0}%`, color: (stats?.winRate ?? 0) >= 50 ? '#4ade80' : '#ef4444' },
+            { icon: <Trophy className="w-4 h-4" />, label: 'Títulos', value: jogador.titulos },
+            { icon: <Gamepad2 className="w-4 h-4" />, label: 'KDA', value: '—' },
+            { icon: <Activity className="w-4 h-4" />, label: 'CS/min',   value: '—' },
+            { icon: <Users className="w-4 h-4" />, label: 'KP%',        value: '—' },
+          ].map((stat, idx) => (
+            <div key={idx} className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
+              <div className="flex items-center justify-center gap-1 mb-1 text-white/40">
+                {stat.icon}
+                <span className="text-[10px] font-bold uppercase">{stat.label}</span>
+              </div>
+              <p className="text-white font-black text-lg" style={stat.color ? { color: stat.color } : {}}>{stat.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Roles */}
+        <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+          <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">Posições</p>
+          <div className="flex items-center gap-3">
+            <div className={`flex items-center gap-2 px-3 py-2 rounded-full ${roleConfig.bg} border border-white/10`}>
+              <img src={roleConfig.img} alt={roleConfig.label} className="w-5 h-5 object-contain" />
+              <span className={`text-sm font-bold ${roleConfig.color}`}>Principal: {roleConfig.label}</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/5 border border-white/5">
+              <img src={ROLE_CONFIG[jogador.roleSecundaria].img} alt={ROLE_CONFIG[jogador.roleSecundaria].label} className="w-4 h-4 object-contain opacity-60" />
+              <span className="text-xs text-white/40">{ROLE_CONFIG[jogador.roleSecundaria].label}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Conquistas */}
+        {jogador.conquistas.length > 0 && (
+          <div className="bg-white/5 rounded-xl p-4 border border-white/5">
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">Conquistas</p>
+            <div className="flex flex-wrap gap-2">
+              {jogador.conquistas.map((conquista, idx) => (
+                <div key={idx} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10 border border-primary/20">
+                  <Medal className="w-3 h-3 text-primary" />
+                  <span className="text-xs text-white/80">{conquista}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-2 border-t border-white/5">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-3 h-3 text-white/30" />
+            <span className="text-[10px] text-white/30">Temporada 2025</span>
+          </div>
+          <button
+            onClick={() => { playSound('click'); onClose(); }}
+            className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white/60 transition-all"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </ModalBase>
+  );
+};
+
+// ── Mapas ──────────────────────────────────────────────────────────────────
+const TIER_MAP: Record<string, EloType> = {
+  IRON: 'Ferro', BRONZE: 'Bronze', SILVER: 'Prata', GOLD: 'Ouro',
+  PLATINUM: 'Platina', EMERALD: 'Esmeralda', DIAMOND: 'Diamante',
+  MASTER: 'Mestre', GRANDMASTER: 'Grão-Mestre', CHALLENGER: 'Desafiante',
+};
+
+const LANE_MAP: Record<string, Role> = {
+  Top: 'TOP', Jungle: 'JG', Middle: 'MID', Bottom: 'ADC', Support: 'SUP', Fill: 'RES',
+};
+
+// ── Carregador Supabase ────────────────────────────────────────────────────
+async function carregarJogadores(): Promise<Jogador[]> {
+  // Apenas colunas garantidas (elo/tier não são salvas no cadastro)
+  const { data: contas, error } = await supabase
+    .from('contas_riot')
+    .select('user_id, riot_id, puuid, profile_icon_id, level');
+
+  if (error) { console.error('[players] erro ao buscar contas_riot:', error); return []; }
+  if (!contas || contas.length === 0) { console.warn('[players] nenhuma conta encontrada'); return []; }
+
+  const userIds = contas.map((c: any) => c.user_id);
+
+  const [{ data: perfis }, { data: membros }] = await Promise.all([
+    supabase.from('profiles').select('id, lane, lane2').in('id', userIds),
+    supabase.from('time_membros').select('user_id, time_id').in('user_id', userIds),
+  ]);
+
+  const timeIds = [...new Set((membros ?? []).map((m: any) => m.time_id))];
+  const { data: times } = timeIds.length > 0
+    ? await supabase.from('times').select('id, tag, gradient_from').in('id', timeIds)
+    : { data: [] };
+
+  const perfilMap = Object.fromEntries((perfis ?? []).map((p: any) => [p.id, p]));
+  const membroMap = Object.fromEntries((membros ?? []).map((m: any) => [m.user_id, m]));
+  const timeMap   = Object.fromEntries((times  ?? []).map((t: any) => [t.id, t]));
+
+  return contas.map((c: any) => {
+    const perfil = perfilMap[c.user_id] ?? {};
+    const membro = membroMap[c.user_id];
+    const time   = membro ? timeMap[membro.time_id] : null;
+
+    // Elo será buscado da Riot API ao abrir o modal; aqui fica Ferro como placeholder
+    const eloType: EloType = 'Ferro';
+
+    return {
+      id:               c.user_id,
+      riotId:           c.riot_id ?? 'Jogador',
+      nome:             (c.riot_id ?? 'Jogador').split('#')[0],
+      nivel:            c.level ?? 1,
+      elo:              eloType,
+      iconeId:          c.profile_icon_id ?? 1,
+      partidas:         0,
+      winRate:          0,
+      titulos:          0,
+      rolePrincipal:    (LANE_MAP[perfil.lane]  ?? 'MID') as Role,
+      roleSecundaria:   (LANE_MAP[perfil.lane2] ?? 'RES') as Role,
+      isVIP:            false,
+      isVerified:       true,
+      kda:              0,
+      csPorMinuto:      0,
+      participacaoKill: 0,
+      conquistas:       [],
+      timeTag:          time?.tag ?? undefined,
+      timeColor:        time?.gradient_from ?? undefined,
+      // guarda puuid para buscar stats na Riot API ao abrir o modal
+      _puuid:      c.puuid ?? undefined,
+      _carregando: true,
+    } as Jogador & { _puuid?: string; _carregando?: boolean };
+  });
+}
+
+// ── Busca stats da Riot API (chamada ao abrir o modal) ─────────────────────
+import { buscarElo } from '../api/riot';
+
+interface StatsModal {
+  elo: EloType;
+  rank: string;
+  pdl: number;
+  partidas: number;
+  winRate: number;
+  kda: number;
+  csPorMinuto: number;
+  participacaoKill: number;
+}
+
+async function buscarStatsModal(puuid: string): Promise<StatsModal | null> {
+  try {
+    const ranqueadas = await buscarElo(puuid);
+
+    const solo = (ranqueadas ?? []).find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
+    const tier = solo?.tier ?? '';
+    const eloType: EloType = TIER_MAP[tier] ?? 'Ferro';
+
+    return {
+      elo:              eloType,
+      rank:             solo ? `${solo.tier} ${solo.rank}` : 'Sem Rank',
+      pdl:              solo?.leaguePoints ?? 0,
+      partidas:         (solo?.wins ?? 0) + (solo?.losses ?? 0),
+      winRate:          solo ? Math.round((solo.wins / ((solo.wins + solo.losses) || 1)) * 100) : 0,
+      kda:              0, // Riot API requer cálculo por partida individal
+      csPorMinuto:      0,
+      participacaoKill: 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ── Componente Principal ────────────────────────────────────────────────────
+export default function App() {
+  const { playSound } = useSound();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [todosJogadores, setTodosJogadores] = useState<Jogador[]>([]);
+  const [jogadores, setJogadores] = useState<Jogador[]>([]);
+  const [filtroElo, setFiltroElo] = useState<EloType | 'todos'>('todos');
+  const [filtroRole, setFiltroRole] = useState<Role | 'todos'>('todos');
+  const [loading, setLoading] = useState(true);
+  const [selectedJogador, setSelectedJogador] = useState<Jogador | null>(null);
+  const [selectedPuuid, setSelectedPuuid] = useState<string | undefined>(undefined);
+  const [popup, setPopup] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
+  const [visibleCount, setVisibleCount] = useState(8);
+  const [headerBannerUrl, setHeaderBannerUrl] = useState<string | null>(null);
+
+  const PRIMARY_COLOR = '#FFB700';
+
+  // Carrega do Supabase na montagem
+  useEffect(() => {
+    carregarJogadores().then(lista => {
+      setTodosJogadores(lista);
+      setJogadores(lista);
+      setLoading(false);
+    });
+  }, []);
+
+  // Após carregar a lista, busca elo + partidas + winrate de cada player em background
+  useEffect(() => {
+    if (todosJogadores.length === 0) return;
+    let cancelado = false;
+
+    const atualizar = async () => {
+      for (const jogador of todosJogadores) {
+        if (cancelado) break;
+        const puuid = (jogador as any)._puuid;
+        if (!puuid) continue;
+        try {
+          const ranqueadas = await buscarElo(puuid);
+          const solo = (ranqueadas ?? []).find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
+          const eloType: EloType = solo ? (TIER_MAP[solo.tier] ?? 'Ferro') : 'Ferro';
+          const partidas = solo ? (solo.wins + solo.losses) : 0;
+          const winRate  = solo && partidas > 0 ? Math.round((solo.wins / partidas) * 100) : 0;
+          if (cancelado) break;
+          setTodosJogadores(prev =>
+            prev.map((j: any) =>
+              j.id === jogador.id
+                ? { ...j, elo: eloType, partidas, winRate, _carregando: false }
+                : j
+            )
+          );
+        } catch {
+          // marca como carregado mesmo sem dados
+          setTodosJogadores(prev =>
+            prev.map((j: any) => j.id === jogador.id ? { ...j, _carregando: false } : j)
+          );
+        }
+        await new Promise(r => setTimeout(r, 350));
+      }
+    };
+
+    atualizar();
+    return () => { cancelado = true; };
+  }, [todosJogadores.length]);
+
+  const handleHeaderBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setHeaderBannerUrl(reader.result as string);
+        setPopup({ type: 'success', message: 'Fundo do cabeçalho atualizado!' });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + document.documentElement.scrollTop + 100 >= document.documentElement.offsetHeight) {
+        setVisibleCount(prev => Math.min(prev + 4, jogadores.length));
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [jogadores.length]);
+
+  useEffect(() => {
+    if (popup) {
+      const timer = setTimeout(() => setPopup(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [popup]);
+
+  // Filtragem reativa sobre os dados já carregados
+  useEffect(() => {
+    let filtrados = [...todosJogadores];
+    if (searchTerm) {
+      filtrados = filtrados.filter(j =>
+        j.riotId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        j.nome.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    if (filtroElo !== 'todos') filtrados = filtrados.filter(j => j.elo === filtroElo);
+    if (filtroRole !== 'todos') filtrados = filtrados.filter(j => j.rolePrincipal === filtroRole || j.roleSecundaria === filtroRole);
+    setJogadores(filtrados);
+    setVisibleCount(8);
+  }, [searchTerm, filtroElo, filtroRole, todosJogadores]);
+
+  const handleVerPerfil = (jogador: Jogador) => {
+    playSound('click');
+    setSelectedJogador(jogador);
+    setSelectedPuuid((jogador as any)._puuid);
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Popup */}
+      <AnimatePresence>
+        {popup && (
+          <motion.div
+            initial={{ opacity: 0, y: -50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            className={`fixed top-20 left-1/2 -translate-x-1/2 z-[70] px-6 py-3 rounded-xl shadow-lg flex items-center gap-3 ${
+              popup.type === 'error' ? 'bg-red-500/90' : popup.type === 'success' ? 'bg-green-500/90' : 'bg-blue-500/90'
+            } text-white`}
+          >
+            {popup.type === 'error' && <X className="w-5 h-5" />}
+            {popup.type === 'success' && <Check className="w-5 h-5" />}
+            <span className="font-medium">{popup.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal Detalhes */}
+      <AnimatePresence>
+        {selectedJogador && (
+          <PlayerDetailModal jogador={selectedJogador} puuid={selectedPuuid} onClose={() => { setSelectedJogador(null); setSelectedPuuid(undefined); }} />
+        )}
+      </AnimatePresence>
+
+      {/* Header banner */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }} 
+        animate={{ opacity: 1, y: 0 }}
+        className="relative overflow-hidden rounded-2xl border border-white/8 p-6 group mb-8"
+        style={{ background: 'linear-gradient(135deg, #2a1a00 0%, #0a0a0a 60%)' }}
+      >
+        {headerBannerUrl && (
+          <div className="absolute inset-0 z-0">
+            <img 
+              src={headerBannerUrl} 
+              alt="" 
+              className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
+              referrerPolicy="no-referrer"
+            />
+
+            {/* 🔥 DEGRADE LATERAL CONTÍNUO */}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 via-black/20 to-black/10" />
+          </div>
+        )}
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Users className="w-5 h-5" style={{ color: PRIMARY_COLOR }} />
+              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: PRIMARY_COLOR }}>
+                Arena de Jogadores
+              </span>
+            </div>
+
+            <h1 className="text-2xl md:text-3xl font-black text-white mb-2 uppercase italic tracking-tighter">
+              Jogadores <span style={{ color: PRIMARY_COLOR }}>Rankeados</span>
+            </h1>
+
+            <p className="text-white/50 text-sm max-w-lg">
+              Conheça os melhores invocadores da comunidade, suas estatísticas e conquistas.
+            </p>
+          </div>
+
+          <label className="shrink-0 cursor-pointer">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleHeaderBannerUpload}
+            />
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold text-xs transition-all backdrop-blur-md">
+              <Upload className="w-3.5 h-3.5" />
+              {headerBannerUrl ? 'Trocar Fundo' : 'Adicionar Fundo'}
+            </div>
+          </label>
+        </div>
+
+        {!headerBannerUrl && (
+          <div 
+            className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-20"
+            style={{ background: 'radial-gradient(circle, #FFB700, transparent)' }}
+          />
+        )}
+      </motion.div>
+
+      {/* Filtros */}
+      <div className="w-full rounded-[28px] p-[1.5px] mb-12 relative overflow-hidden group"
+        style={{ 
+          background: `linear-gradient(135deg, #FFD700, #FFB700, #FF8C00, #FFD700)`,
+          boxShadow: `0 0 40px -15px ${PRIMARY_COLOR}60`
+        }}
+      >
+        <div className="bg-[#0d0d0d] rounded-[26.5px] p-6 relative z-10">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+            {/* Busca */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                <Search className="text-white/30 w-5 h-5" />
+              </div>
+              <input
+                type="text"
+                placeholder="Buscar por Riot ID ou nome..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-white placeholder:text-white/20 focus:outline-none transition-all"
+              />
+            </div>
+
+            {/* Filtro Elo */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                <Trophy className="text-white/30 w-4 h-4" />
+              </div>
+              <select
+                value={filtroElo}
+                onChange={(e) => setFiltroElo(e.target.value as EloType | 'todos')}
+                className="w-full bg-black/50 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-white/80 focus:outline-none cursor-pointer appearance-none"
+              >
+                <option value="todos">Todos os Elos</option>
+                {ELOS_ORDER.map(elo => (
+                  <option key={elo} value={elo}>{elo}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Filtro Role */}
+            <div className="relative">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                <Gamepad2 className="text-white/30 w-4 h-4" />
+              </div>
+              <select
+                value={filtroRole}
+                onChange={(e) => setFiltroRole(e.target.value as Role | 'todos')}
+                className="w-full bg-black/50 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-white/80 focus:outline-none cursor-pointer appearance-none"
+              >
+                <option value="todos">Todas as Roles</option>
+                {ROLES_ORDER.map(role => (
+                  <option key={role} value={role}>{ROLE_CONFIG[role].label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Lista de Jogadores */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-12 h-12 border-2 rounded-full animate-spin"
+            style={{ borderColor: PRIMARY_COLOR, borderTopColor: 'transparent' }}
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <AnimatePresence>
+            {jogadores.slice(0, visibleCount).map((jogador, index) => {
+              const roleConfig = ROLE_CONFIG[jogador.rolePrincipal];
+              const roleSecConfig = ROLE_CONFIG[jogador.roleSecundaria];
+              const eloStyle = ELO_STYLES[jogador.elo];
+              const carregando = (jogador as any)._carregando;
+              const winRateColor = jogador.winRate >= 50 ? '#4ade80' : '#ef4444';
+              
+              return (
+                <motion.div
+                  key={jogador.id}
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ delay: (index % 8) * 0.05 }}
+                  className="group relative cursor-pointer p-[1.5px] rounded-[28px] transition-all hover:-translate-y-1"
+                  style={{ background: eloStyle.gradient }}
+                  onClick={() => handleVerPerfil(jogador)}
+                >
+                  <div className="relative rounded-[26.5px] p-5 overflow-hidden"
+                    style={{ 
+                      background: '#0d0d0d',
+                    }}
+                  >
+                    {/* VIP Indicator */}
+                    {jogador.isVIP && (
+                      <div className="absolute top-4 right-4 flex items-center gap-1 z-10">
+                        <span className="text-[18px] font-black uppercase tracking-wider" 
+                          style={{ color: PRIMARY_COLOR, textShadow: `0 0 10px ${PRIMARY_COLOR}80` }}
+                        >
+                          VIP
+                        </span>
+                      </div>
+                    )}
+                    
+                    {/* Ícone e Info */}
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 rounded-full blur-[3px] opacity-40 group-hover:opacity-100 transition-opacity"
+                          style={{ background: eloStyle.border }}
+                        />
+                        <img 
+                          src={getIconeUrl(jogador.iconeId)} 
+                          className="w-16 h-16 rounded-full border-2 relative z-10 shadow-xl"
+                          style={{ borderColor: eloStyle.border }}
+                          alt={jogador.nome}
+                        />
+                        <div className="absolute -bottom-1 -right-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold text-black border-2 border-[#0a0a0a] z-20"
+                          style={{ background: PRIMARY_COLOR }}
+                        >
+                          {jogador.nivel}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-white font-black text-lg tracking-tight">{jogador.riotId}</p>
+                          {jogador.isVerified && (
+                            <ShieldCheck className="w-3 h-3" style={{ color: eloStyle.border }} />
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${eloStyle.bg} ${eloStyle.text}`}>
+                            {jogador.elo}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Stats */}
+                    <div className="grid grid-cols-3 gap-2 mb-4">
+                      <div className="text-center p-2 bg-white/[0.02] rounded-xl">
+                        {carregando
+                          ? <div className="h-4 w-8 bg-white/10 rounded animate-pulse mx-auto mb-1" />
+                          : <p className="text-white font-black text-sm">{jogador.partidas.toLocaleString()}</p>
+                        }
+                        <p className="text-[8px] text-white/40 uppercase tracking-wider">Partidas</p>
+                      </div>
+                      <div className="text-center p-2 bg-white/[0.02] rounded-xl">
+                        {carregando
+                          ? <div className="h-4 w-8 bg-white/10 rounded animate-pulse mx-auto mb-1" />
+                          : <p className="font-black text-sm" style={{ color: winRateColor }}>{jogador.winRate}%</p>
+                        }
+                        <p className="text-[8px] text-white/40 uppercase tracking-wider">Win Rate</p>
+                      </div>
+                      <div className="text-center p-2 bg-white/[0.02] rounded-xl">
+                        <p className="text-white font-black text-sm">{jogador.titulos}</p>
+                        <p className="text-[8px] text-white/40 uppercase tracking-wider">Títulos</p>
+                      </div>
+                    </div>
+                    
+                    {/* Roles Principal e Secundária */}
+                    <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                      <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          <img src={roleConfig.img} alt={roleConfig.label} className="w-4 h-4 object-contain" />
+                          <span className={`text-xs font-bold ${roleConfig.color}`}>{roleConfig.label}</span>
+                        </div>
+                        <span className="text-white/30 text-[10px]">/</span>
+                        <div className="flex items-center gap-1">
+                          <img src={roleSecConfig.img} alt={roleSecConfig.label} className="w-3 h-3 object-contain opacity-60" />
+                          <span className="text-[10px] text-white/40">{roleSecConfig.label}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {jogador.timeTag && (
+                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-black uppercase tracking-tighter"
+                            style={{ background: `${jogador.timeColor}20`, color: jogador.timeColor, border: `1px solid ${jogador.timeColor}40` }}
+                          >
+                            #{jogador.timeTag.substring(0, 3)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* Loading indicator for infinite scroll */}
+      {visibleCount < jogadores.length && !loading && (
+        <div className="flex justify-center mt-8">
+          <div className="w-8 h-8 border-2 rounded-full animate-spin"
+            style={{ borderColor: PRIMARY_COLOR, borderTopColor: 'transparent' }}
+          />
+        </div>
+      )}
+
+      {/* Mensagem vazia */}
+      {!loading && jogadores.length === 0 && (
+        <motion.div 
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="rounded-3xl border border-white/10 p-12 text-center"
+          style={{ background: '#0d0d0d' }}
+        >
+          <Users className="w-16 h-16 text-white/20 mx-auto mb-4" />
+          <p className="text-white/40 text-lg">Nenhum jogador encontrado com os filtros selecionados.</p>
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setFiltroElo('todos');
+              setFiltroRole('todos');
+              playSound('click');
+            }}
+            className="mt-4 px-6 py-2 rounded-xl font-bold transition-all"
+            style={{ 
+              background: `${PRIMARY_COLOR}20`, 
+              color: PRIMARY_COLOR,
+              border: `1px solid ${PRIMARY_COLOR}40`
+            }}
+          >
+            Limpar Filtros
+          </button>
+        </motion.div>
+      )}
+    </div>
+  );
+}
+

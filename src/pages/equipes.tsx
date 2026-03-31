@@ -3,11 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -17,11 +12,120 @@ import {
 } from 'lucide-react';
 import { useSound } from '../hooks/useSound';
 import { supabase } from '../lib/supabase';
-import { Team, Player, Role, UserRole, ROLE_CONFIG, COLOR_THEMES, getEloColor, formatBRL, teamPower, sortPlayers } from '../types/team';
-import TimeCard from '../components/TimeCard';
-import InvitePlayerModal from '../components/equipes/InvitePlayerModal';
-import JoinRequestModal from '../components/equipes/JoinRequestModal';
-import ModalBase from '../components/equipes/ModalBase';
+
+// ── Tipos ──────────────────────────────────────────────────────────────────
+type Role = 'TOP' | 'JG' | 'MID' | 'ADC' | 'SUP' | 'RES';
+type UserRole = 'leader' | 'member' | 'visitor';
+
+interface Player {
+  name: string;
+  role: Role;
+  elo: string;
+  balance: number;
+  isLeader?: boolean;
+  userId?: string;
+}
+
+interface Team {
+  id: number | string;
+  name: string;
+  tag: string;
+  logoUrl?: string;
+  gradientFrom: string;
+  gradientTo: string;
+  players: Player[];
+  pdl: number;
+  winrate: number;
+  ranking: number;
+  wins: number;
+  gamesPlayed: number;
+  userRole: UserRole;
+}
+
+// ── Configuração visual de rotas ───────────────────────────────────────────
+const ROLE_CONFIG: Record<Role, { label: string; img: string; color: string; bg: string }> = {
+  TOP: { label: 'TOP', img: '/lanes_brancas/Top_iconB.png',           color: 'text-red-400',    bg: 'bg-red-400/10' },
+  JG:  { label: 'JG',  img: '/lanes_brancas/Jungle_iconB.png',        color: 'text-green-400',  bg: 'bg-green-400/10' },
+  MID: { label: 'MID', img: '/lanes_brancas/Middle_iconB.png',        color: 'text-blue-400',   bg: 'bg-blue-400/10' },
+  ADC: { label: 'ADC', img: '/lanes_brancas/Bottom_iconB.png',        color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
+  SUP: { label: 'SUP', img: '/lanes_brancas/Support_iconB.png',       color: 'text-amber-500',  bg: 'bg-amber-500/10' },
+  RES: { label: 'RES', img: '/lanes_brancas/icon-position-fillB.png', color: 'text-gray-400',   bg: 'bg-gray-400/10' },
+};
+
+const COLOR_THEMES = [
+  { from: '#FFB700', to: '#FF6600', label: 'M7 Gold' },
+  { from: '#0044FF', to: '#00D4FF', label: 'Neon Blue' },
+  { from: '#FF3300', to: '#FF9900', label: 'Fire' },
+  { from: '#00FF88', to: '#00C3FF', label: 'Toxic' },
+  { from: '#7B00FF', to: '#00AAFF', label: 'Storm' },
+  { from: '#FFB700', to: '#FF6600', label: 'Gold' },
+  { from: '#FF006E', to: '#FF9966', label: 'Rose' },
+  { from: '#00FF41', to: '#008F11', label: 'Matrix' },
+  { from: '#F953C6', to: '#B91D73', label: 'Candy' },
+  { from: '#1CB5E0', to: '#000851', label: 'Ocean' },
+  { from: '#FF416C', to: '#FF4B2B', label: 'Infrared' },
+  { from: '#11998e', to: '#38ef7d', label: 'Mint' },
+];
+
+const ROLE_ORDER: Role[] = ['TOP', 'JG', 'MID', 'ADC', 'SUP', 'RES'];
+
+const ELO_COLORS: Record<string, string> = {
+  Ferro: 'text-gray-500', Bronze: 'text-amber-600', Prata: 'text-gray-300',
+  Ouro: 'text-yellow-400', Platina: 'text-cyan-400', Esmeralda: 'text-emerald-400',
+  Diamante: 'text-blue-400', Mestre: 'text-amber-500',
+  'Grão-Mestre': 'text-red-400', Desafiante: 'text-yellow-300',
+};
+
+const getEloColor  = (elo: string) => ELO_COLORS[elo.split(' ')[0]] ?? 'text-white/60';
+const formatBRL    = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const teamPower    = (players: Player[]) => players.reduce((s, p) => s + p.balance, 0);
+const sortPlayers  = (players: Player[]) =>
+  [...players].sort((a, b) => {
+    const oa = ROLE_ORDER.indexOf(a.role);
+    const ob = ROLE_ORDER.indexOf(b.role);
+    return oa !== ob ? oa - ob : a.name.localeCompare(b.name);
+  });
+
+// ── ModalBase ──────────────────────────────────────────────────────────────
+const ModalBase = ({ onClose, children, gradientFrom, title }: {
+  onClose: () => void;
+  children: React.ReactNode;
+  gradientFrom?: string;
+  title?: string;
+}) => (
+  <motion.div
+    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+    onClick={onClose}
+  >
+    <motion.div
+      initial={{ opacity: 0, scale: 0.92, y: 20 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.92, y: 20 }}
+      transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+      className="relative w-full max-w-lg rounded-2xl overflow-hidden"
+      style={gradientFrom ? {
+        border: '3px solid transparent',
+        background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${gradientFrom}, ${gradientFrom}80) border-box`,
+        boxShadow: `0 0 45px -10px ${gradientFrom}60`
+      } : {
+        background: '#0d0d0d',
+        border: '1px solid rgba(255,255,255,0.1)'
+      }}
+      onClick={(e: React.MouseEvent) => e.stopPropagation()}
+    >
+      {title && (
+        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+          <h2 className="text-white font-black text-lg tracking-tight uppercase">{title}</h2>
+          <button onClick={onClose} className="text-white/20 hover:text-white transition-colors">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+      <div className="p-6">{children}</div>
+    </motion.div>
+  </motion.div>
+);
 
 
 // ── Upload de logo para Supabase Storage ───────────────────────────────────
@@ -51,13 +155,28 @@ function validarImagem(file: File): Promise<string | null> {
 
 async function uploadLogoTime(file: File, timeId: string): Promise<string | null> {
   const ext  = file.type === 'image/png' ? 'png' : 'jpg';
-  const path = `${timeId}.${ext}`;
+
+  // nome único pra evitar cache
+  const path = `${timeId}-${Date.now()}.${ext}`;
+
   const { error } = await supabase.storage
     .from('team-logos')
-    .upload(path, file, { upsert: true, contentType: file.type });
-  if (error) return null;
-  const { data } = supabase.storage.from('team-logos').getPublicUrl(path);
-  return data.publicUrl;
+    .upload(path, file, {
+      upsert: true,
+      contentType: file.type
+    });
+
+  if (error) {
+    console.error('[uploadLogoTime] erro:', error);
+    return null;
+  }
+
+  const { data } = supabase.storage
+    .from('team-logos')
+    .getPublicUrl(path);
+
+  // força atualização no navegador
+  return `${data.publicUrl}?t=${Date.now()}`;
 }
 
 // ── Mock Data ──────────────────────────────────────────────────────────────
@@ -204,6 +323,391 @@ const RoleRow = ({ role, player, team, isApplied, showBalance = false, labelOver
   );
 };
 
+// ── TimeCard ──────────────────────────────────────────────────────────────
+const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
+  team: Team;
+  onClick: (t: Team) => void;
+  isLarge?: boolean;
+  appliedSlots?: string[];
+}) => {
+  const { playSound } = useSound();
+  const financial = teamPower(team.players);
+  return (
+    <motion.div
+      whileHover={{ scale: isLarge ? 1.005 : 1.02, y: -3 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={() => { playSound('click'); onClick(team); }}
+      className="rounded-2xl cursor-pointer overflow-hidden group transition-all duration-500"
+      style={{
+        border: '3px solid transparent',
+        background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
+        boxShadow: `0 0 25px -10px ${team.gradientFrom}a0, inset 0 0 20px -15px ${team.gradientFrom}60`,
+      }}
+    >
+      <div className="rounded-[13px] overflow-hidden relative">
+        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[80px] opacity-20 pointer-events-none" style={{ background: team.gradientFrom }} />
+        <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-15 pointer-events-none" style={{ background: team.gradientTo || team.gradientFrom }} />
+        <div className="relative z-10 p-5">
+          
+          {/* Header: Nome e Tag */}
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5">
+                {team.userRole === 'leader' && (
+                  <motion.div animate={{ rotate: [0, -10, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }}>
+                    <Crown className="w-4 h-4 shrink-0" style={{ color: team.gradientFrom }} />
+                  </motion.div>
+                )}
+                <h3 className="text-white font-black text-xl tracking-tight leading-none truncate">{team.name}</h3>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="inline-block text-[13px] font-black px-3 py-1 rounded-lg tracking-widest"
+                  style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
+                  #{team.tag}
+                </span>
+                {/* Ranking agora fica do lado da tag */}
+                <span className="inline-block text-[13px] font-black px-3 py-1 rounded-lg tracking-widest"
+                  style={{ color: team.gradientFrom, background: `${team.gradientFrom}10`, border: `1px solid ${team.gradientFrom}30` }}>
+                  #{team.ranking}
+                </span>
+              </div>
+            </div>
+            
+            {/* Logo pequena - visível APENAS no desktop (NUNCA no mobile) */}
+            {!isLarge && (
+              <div className="w-20 h-20 rounded-2xl flex items-center justify-center relative overflow-hidden hidden sm:flex shrink-0 ml-3"
+                style={{
+                  border: '2px solid transparent',
+                  background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
+                  boxShadow: `0 0 10px -4px ${team.gradientFrom}80`,
+                }}>
+                <div className="absolute inset-0 opacity-15 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }} />
+                {team.logoUrl
+                  ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
+                  : <span className="font-black text-lg tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
+              </div>
+            )}
+          </div>
+
+          {/* Logo Mobile - Centralizada em cima (aparece apenas no mobile) */}
+          <div className="flex justify-center mb-5 sm:hidden">
+            <div className="w-36 h-36 rounded-2xl flex items-center justify-center relative overflow-hidden"
+              style={{
+                border: '2px solid transparent',
+                background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
+                boxShadow: `0 0 15px -4px ${team.gradientFrom}80`,
+              }}>
+              <div className="absolute inset-0 opacity-20 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }} />
+              {team.logoUrl
+                ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
+                : <span className="font-black text-3xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
+            </div>
+          </div>
+
+          {/* Conteúdo Principal */}
+          <div className={isLarge ? 'flex gap-12 mb-4 items-center' : ''}>
+            <div className={isLarge ? 'flex-1 min-w-0' : ''}>
+              {/* Lista de Jogadores */}
+              <div className="bg-black/30 rounded-xl px-3 py-2 mb-4 space-y-0.5 border border-white/[0.04]">
+                {['TOP', 'JG', 'MID', 'ADC', 'SUP', 'RES1', 'RES2'].map((roleKey) => {
+                  const isRes = roleKey.startsWith('RES');
+                  const role = isRes ? 'RES' : roleKey as Role;
+                  const resIndex = isRes ? parseInt(roleKey.slice(3)) - 1 : -1;
+                  const player = isRes ? team.players.filter(p => p.role === 'RES')[resIndex] : team.players.find(p => p.role === role);
+                  const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`) || (isRes && appliedSlots.includes(`${team.id}-RES`));
+                  return <RoleRow key={roleKey} role={role} player={player} team={team} isApplied={isApplied} labelOverride={isRes ? `R${resIndex + 1}` : undefined} />;
+                })}
+              </div>
+              
+              {/* Stats Cards */}
+              <div className="grid grid-cols-3 gap-2 mb-3">
+                {[
+                  { icon: <Flame className="w-3 h-3" style={{ color: team.gradientFrom }} />, label: 'PDL', value: team.pdl.toLocaleString('pt-BR'), color: team.gradientFrom },
+                  { icon: <TrendingUp className="w-3 h-3 text-green-400" />, label: 'WIN%', value: `${team.winrate}%`, color: '#4ade80' },
+                  { icon: <Trophy className="w-3 h-3 text-white/30" />, label: 'W/L', value: `${team.wins}/${team.gamesPlayed - team.wins}`, color: 'white' },
+                ].map(m => (
+                  <div key={m.label} className="bg-black/40 rounded-xl p-2.5 text-center border border-white/[0.04]">
+                    <div className="flex items-center justify-center gap-1 mb-1">
+                      {m.icon}
+                      <span className="text-[9px] text-white/35 uppercase tracking-wider">{m.label}</span>
+                    </div>
+                    <span className="font-black text-sm" style={{ color: m.color }}>{m.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Logo Grande no Desktop (apenas quando isLarge = true) */}
+            {isLarge && (
+              <div className="shrink-0 flex flex-col justify-center hidden sm:flex">
+                <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                  className="w-64 h-64 rounded-2xl flex items-center justify-center relative overflow-hidden"
+                  style={{
+                    border: '3px solid transparent',
+                    background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
+                    boxShadow: `0 0 25px -8px ${team.gradientFrom}60`,
+                  }}>
+                  <div className="absolute inset-0 opacity-20 blur-2xl pointer-events-none" style={{ background: `radial-gradient(circle at center, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}, transparent)` }} />
+                  <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none z-10" />
+                  {team.logoUrl
+                    ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
+                    : <span className="font-black text-3xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
+                </motion.div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer: Poder Financeiro */}
+          <div className="flex items-center justify-between px-3 py-2.5 rounded-xl border mt-2"
+            style={{ background: `${team.gradientFrom}0d`, borderColor: `${team.gradientFrom}30` }}>
+            <div className="flex items-center gap-2">
+              <Wallet className="w-4 h-4" style={{ color: team.gradientFrom }} />
+              <span className="text-xs text-white/50">Poder Financeiro</span>
+            </div>
+            <span className="font-bold text-sm text-white">{formatBRL(financial)}</span>
+          </div>
+          
+          {/* Ver detalhes */}
+          <div className="mt-3 flex items-center justify-end gap-1 text-xs text-white/20">
+            <span>Ver detalhes</span>
+            <ChevronRight className="w-3 h-3" />
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
+
+// ── InvitePlayerModal ──────────────────────────────────────────────────────
+const InvitePlayerModal = ({ team, onClose }: { team: Team; onClose: () => void }) => {
+  const { playSound } = useSound();
+  const [query, setQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<{ user_id: string; riot_id: string; level?: number; profile_icon_id?: number } | null>(null);
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [message, setMessage] = useState('');
+  const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (query.length < 2) { setSearchResults([]); setNotFound(false); return; }
+    setSearching(true); setNotFound(false);
+    const timer = setTimeout(async () => {
+      const { data } = await supabase.from('contas_riot').select('user_id, riot_id, profile_icon_id, level').ilike('riot_id', `%${query}%`).limit(5);
+      setSearching(false);
+      if (!data || data.length === 0) { setNotFound(true); setSearchResults([]); }
+      else { setSearchResults(data); setNotFound(false); }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const handleInvite = async () => {
+    if (!selectedPlayer || !selectedRole) return;
+    if (selectedRole !== 'RES') {
+      if (team.players.some(p => p.role === selectedRole)) { setError('Posição já preenchida no time'); return; }
+    } else {
+      if (team.players.filter(p => p.role === 'RES').length >= 2) { setError('Máximo de 2 reservas atingido'); return; }
+    }
+    setSending(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSending(false); return; }
+    const { error: insertError } = await supabase.from('time_convites').insert({
+      time_id: team.id, de_user_id: user.id, para_user_id: selectedPlayer.user_id,
+      riot_id: selectedPlayer.riot_id, role: selectedRole, mensagem: message || null,
+      tipo: 'convite', status: 'pendente',
+    });
+    setSending(false);
+    if (insertError) { setError('Erro ao enviar convite. Tente novamente.'); return; }
+    playSound('success'); setSent(true); setTimeout(onClose, 1800);
+  };
+
+  return (
+    <ModalBase onClose={onClose}>
+      <div className="rounded-2xl overflow-hidden relative" style={{
+        background: '#0d0d0d', border: '3px solid transparent',
+        backgroundImage: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
+        boxShadow: `0 0 35px -10px ${team.gradientFrom}70`
+      }}>
+        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: team.gradientFrom }} />
+        <div className="relative z-10">
+          <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between" style={{ background: `${team.gradientFrom}08` }}>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${team.gradientFrom}25` }}>
+                <UserPlus className="w-4 h-4" style={{ color: team.gradientFrom }} />
+              </div>
+              <h2 className="text-white font-black text-lg">Convidar Jogador</h2>
+            </div>
+            <button onClick={onClose} className="text-white/30 hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+          </div>
+          <div className="p-6 space-y-6">
+            {error && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-red-500/20 flex items-center justify-center shrink-0"><X className="w-4 h-4 text-red-400" /></div>
+                <p className="text-red-400 text-xs font-medium">{error}</p>
+              </motion.div>
+            )}
+            <div className="space-y-2">
+              <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">1. Buscar Player</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+                <input value={query} onChange={e => { setQuery(e.target.value); setSelectedPlayer(null); setError(null); }}
+                  placeholder="Buscar por Riot ID (ex: Player#BR1)"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl pl-10 pr-10 py-3 text-white text-sm placeholder:text-white/25 focus:outline-none focus:border-white/30" />
+                {searching && <RefreshCw className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30 animate-spin" />}
+              </div>
+              {query.length >= 2 && !selectedPlayer && !searching && (
+                <div className="mt-2">
+                  {notFound ? (
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center"><p className="text-white/40 text-xs font-medium">Player não cadastrado na plataforma</p></div>
+                  ) : (
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                      {searchResults.map(p => {
+                        const iconUrl = p.profile_icon_id ? `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${p.profile_icon_id}.png` : null;
+                        return (
+                          <button key={p.user_id} onClick={() => { playSound('click'); setSelectedPlayer(p); }}
+                            className="w-full flex items-center justify-between bg-white/5 hover:bg-white/10 rounded-xl p-3 border border-white/5 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-full bg-white/10 overflow-hidden flex items-center justify-center">
+                                {iconUrl ? <img src={iconUrl} alt="" className="w-full h-full object-cover" /> : <span className="text-white/60 text-xs font-bold">{p.riot_id.charAt(0).toUpperCase()}</span>}
+                              </div>
+                              <div className="text-left">
+                                <p className="text-white text-sm font-medium">{p.riot_id}</p>
+                                {p.level && <p className="text-[10px] text-white/40">Nível {p.level}</p>}
+                              </div>
+                            </div>
+                            <Plus className="w-4 h-4 text-white/20" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+              {selectedPlayer && (
+                <div className="flex items-center justify-between bg-white/10 rounded-xl p-3 border border-white/20">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center" style={{ background: `${team.gradientFrom}30` }}>
+                      {selectedPlayer.profile_icon_id
+                        ? <img src={`https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${selectedPlayer.profile_icon_id}.png`} alt="" className="w-full h-full object-cover" />
+                        : <Check className="w-4 h-4" style={{ color: team.gradientFrom }} />}
+                    </div>
+                    <div>
+                      <p className="text-white text-sm font-bold">{selectedPlayer.riot_id}</p>
+                      {selectedPlayer.level && <p className="text-[10px] text-white/40">Nível {selectedPlayer.level}</p>}
+                    </div>
+                  </div>
+                  <button onClick={() => setSelectedPlayer(null)} className="text-white/30 hover:text-white text-xs underline">Trocar</button>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">2. Selecionar Rota</label>
+              <div className="grid grid-cols-3 gap-2">
+                {(Object.keys(ROLE_CONFIG) as Role[]).map(role => {
+                  const cfg = ROLE_CONFIG[role]; const isSelected = selectedRole === role;
+                  return (
+                    <button key={role} onClick={() => { playSound('click'); setSelectedRole(role); setError(null); }}
+                      className={`flex flex-col items-center gap-1.5 p-2.5 rounded-xl border transition-all ${isSelected ? 'bg-white/10 border-white/40' : 'bg-white/5 border-white/5 hover:border-white/10'}`}>
+                      <img src={cfg.img} alt={cfg.label} className={`w-4 h-4 object-contain ${isSelected ? 'opacity-100' : 'opacity-40'}`} />
+                      <span className={`text-[10px] font-bold ${isSelected ? 'text-white' : 'text-white/40'}`}>{cfg.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">3. Mensagem (Opcional)</label>
+              <textarea value={message} onChange={e => setMessage(e.target.value)} placeholder="Ex: Bora subir de elo? Precisamos de um main..." rows={2}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-white/20 focus:outline-none focus:border-white/30 resize-none" />
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button onClick={onClose} className="flex-1 py-3 bg-white/5 border border-white/10 text-white/60 rounded-xl text-sm font-bold hover:bg-white/10 transition-all">Cancelar</button>
+              <button onClick={handleInvite} disabled={!selectedPlayer || !selectedRole || sent || sending}
+                className="flex-[1.5] py-3 rounded-xl text-sm font-black transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
+                style={{ background: team.gradientFrom, color: 'white' }}>
+                {sending ? <><RefreshCw className="w-4 h-4 animate-spin" /> Enviando...</> : sent ? <><Check className="w-4 h-4" /> Enviado!</> : <><Send className="w-4 h-4" /> Confirmar Convite</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ModalBase>
+  );
+};
+
+// ── JoinRequestModal ───────────────────────────────────────────────────────
+const JoinRequestModal = ({ team, onClose, alreadyInTeam = false }: { team: Team; onClose: () => void; alreadyInTeam?: boolean }) => {
+  const { playSound } = useSound();
+  const [selectedRole, setSelectedRole] = useState<Role | ''>('');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
+  const roles: Role[] = ['TOP', 'JG', 'MID', 'ADC', 'SUP', 'RES'];
+
+  const handleSubmit = async () => {
+    if (!selectedRole || alreadyInTeam) return;
+    setSubmitting(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) { setSubmitting(false); return; }
+    const { data: riotData } = await supabase.from('contas_riot').select('riot_id').eq('user_id', user.id).maybeSingle();
+    await supabase.from('time_convites').insert({
+      time_id: team.id, de_user_id: user.id, riot_id: riotData?.riot_id || null,
+      role: selectedRole, mensagem: message || null, tipo: 'solicitacao', status: 'pendente',
+    });
+    setSubmitting(false); playSound('success'); setSent(true); setTimeout(onClose, 2500);
+  };
+
+  if (sent) {
+    return (
+      <ModalBase onClose={onClose} gradientFrom={team.gradientFrom} title="">
+        <div className="py-8 text-center space-y-4">
+          <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mx-auto border border-green-500/30">
+            <Check className="w-8 h-8 text-green-400" />
+          </div>
+          <div>
+            <p className="text-white font-black text-lg">Solicitação Enviada!</p>
+            <p className="text-white/50 text-sm mt-2">Solicitação enviada para entrar no time <span className="text-white font-bold">{team.name}</span></p>
+          </div>
+        </div>
+      </ModalBase>
+    );
+  }
+
+  return (
+    <ModalBase onClose={onClose} gradientFrom={team.gradientFrom} title="Solicitar Entrada">
+      <div className="space-y-6">
+        <div>
+          <label className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-3 block">Escolha sua Rota</label>
+          <div className="grid grid-cols-3 gap-2">
+            {roles.map((role) => {
+              const cfg = ROLE_CONFIG[role]; const isSelected = selectedRole === role;
+              return (
+                <button key={role} onClick={() => { playSound('click'); setSelectedRole(role); }}
+                  className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${isSelected ? 'bg-white/10 border-white/20 scale-[1.02]' : 'bg-black/40 border-white/[0.04] hover:bg-white/5 opacity-50'}`}>
+                  <img src={cfg.img} alt={cfg.label} className="w-5 h-5 object-contain" />
+                  <span className={`text-[10px] font-black tracking-widest ${isSelected ? cfg.color : 'text-white'}`}>{role}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div>
+          <label className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-3 block">Mensagem (Opcional)</label>
+          <textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Conte um pouco sobre sua experiência..."
+            className="w-full bg-black/40 border border-white/[0.08] rounded-xl p-4 text-sm text-white placeholder:text-white/10 focus:outline-none focus:border-white/20 transition-all min-h-[100px] resize-none" />
+        </div>
+        <button onClick={handleSubmit} disabled={!selectedRole || submitting}
+          className={`w-full py-4 rounded-xl font-black text-sm tracking-widest transition-all flex items-center justify-center gap-2 ${selectedRole && !submitting ? 'bg-white text-black hover:scale-[1.02] active:scale-95 shadow-xl shadow-white/10' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}>
+          {submitting ? <><RefreshCw className="w-4 h-4 animate-spin" /> Enviando...</> : 'CONFIRMAR SOLICITAÇÃO'}
+        </button>
+      </div>
+    </ModalBase>
+  );
+};
+
 // ── Modal: Editar Time ─────────────────────────────────────────────────────
 const EditTeamModal = ({
   team, onClose, onSave,
@@ -237,6 +741,7 @@ const EditTeamModal = ({
   const handleSave = () => {
     if (logoUploading) return;
     playSound('success');
+    console.log('[handleSave] logoPreview ao salvar:', logoPreview);
     onSave({
       name,
       tag: tag.toUpperCase().slice(0, 3),
@@ -1102,7 +1607,10 @@ export default function App() {
     const channel = supabase
       .channel('equipes-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'times' }, () => {
-        carregarTimesDoSupabase(uidRef.current).then(loaded => setTeams(loaded));
+        carregarTimesDoSupabase(uidRef.current).then(loaded => {
+          console.log('[Realtime times] logo_url no reload:', loaded.find(t => t.userRole !== 'visitor')?.logoUrl);
+          setTeams(loaded);
+        });
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'time_membros' }, () => {
         carregarTimesDoSupabase(uidRef.current).then(loaded => setTeams(loaded));
@@ -1210,6 +1718,7 @@ export default function App() {
 
   const handleUpdateTeam = async (updated: Partial<Team>) => {
     if (!myTeam) return;
+    console.log('[handleUpdateTeam] logo_url sendo enviado ao DB:', updated.logoUrl);
     const { error } = await supabase
       .from('times')
       .update({
@@ -1222,9 +1731,10 @@ export default function App() {
       .eq('id', myTeam.id);
 
     if (error) {
-      console.error('Erro ao salvar time:', error);
+      console.error('[handleUpdateTeam] Erro ao salvar time:', error);
       return;
     }
+    console.log('[handleUpdateTeam] Salvo com sucesso no DB');
 
     setTeams(prev => prev.map(t =>
       t.id === myTeam.id ? { ...t, ...updated } : t
@@ -1326,9 +1836,11 @@ export default function App() {
     <div className="min-h-screen text-white p-4 md:p-8 font-sans">
       <div className="max-w-7xl mx-auto space-y-8">
 
+
         {/* Header banner */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }}
           className="relative overflow-hidden rounded-2xl border border-white/8 p-6 group"
           style={{ background: 'linear-gradient(135deg, #2a1a00 0%, #0a0a0a 60%)' }}
         >
@@ -1337,10 +1849,12 @@ export default function App() {
               <img 
                 src={headerBannerUrl} 
                 alt="" 
-                className="w-full h-full object-cover opacity-40 group-hover:scale-105 transition-transform duration-700"
+                className="w-full h-full object-cover opacity-80 group-hover:scale-103 transition-transform duration-700"
                 referrerPolicy="no-referrer"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/40 to-transparent" />
+
+        
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
             </div>
           )}
 
@@ -1348,9 +1862,15 @@ export default function App() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Users className="w-5 h-5" style={{ color: '#FFB700' }} />
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#FFB700' }}>Arena de Times</span>
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#FFB700' }}>
+                  Arena de Times
+                </span>
               </div>
-              <h1 className="text-2xl md:text-3xl font-black text-white mb-2">Equipes</h1>
+
+              <h1 className="text-2xl md:text-3xl font-black text-white mb-2">
+                Equipes
+              </h1>
+
               <p className="text-white/50 text-sm max-w-lg">
                 Gerencie seu time, analise os rivais e descubra quais equipes dominam a plataforma.
               </p>
@@ -1371,8 +1891,10 @@ export default function App() {
           </div>
 
           {!headerBannerUrl && (
-            <div className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-20"
-              style={{ background: 'radial-gradient(circle, #FFB700, transparent)' }} />
+            <div 
+              className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-20"
+              style={{ background: 'radial-gradient(circle, #FFB700, transparent)' }}
+            />
           )}
         </motion.div>
 
@@ -1380,7 +1902,7 @@ export default function App() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <Crown className="w-5 h-5 text-white/50" />
+              <Crown className="w-7 h-7 text-primary" />
               <h2 className="text-white font-bold text-lg">Minha Equipe</h2>
             </div>
             {!myTeam && (
@@ -1464,7 +1986,7 @@ export default function App() {
         <div>
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div className="flex items-center gap-3">
-              <Trophy className="w-5 h-5 text-yellow-500" />
+              <Trophy className="w-7 h-7 text-primary" />
               <h2 className="text-white font-black text-xl tracking-tight">Ranking Global</h2>
               <span className="text-white/25 text-xs bg-white/5 px-2.5 py-0.5 rounded-full font-bold">{filteredTeams.length} Equipes</span>
             </div>

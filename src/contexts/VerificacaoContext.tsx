@@ -61,7 +61,8 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
 
   const salvarNoBanco = async (verificacao: VerificacaoAtiva, iconeId: number) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
       if (!user) return false;
 
       const payload = {
@@ -73,15 +74,9 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
         validado: true
       };
 
-      const { data: existing } = await supabase
+      const { error } = await supabase
         .from('contas_riot')
-        .select('id')
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      const { error } = existing
-        ? await supabase.from('contas_riot').update(payload).eq('user_id', user.id)
-        : await supabase.from('contas_riot').insert({ user_id: user.id, ...payload });
+        .upsert({ user_id: user.id, ...payload }, { onConflict: 'user_id' });
 
       if (error) {
         console.error('❌ Erro ao salvar:', error);

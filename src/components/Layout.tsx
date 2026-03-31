@@ -33,7 +33,6 @@ const getImageUrl = (fileName: string) => {
 };
 
 const LOGO_URL = getImageUrl('logo-m7.png');
-const SIDEBAR_IMAGE_URL = getImageUrl('sidebar-image.png');
 
 export default function Layout() {
   const navigate = useNavigate();
@@ -44,26 +43,15 @@ export default function Layout() {
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [contaRiot, setContaRiot] = useState<any>(null);
-  const [balance, setBalance] = useState(2450.00);
+  const [balance, setBalance] = useState(0);
+  const [loadingUser, setLoadingUser] = useState(true);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Função para formatar nome do email
-  const getFullNameFromEmail = (email: string) => {
-    if (!email) return 'Jogador';
-    const namePart = email.split('@')[0];
-    return namePart
-      .split(/[._-]/)
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-
-  // Função para navegar com som
   const navigateWithSound = (path: string) => {
     playSound('click');
     navigate(path);
   };
 
-  // Função para logout com som
   const handleLogoutWithSound = async () => {
     playSound('click');
     if (supabase) {
@@ -76,7 +64,8 @@ export default function Layout() {
     const carregarDados = async () => {
       if (!supabase) return;
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user ?? null;
       setUser(user);
 
       if (user) {
@@ -98,6 +87,7 @@ export default function Layout() {
 
         setContaRiot(riotData);
       }
+      setLoadingUser(false);
     };
 
     carregarDados();
@@ -125,7 +115,7 @@ export default function Layout() {
     { label: 'Jogar', icon: Zap, path: '/jogar' },
     { label: 'Campeonatos', icon: Trophy, path: '/campeonatos' },
     { label: 'Times', icon: Users, path: '/times' },
-    { label: 'Jogadores', icon: UserIcon, path: '/jogadores' },
+    { label: 'Players', icon: UserIcon, path: '/players' },
     { label: 'Estatísticas', icon: LineChart, path: '/estatisticas' },
     { label: 'Histórico', icon: History, path: '/historico' },
   ];
@@ -139,7 +129,7 @@ export default function Layout() {
     { label: 'Políticas', icon: ShieldCheck, path: '/politicas' },
   ];
 
-  const sidebarWidths = "hidden sm:flex sm:w-[12%] md:w-[11%] lg:w-[10%] 2xl:w-[9%] min-w-[180px] max-w-[260px]";
+  const sidebarWidths = "hidden lg:flex lg:w-[220px] xl:w-[240px] 2xl:w-[260px] shrink-0";
 
   const riotIconUrl = contaRiot?.profile_icon_id 
     ? `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${contaRiot.profile_icon_id}.png`
@@ -153,101 +143,125 @@ export default function Layout() {
         backgroundColor: '#0a0b0f'
       }}
     >
-      <header className="bg-black/60 backdrop-blur-sm fixed top-0 z-50 w-full h-16 border-b border-primary shadow-lg">
-        <div className="flex justify-between items-center h-full px-6">
-          <div className="flex items-center gap-4 md:gap-6">
+      {/* Header Responsivo */}
+      <header className="bg-black/60 backdrop-blur-sm fixed top-0 z-50 w-full h-14 md:h-16 border-b border-primary shadow-lg">
+        <div className="flex justify-between items-center h-full px-3 md:px-6">
+          {/* Lado esquerdo - Mobile: apenas menu hambúrguer | Desktop: menu + logo + nome + bem-vindo */}
+          <div className="flex items-center gap-2 md:gap-4">
+            {/* Menu Hamburguer - visível em mobile/tablet */}
             <button 
-              className="sm:hidden text-white/80 hover:text-primary transition-colors p-2 rounded-lg hover:bg-white/5"
+              className="lg:hidden text-white/80 hover:text-primary transition-colors p-1.5 md:p-2 rounded-lg hover:bg-white/5"
               onClick={() => {
                 playSound('click');
                 setIsMobileMenuOpen(!isMobileMenuOpen);
               }}
             >
-              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+              <Menu size={18} className="md:w-5 md:h-5" />
             </button>
 
+            {/* Logo e Nome - APENAS DESKTOP (lg pra cima) */}
             <Link 
               to="/lobby" 
               onClick={() => playSound('click')}
-              className="flex items-center gap-3 hover:opacity-90 transition-all group"
+              className="hidden lg:flex items-center gap-2 xl:gap-3 hover:opacity-90 transition-all group"
             >
               <div className="relative">
                 <img 
                   alt="M7 Academy Logo" 
-                  className="h-10 md:h-11 w-auto object-contain relative z-10 drop-shadow-[0_0_2px_#FFFF00] drop-shadow-[0_0_5px_#FFFF00] drop-shadow-[0_0_10px_#FFFF00] drop-shadow-[0_0_20px_rgba(255,255,0,0.4)]" 
+                  className="h-8 xl:h-10 w-auto object-contain relative z-10 drop-shadow-[0_0_2px_#FFFF00] drop-shadow-[0_0_5px_#FFFF00] drop-shadow-[0_0_10px_rgba(255,255,0,0.4)]" 
                   src={LOGO_URL} 
                 />
               </div>
               <div className="flex flex-col">
-                <h1 className="text-lg md:text-xl font-black tracking-tighter text-primary uppercase font-arial-bold italic leading-tight">
+                <h1 className="text-sm xl:text-base font-black tracking-tighter text-primary uppercase font-arial-bold italic leading-tight">
                   M7 ACADEMY
                 </h1>
-                <span className="text-[8px] text-white/40 tracking-[0.3em] uppercase hidden md:block">jogue e divirta-se!</span>
+                <span className="text-[6px] xl:text-[8px] text-white/40 tracking-[0.2em] xl:tracking-[0.3em] uppercase">
+                  jogue e divirta-se!
+                </span>
               </div>
             </Link>
           
-            <div className="hidden lg:flex items-center gap-3 ml-2">
+            {/* Bem-vindo - apenas desktop grande */}
+            <div className="hidden xl:flex items-center gap-3 ml-2">
               <div className="w-[1px] h-5 bg-white/20"></div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                  <h2 className="font-body text-sm font-light tracking-wide">
-                    <span className="text-primary font-semibold">Bem-vindo,</span>{" "}
-                    <span className="text-white font-bold">
-                      {contaRiot ? contaRiot.riot_id : (user?.user_metadata?.full_name || getFullNameFromEmail(user?.email))}
-                    </span>
-                  </h2>
+                  {loadingUser ? (
+                    <div className="h-4 w-36 bg-white/10 rounded animate-pulse" />
+                  ) : (
+                    <h2 className="font-body text-sm font-light tracking-wide">
+                      <span className="text-primary font-semibold">Bem-vindo,</span>
+                      <span className="text-white/80 ml-1">
+                        {contaRiot ? contaRiot.riot_id?.split('#')[0] : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jogador')}
+                      </span>
+                    </h2>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-5">
-            <NotificationBell />
-
+          {/* Lado direito - elementos responsivos */}
+          <div className="flex items-center gap-2 md:gap-3 lg:gap-5">
+            {/* Saldo */}
             <button 
               onClick={() => playSound('click')}
-              className="flex items-center gap-2 px-4 py-1.5 bg-black/40 backdrop-blur-sm border border-white/10 rounded-full hover:border-primary/30 transition-all duration-150"
+              className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-black/40 backdrop-blur-sm border border-white/10 rounded-full hover:border-primary/30 transition-all duration-150"
             >
-              <div className="p-1 bg-primary/10 rounded-full">
-                <Wallet className="text-primary w-3.5 h-3.5" />
+              <div className="p-0.5 md:p-1 bg-primary/10 rounded-full">
+                <Wallet className="text-primary w-3 h-3 md:w-3.5 md:h-3.5" />
               </div>
-              <span className="text-sm font-bold text-white tracking-tight">
+              <span className="text-xs md:text-sm font-bold text-white tracking-tight">
                 R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
-              <ChevronDown className="text-white/40 w-3 h-3 group-hover:text-primary transition-colors" />
             </button>
-            
+
+            {/* Botão Depositar - Mobile: "DEP" | Desktop: "DEPOSITAR" */}
             <button 
               onClick={() => {
                 playSound('click');
                 setIsDepositModalOpen(true);
               }}
-              className="bg-gradient-to-r from-primary to-[#E6A600] text-black px-5 py-1.5 rounded-full font-bold text-[11px] uppercase tracking-wider hover:brightness-110 transition-all active:scale-95 shadow-lg shadow-primary/20 flex items-center gap-2"
+              className="bg-gradient-to-r from-primary to-[#E6A600] text-black px-2 md:px-3 lg:px-4 py-1 md:py-1.5 rounded-full font-bold text-[10px] md:text-[11px] uppercase tracking-wider hover:brightness-110 transition-all active:scale-95 shadow-lg shadow-primary/20 flex items-center gap-1"
             >
-              <CreditCard className="w-3.5 h-3.5" />
-              DEPOSITAR
+              <CreditCard className="w-2.5 h-2.5 md:w-3 md:h-3" />
+              <span className="hidden sm:inline">DEPOSITAR</span>
+              <span className="sm:hidden">DEPOSITAR</span>
             </button>
 
-            <div className="relative ml-1" ref={dropdownRef}>
+            {/* Notification Bell - apenas desktop */}
+            <div className="hidden sm:block">
+              <NotificationBell />
+            </div>
+
+            {/* Profile Dropdown */}
+            <div className="relative ml-0 md:ml-1" ref={dropdownRef}>
               <button 
                 onClick={() => {
                   playSound('click');
                   setIsProfileOpen(!isProfileOpen);
                 }}
-                className="relative group"
+                className="relative group flex items-center gap-1 md:gap-2 p-0.5 md:p-1 rounded-xl hover:bg-white/5 transition-all"
               >
-                <div className="absolute inset-0 rounded-full bg-primary/20 blur-md group-hover:blur-lg transition-all"></div>
-                <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-primary/50 shadow-lg shadow-primary/20 transition-all hover:scale-105">
-                  <img 
-                    alt="User Profile Avatar" 
-                    className="w-full h-full object-cover" 
-                    src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
-                    onError={(e) => {
-                      e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
-                    }}
-                  />
+                <div className="relative">
+                  <div className="absolute inset-0 rounded-full bg-primary/20 blur-md group-hover:blur-lg transition-all"></div>
+                  {loadingUser ? (
+                    <div className="relative w-7 h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 rounded-full bg-white/10 animate-pulse border-2 border-primary/30" />
+                  ) : (
+                    <div className="relative w-7 h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 rounded-full overflow-hidden border-2 border-primary shadow-[0_0_10px_rgba(255,255,0,0.3)] transition-all hover:scale-105">
+                      <img
+                        alt="User Profile Avatar"
+                        className="w-full h-full object-cover"
+                        src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
+                        onError={(e) => {
+                          e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
+                        }}
+                      />
+                    </div>
+                  )}
                 </div>
+                <ChevronDown className="text-white/40 w-2.5 h-2.5 md:w-3 md:h-3 lg:w-3.5 lg:h-3.5 group-hover:text-primary transition-colors" />
               </button>
 
               <AnimatePresence>
@@ -256,13 +270,13 @@ export default function Layout() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.1 }} // <-- REDUZIDO de 0.2 para 0.1
-                    className="absolute right-0 mt-3 w-80 bg-[#0a0b0f]/95 backdrop-blur-xl border border-white/10 shadow-2xl z-[60] rounded-2xl overflow-hidden"
+                    transition={{ duration: 0.1 }}
+                    className="absolute right-0 mt-2 w-72 md:w-80 bg-[#0a0b0f]/95 backdrop-blur-xl border border-white/10 shadow-2xl z-[60] rounded-2xl overflow-hidden"
                   >
                     <div className="relative">
                       <div className="absolute top-0 left-0 w-full h-20 bg-gradient-to-b from-primary/20 to-transparent"></div>
                       <div className="flex flex-col items-center pt-6 pb-4 px-4 relative">
-                        <div className="w-20 h-20 rounded-full border-3 border-primary overflow-hidden shadow-xl shadow-primary/30">
+                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-3 border-primary overflow-hidden shadow-xl shadow-primary/30">
                           <img 
                             alt="User Profile Avatar" 
                             className="w-full h-full object-cover" 
@@ -270,17 +284,26 @@ export default function Layout() {
                           />
                         </div>
                         <div className="mt-3 text-center">
-                          <h3 className="text-white font-headline font-bold text-lg">
-                            {contaRiot ? contaRiot.riot_id : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jogador')}
-                          </h3>
-                          {contaRiot ? (
-                            <p className="text-primary font-headline text-sm tracking-[0.1em] uppercase font-semibold mt-1">
-                              {contaRiot.elo || 'SEM RANQUEADA'}
-                            </p>
+                          {loadingUser ? (
+                            <>
+                              <div className="h-5 w-32 bg-white/10 rounded animate-pulse mx-auto" />
+                              <div className="h-3 w-20 bg-white/10 rounded animate-pulse mx-auto mt-2" />
+                            </>
                           ) : (
-                            <p className="text-white/40 font-headline text-xs tracking-[0.1em] uppercase mt-1">
-                              Conta riot não vinculada
-                            </p>
+                            <>
+                              <h3 className="text-white font-headline font-bold text-base md:text-lg">
+                                {contaRiot ? contaRiot.riot_id : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jogador')}
+                              </h3>
+                              {contaRiot ? (
+                                <p className="text-primary font-headline text-xs md:text-sm tracking-[0.1em] uppercase font-semibold mt-1">
+                                  {contaRiot.elo || 'SEM RANQUEADA'}
+                                </p>
+                              ) : (
+                                <p className="text-white/40 font-headline text-[10px] md:text-xs tracking-[0.1em] uppercase mt-1">
+                                  Conta riot não vinculada
+                                </p>
+                              )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -318,26 +341,72 @@ export default function Layout() {
         </div>
       </header>
 
-      <div className="flex h-full pt-16">
-        <aside className={`${sidebarWidths} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex flex-col py-6 z-40 overflow-y-auto h-[calc(100vh-4rem)] sticky top-16`}>
-          <div className="px-4 mb-8">
-            <div className="aspect-square w-full bg-gradient-to-br from-surface-variant to-black/60 border border-white/10 rounded-xl overflow-hidden shadow-lg">
-              <img 
-                alt="Sidebar Featured" 
-                className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" 
-                src={SIDEBAR_IMAGE_URL}
-              />
+      {/* Layout Principal */}
+      <div className="flex h-full pt-14 md:pt-16">
+        {/* Sidebar Desktop */}
+        <aside className={`${sidebarWidths} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex flex-col py-4 md:py-6 z-40 overflow-y-auto h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 hidden lg:flex`}>
+          {contaRiot ? (
+            <Link 
+              to="/perfil"
+              onClick={() => playSound('click')}
+              className="px-3 mb-6 md:mb-8 flex flex-col items-center group/profile cursor-pointer"
+            >
+              <div className="relative mb-3 md:mb-4">
+                <div className="absolute inset-0 rounded-full bg-primary/10 blur-lg transition-all"></div>
+                <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-primary shadow-[0_0_15px_rgba(255,255,0,0.2)] transition-all">
+                  <img 
+                    alt="User Profile Avatar" 
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover/profile:scale-110" 
+                    src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
+                    onError={(e) => {
+                      e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
+                    }}
+                  />
+                </div>
+                <div className="absolute bottom-1 right-1 w-3.5 h-3.5 md:w-4 md:h-4 bg-green-500 border-2 border-[#050505] rounded-full z-10 shadow-[0_0_8px_rgba(34,197,94,0.3)]"></div>
+              </div>
+              <h3 className="text-white font-headline font-bold text-xs text-center transition-colors truncate max-w-full px-2">
+                {contaRiot.riot_id}
+              </h3>
+            </Link>
+          ) : (
+            <div className="px-3 mb-6 md:mb-8">
+              <Link
+                to="/vincular"
+                onClick={() => playSound('click')}
+                className="block w-full"
+              >
+                <motion.div
+                  animate={{ 
+                    scale: [1, 1.02, 1],
+                    boxShadow: [
+                      "0 0 0px rgba(255, 255, 0, 0)",
+                      "0 0 12px rgba(255, 255, 0, 0.3)",
+                      "0 0 0px rgba(255, 255, 0, 0)"
+                    ]
+                  }}
+                  transition={{ 
+                    duration: 2,
+                    repeat: Infinity,
+                    ease: "easeInOut"
+                  }}
+                  className="bg-primary/100 text-black text-[10px] font-black uppercase tracking-[0.15em] py-3 px-3 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2"
+                >
+                  <Zap className="w-4 h-4" />
+                  <span className="leading-tight text-[10px]">Vincular Conta Riot</span>
+                </motion.div>
+              </Link>
             </div>
-          </div>
+          )}
 
-          <nav className="flex-1 px-3 space-y-1">
+          <nav className="flex-1 px-2 space-y-1">
             {navItems.map((item) => {
               const isActive = location.pathname === item.path;
               return (
                 <button 
                   key={item.label}
                   onClick={() => navigateWithSound(item.path)}
-                  className={`group relative flex items-center gap-3 px-4 py-3 rounded-r-sm font-headline text-xs font-medium uppercase tracking-wider transition-all duration-100 w-full ${
+                  className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-r-sm font-headline text-xs font-medium uppercase tracking-wider transition-all duration-100 w-full ${
                     isActive 
                       ? 'text-primary bg-primary/10 shadow-lg shadow-primary/5' 
                       : 'text-white/50 hover:text-white hover:bg-white/5'
@@ -346,18 +415,18 @@ export default function Layout() {
                   {isActive && (
                     <motion.div 
                       layoutId="activeTab"
-                      className="absolute left-0 w-1 h-10 bg-primary rounded"
-                      transition={{ type: "spring", duration: 0.3, bounce: 0.2 }} // <-- MAIS RÁPIDO
+                      className="absolute left-0 w-1 h-8 bg-primary rounded"
+                      transition={{ type: "spring", duration: 0.3, bounce: 0.2 }}
                     />
                   )}
                   <item.icon className={`w-4 h-4 transition-all ${isActive ? 'text-primary' : 'group-hover:text-primary'}`} />
-                  <span className="hidden sm:inline">{item.label}</span>
+                  <span>{item.label}</span>
                 </button>
               );
             })}
           </nav>
 
-          <div className="px-4 mt-auto space-y-3 pt-6">
+          <div className="px-3 mt-auto space-y-3 pt-6">
             <button 
               onClick={() => playSound('click')}
               className="w-full py-2.5 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-headline text-[10px] uppercase tracking-[0.2em] font-black hover:brightness-110 transition-all shadow-lg shadow-primary/20"
@@ -369,11 +438,12 @@ export default function Layout() {
               className="flex items-center justify-center gap-2 text-white/40 hover:text-primary py-2 text-[10px] uppercase tracking-widest font-headline transition-colors w-full"
             >
               <Headset className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Suporte</span>
+              <span>Suporte</span>
             </button>
           </div>
         </aside>
 
+        {/* Mobile Menu Overlay */}
         <AnimatePresence>
           {isMobileMenuOpen && (
             <>
@@ -381,21 +451,24 @@ export default function Layout() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.1 }} // <-- MAIS RÁPIDO
-                className="fixed inset-0 bg-black/80 backdrop-blur-md z-[55] sm:hidden"
+                transition={{ duration: 0.1 }}
+                className="fixed inset-0 bg-black/80 backdrop-blur-md z-[55] lg:hidden"
                 onClick={() => setIsMobileMenuOpen(false)}
               />
               <motion.aside 
                 initial={{ x: '-100%' }}
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
-                transition={{ type: "spring", damping: 30, stiffness: 300 }} // <-- MAIS RÁPIDO
-                className="fixed inset-y-0 left-0 w-72 bg-background border-r border-white/10 z-[60] py-6 flex flex-col sm:hidden shadow-2xl"
+                transition={{ type: "spring", damping: 30, stiffness: 300 }}
+                className="fixed inset-y-0 left-0 w-64 sm:w-72 bg-[#050505] border-r border-white/10 z-[60] py-6 flex flex-col lg:hidden shadow-2xl"
               >
-                <div className="px-6 mb-6 flex justify-between items-center">
-                  <div>
-                    <h1 className="text-xl font-black text-primary font-headline italic">M7 ACADEMY</h1>
-                    <p className="text-[10px] text-white/40 mt-1">dallee</p>
+                <div className="px-5 mb-6 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <img alt="Logo" className="h-8 w-auto" src={LOGO_URL} />
+                    <div>
+                      <h1 className="text-sm font-black text-primary font-headline italic">M7 ACADEMY</h1>
+                      <p className="text-[8px] text-white/40">jogue e divirta-se!</p>
+                    </div>
                   </div>
                   <button 
                     onClick={() => {
@@ -404,11 +477,34 @@ export default function Layout() {
                     }} 
                     className="text-white/70 hover:text-primary p-2 rounded-lg hover:bg-white/5"
                   >
-                    <X size={20} />
+                    <X size={18} />
                   </button>
                 </div>
                 
-                <nav className="flex-1 px-4 space-y-2">
+                {/* Perfil Mobile */}
+                {contaRiot ? (
+                  <div className="px-5 mb-6 pb-4 border-b border-white/10">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-primary">
+                        <img src={riotIconUrl || user?.user_metadata?.avatar_url} className="w-full h-full object-cover" alt="" />
+                      </div>
+                      <div>
+                        <p className="text-white font-bold text-sm">{contaRiot.riot_id}</p>
+                        <p className="text-primary text-[10px] uppercase">{contaRiot.elo || 'SEM RANQUEADA'}</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="px-5 mb-6">
+                    <Link to="/vincular" onClick={() => setIsMobileMenuOpen(false)}>
+                      <div className="bg-primary/20 border border-primary/40 text-primary text-xs font-bold py-3 rounded-xl text-center">
+                        Vincular Conta Riot
+                      </div>
+                    </Link>
+                  </div>
+                )}
+                
+                <nav className="flex-1 px-3 space-y-1">
                   {navItems.map((item) => (
                     <button 
                       key={item.label}
@@ -423,7 +519,7 @@ export default function Layout() {
                           : 'text-white/60 hover:text-white hover:bg-white/5'
                       }`}
                     >
-                      <item.icon className="w-5 h-5" />
+                      <item.icon className="w-4 h-4" />
                       {item.label}
                     </button>
                   ))}
@@ -436,17 +532,27 @@ export default function Layout() {
                   >
                     TORNE-SE VIP
                   </button>
+                  {/* Suporte centralizado abaixo do botão VIP */}
+                  <button 
+                    onClick={() => {
+                      navigateWithSound('/suporte');
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full flex items-center justify-center gap-2 text-white/40 hover:text-primary py-3 mt-2 text-xs transition-colors"
+                  >
+                    <Headset className="w-3.5 h-3.5" />
+                    Suporte
+                  </button>
                 </div>
               </motion.aside>
             </>
           )}
         </AnimatePresence>
 
-        <main className="flex-1 bg-gradient-to-br from-surface-variant/30 to-background/50 relative overflow-y-auto h-[calc(100vh-4rem)]">
-          <div className="relative z-10 p-5 md:p-8 h-full">
-            <div className="">
-              <Outlet />
-            </div>
+        {/* Main Content */}
+        <main className="flex-1 bg-gradient-to-br from-surface-variant/30 to-background/50 relative overflow-y-auto h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)]">
+          <div className="relative z-10 p-3 md:p-5 lg:p-8 h-full">
+            <Outlet />
           </div>
         </main>
       </div>
@@ -466,44 +572,44 @@ export default function Layout() {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-md bg-[#0a0b0f] border border-white/10 rounded-3xl overflow-hidden shadow-2xl"
+              className="relative w-full max-w-md bg-[#0a0b0f] border border-white/10 rounded-3xl overflow-hidden shadow-2xl mx-4"
             >
               <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/10 to-transparent"></div>
               
-              <div className="relative p-8">
-                <div className="flex justify-between items-center mb-8">
+              <div className="relative p-5 md:p-8">
+                <div className="flex justify-between items-center mb-6 md:mb-8">
                   <div>
-                    <h2 className="text-2xl font-black text-white font-headline italic uppercase tracking-tight">Depositar</h2>
-                    <p className="text-white/40 text-xs uppercase tracking-widest mt-1">Adicione saldo à sua conta</p>
+                    <h2 className="text-xl md:text-2xl font-black text-white font-headline italic uppercase tracking-tight">Depositar</h2>
+                    <p className="text-white/40 text-[10px] md:text-xs uppercase tracking-widest mt-1">Adicione saldo à sua conta</p>
                   </div>
                   <button 
                     onClick={() => setIsDepositModalOpen(false)}
                     className="p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-colors"
                   >
-                    <X size={20} />
+                    <X size={18} />
                   </button>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center justify-between">
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-3 md:p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                        <Zap className="text-primary w-5 h-5" />
+                      <div className="w-8 h-8 md:w-10 md:h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                        <Zap className="text-primary w-4 h-4 md:w-5 md:h-5" />
                       </div>
                       <div>
-                        <p className="text-white font-bold text-sm">PIX Instantâneo</p>
-                        <p className="text-white/40 text-[10px] uppercase tracking-wider">Processamento imediato</p>
+                        <p className="text-white font-bold text-xs md:text-sm">PIX Instantâneo</p>
+                        <p className="text-white/40 text-[8px] md:text-[10px] uppercase tracking-wider">Processamento imediato</p>
                       </div>
                     </div>
-                    <div className="w-2 h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
+                    <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2 md:gap-3">
                     {[20, 50, 100, 200, 500, 1000].map((amount) => (
                       <button 
                         key={amount}
                         onClick={() => playSound('click')}
-                        className="py-3 bg-white/5 border border-white/10 rounded-xl text-white font-bold text-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
+                        className="py-2 md:py-3 bg-white/5 border border-white/10 rounded-xl text-white font-bold text-xs md:text-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
                       >
                         R$ {amount}
                       </button>
@@ -514,20 +620,20 @@ export default function Layout() {
                     <input 
                       type="text" 
                       placeholder="Outro valor"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-4 px-5 text-white font-bold placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 md:py-4 px-4 md:px-5 text-white font-bold text-sm md:text-base placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
                     />
-                    <div className="absolute right-5 top-1/2 -translate-y-1/2 text-primary font-bold text-sm">BRL</div>
+                    <div className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-primary font-bold text-xs md:text-sm">BRL</div>
                   </div>
 
                   <button 
                     onClick={() => playSound('click')}
-                    className="w-full py-4 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-black text-sm uppercase tracking-widest hover:brightness-110 transition-all shadow-lg shadow-primary/20 mt-4"
+                    className="w-full py-3 md:py-4 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-black text-xs md:text-sm uppercase tracking-widest hover:brightness-110 transition-all shadow-lg shadow-primary/20 mt-2 md:mt-4"
                   >
                     GERAR QR CODE PIX
                   </button>
                 </div>
 
-                <p className="text-center text-[10px] text-white/20 mt-6 uppercase tracking-widest">
+                <p className="text-center text-[8px] md:text-[10px] text-white/20 mt-4 md:mt-6 uppercase tracking-widest">
                   Ao depositar você concorda com nossos termos de uso
                 </p>
               </div>

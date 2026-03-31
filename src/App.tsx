@@ -11,6 +11,7 @@ import Equipes from "./pages/equipes";
 import { VerificacaoProvider } from './contexts/VerificacaoContext';
 import VerificacaoStatus from './components/VerificacaoStatus';
 import ResetHandler from "./pages/ResetHandler";
+import Players from "./pages/players";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="/configuracoes" element={<PrivateRoute><div>Configurações</div></PrivateRoute>} />
             <Route path="/politicas" element={<PrivateRoute><div>Políticas</div></PrivateRoute>} />
             <Route path="/suporte" element={<PrivateRoute><div>Suporte</div></PrivateRoute>} />
+            <Route path="/players" element={<PrivateRoute><Players /></PrivateRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>
