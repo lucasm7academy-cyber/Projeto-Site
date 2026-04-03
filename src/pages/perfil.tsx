@@ -18,7 +18,8 @@ import {
   Mail
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { buscarJogadorCompleto, buscarEstatisticasRecentes, getDDRVersion } from '../api/riot';
+import { buscarEstatisticasRecentes, getDDRVersion } from '../api/riot';
+import { buscarElosJogador } from '../api/player';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
@@ -498,19 +499,14 @@ export default function Perfil() {
         }
       }
 
-      if (riotData?.riot_id) {
-        const resultado = await buscarJogadorCompleto(riotData.riot_id);
-        if (resultado.success) {
-          setEloSolo(resultado.data.ranqueadas?.find((r: any) => r.queueType === 'RANKED_SOLO_5x5') ?? null);
-          setEloFlex(resultado.data.ranqueadas?.find((r: any) => r.queueType === 'RANKED_FLEX_SR') ?? null);
-        }
-      }
-
       if (riotData?.puuid) {
-        const [stats, version] = await Promise.all([
+        const [elos, stats, version] = await Promise.all([
+          buscarElosJogador(riotData.puuid),
           buscarEstatisticasRecentes(riotData.puuid),
           getDDRVersion(),
         ]);
+        setEloSolo(elos.soloQ);
+        setEloFlex(elos.flexQ);
         setStatsRecentes(stats);
         setDdrVer(version);
       }

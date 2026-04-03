@@ -137,9 +137,11 @@ export async function buscarInvocadorPorPUUID(puuid: string) {
 export async function buscarElo(puuid: string) {
   try {
     const res = await riotFetch(`${PLATFORM_URL}/lol/league/v4/entries/by-puuid/${puuid}`);
+    if (res.status === 429) throw new Error('RATE_LIMIT');
     if (!res.ok) return [];
     return await res.json();
-  } catch {
+  } catch (err: any) {
+    if (err?.message === 'RATE_LIMIT') throw err;
     return [];
   }
 }
@@ -324,7 +326,7 @@ export async function buscarEstatisticasRecentes(puuid: string, days = 90) {
   try {
     const startTime = Math.floor((Date.now() - days * 24 * 60 * 60 * 1000) / 1000);
     const idsRes = await riotFetch(
-      `${REGIONAL_URL}/lol/match/v5/matches/by-puuid/${puuid}/ids?count=15&startTime=${startTime}`
+      `${REGIONAL_URL}/lol/match/v5/matches/by-puuid/${puuid}/ids?count=20&startTime=${startTime}`
     );
     if (!idsRes.ok) return null;
     const ids: string[] = await idsRes.json();

@@ -15,6 +15,7 @@ export default function NotificationBell() {
   const [contaRiot, setContaRiot] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   // ── Carrega notificações ──────────────────────────────────────────────────
@@ -133,7 +134,20 @@ export default function NotificationBell() {
   // ── Ações ─────────────────────────────────────────────────────────────────
   const handleAcceptInvite = async (notif: any) => {
     if (!user) return;
-    const { error: errInsert } = await supabase.from('time_membros').upsert({
+
+    const { data: membership } = await supabase
+      .from('time_membros')
+      .select('time_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (membership) {
+      setErrorMsg('Você já pertence a um time. Saia antes de aceitar outro convite.');
+      setTimeout(() => setErrorMsg(null), 4000);
+      return;
+    }
+
+    const { error: errInsert } = await supabase.from('time_membros').insert({
       time_id:   notif.time_id,
       user_id:   user.id,
       riot_id:   contaRiot?.riot_id || 'Jogador',
@@ -142,7 +156,7 @@ export default function NotificationBell() {
       is_leader: false,
       elo:       '',
       balance:   0,
-    }, { onConflict: 'time_id,user_id', ignoreDuplicates: true });
+    });
 
     if (errInsert) { console.error('Erro ao aceitar convite:', errInsert); return; }
 
@@ -158,7 +172,19 @@ export default function NotificationBell() {
   };
 
   const handleAcceptRequest = async (notif: any) => {
-    const { error: errInsert } = await supabase.from('time_membros').upsert({
+    const { data: membership } = await supabase
+      .from('time_membros')
+      .select('time_id')
+      .eq('user_id', notif.de_user_id)
+      .maybeSingle();
+
+    if (membership) {
+      setErrorMsg(`${notif.player_riot_id} já pertence a outro time.`);
+      setTimeout(() => setErrorMsg(null), 4000);
+      return;
+    }
+
+    const { error: errInsert } = await supabase.from('time_membros').insert({
       time_id:   notif.time_id,
       user_id:   notif.de_user_id,
       riot_id:   notif.player_riot_id,
@@ -167,7 +193,7 @@ export default function NotificationBell() {
       is_leader: false,
       elo:       '',
       balance:   0,
-    }, { onConflict: 'time_id,user_id', ignoreDuplicates: true });
+    });
 
     if (errInsert) { console.error('Erro ao aceitar solicitação:', errInsert); return; }
 
@@ -285,6 +311,19 @@ export default function NotificationBell() {
               <h3 className="text-white font-bold text-sm uppercase tracking-wider">Notificações</h3>
               <span className="text-[10px] text-white/40 uppercase font-semibold">Recentes</span>
             </div>
+            <AnimatePresence>
+              {errorMsg && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="px-4 py-2 bg-red-500/15 border-b border-red-500/20 flex items-center gap-2"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                  <p className="text-red-400 text-[11px] font-medium">{errorMsg}</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             <div className="max-h-[440px] overflow-y-auto">
               {notifications.length > 0 ? (

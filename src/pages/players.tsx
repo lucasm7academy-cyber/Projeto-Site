@@ -10,69 +10,25 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Users, Crown, TrendingUp, Trophy, Search,
-  ShieldCheck, Gamepad2, X, Medal,
-  Calendar, Activity, Target, Eye, Check, RefreshCw, Star, Upload
+  Users, Crown, Trophy, Search,
+  ShieldCheck, Gamepad2, X, Check, Upload
 } from 'lucide-react';
 import { useSound } from '../hooks/useSound';
 import { supabase } from '../lib/supabase';
+import { buscarElo } from '../api/riot';
+import {
+  PlayerDetailModal,
+  type Jogador,
+  type Role,
+  type EloType,
+  ROLE_CONFIG,
+  ELO_STYLES,
+  ELOS_ORDER,
+  ROLES_ORDER,
+  TIER_MAP,
+  getIconeUrl,
+} from '../components/players/PlayerDetailModal';
 
-// ── Tipos ──────────────────────────────────────────────────────────────────
-type Role = 'TOP' | 'JG' | 'MID' | 'ADC' | 'SUP' | 'RES';
-type EloType = 'Ferro' | 'Bronze' | 'Prata' | 'Ouro' | 'Platina' | 'Esmeralda' | 'Diamante' | 'Mestre' | 'Grão-Mestre' | 'Desafiante';
-
-interface Jogador {
-  id: string;
-  riotId: string;
-  nome: string;
-  nivel: number;
-  elo: EloType;
-  iconeId: number;
-  partidas: number;
-  winRate: number;
-  titulos: number;
-  rolePrincipal: Role;
-  roleSecundaria: Role;
-  isVIP: boolean;
-  isVerified: boolean;
-  kda: number;
-  csPorMinuto: number;
-  participacaoKill: number;
-  conquistas: string[];
-  timeTag?: string;
-  timeColor?: string;
-}
-
-// ── Configuração visual ───────────────────────────────────────────────────
-const ROLE_CONFIG: Record<Role, { label: string; img: string; color: string; bg: string }> = {
-  TOP: { label: 'TOP', img: '/lanes_brancas/Top_iconB.png', color: 'text-red-400', bg: 'bg-red-400/10' },
-  JG: { label: 'JG', img: '/lanes_brancas/Jungle_iconB.png', color: 'text-green-400', bg: 'bg-green-400/10' },
-  MID: { label: 'MID', img: '/lanes_brancas/Middle_iconB.png', color: 'text-blue-400', bg: 'bg-blue-400/10' },
-  ADC: { label: 'ADC', img: '/lanes_brancas/Bottom_iconB.png', color: 'text-yellow-400', bg: 'bg-yellow-400/10' },
-  SUP: { label: 'SUP', img: '/lanes_brancas/Support_iconB.png', color: 'text-amber-500', bg: 'bg-amber-500/10' },
-  RES: { label: 'RES', img: '/lanes_brancas/icon-position-fillB.png', color: 'text-gray-400', bg: 'bg-gray-400/10' },
-};
-
-// Cores dos Elos (bordas e glow)
-const ELO_STYLES: Record<EloType, { border: string; glow: string; text: string; bg: string; gradient: string }> = {
-  Ferro: { border: '#6c757d', glow: '#6c757d40', text: 'text-gray-500', bg: 'bg-gray-500/10', gradient: 'linear-gradient(135deg, #6c757d, #495057, #6c757d)' },
-  Bronze: { border: '#cd7f32', glow: '#cd7f3240', text: 'text-amber-600', bg: 'bg-amber-600/10', gradient: 'linear-gradient(135deg, #cd7f32, #a0522d, #cd7f32)' },
-  Prata: { border: '#c0c0c0', glow: '#c0c0c040', text: 'text-gray-300', bg: 'bg-gray-300/10', gradient: 'linear-gradient(135deg, #c0c0c0, #808080, #c0c0c0)' },
-  Ouro: { border: '#ffd700', glow: '#ffd70040', text: 'text-yellow-400', bg: 'bg-yellow-400/10', gradient: 'linear-gradient(135deg, #ffd700, #daa520, #ffd700)' },
-  Platina: { border: '#00e5ff', glow: '#00e5ff40', text: 'text-cyan-400', bg: 'bg-cyan-400/10', gradient: 'linear-gradient(135deg, #00e5ff, #00acc1, #00e5ff)' },
-  Esmeralda: { border: '#2ecc71', glow: '#2ecc7140', text: 'text-emerald-400', bg: 'bg-emerald-400/10', gradient: 'linear-gradient(135deg, #2ecc71, #27ae60, #2ecc71)' },
-  Diamante: { border: '#3498db', glow: '#3498db60', text: 'text-blue-400', bg: 'bg-blue-400/10', gradient: 'linear-gradient(135deg, #3498db, #2980b9, #3498db)' },
-  Mestre: { border: '#9b59b6', glow: '#9b59b680', text: 'text-purple-400', bg: 'bg-purple-400/10', gradient: 'linear-gradient(135deg, #9b59b6, #8e44ad, #9b59b6)' },
-  'Grão-Mestre': { border: '#e74c3c', glow: '#e74c3c80', text: 'text-red-400', bg: 'bg-red-400/10', gradient: 'linear-gradient(135deg, #e74c3c, #c0392b, #e74c3c)' },
-  Desafiante: { border: '#f1c40f', glow: '#f1c40fa0', text: 'text-yellow-300', bg: 'bg-yellow-300/10', gradient: 'linear-gradient(135deg, #f1c40f, #f39c12, #f1c40f)' },
-};
-
-const ELOS_ORDER: EloType[] = ['Ferro', 'Bronze', 'Prata', 'Ouro', 'Platina', 'Esmeralda', 'Diamante', 'Mestre', 'Grão-Mestre', 'Desafiante'];
-const ROLES_ORDER: Role[] = ['TOP', 'JG', 'MID', 'ADC', 'SUP'];
-
-const getIconeUrl = (iconeId: number) => {
-  return `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${iconeId}.png`;
-};
 
 // ── Dados Mockados (com times e VIP) ───────────────────────────────────────
 const JOGADORES_MOCK: Jogador[] = [
@@ -238,188 +194,8 @@ const JOGADORES_MOCK: Jogador[] = [
   },
 ];
 
-// ── ModalBase ──────────────────────────────────────────────────────────────
-const ModalBase = ({ onClose, children, title, gradientFrom = '#FFB700' }: { 
-  onClose: () => void; 
-  children: React.ReactNode; 
-  title?: string;
-  gradientFrom?: string;
-}) => (
-  <motion.div 
-    initial={{ opacity: 0 }} 
-    animate={{ opacity: 1 }} 
-    exit={{ opacity: 0 }} 
-    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-    onClick={onClose}
-  >
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.92, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.92, y: 20 }}
-      transition={{ type: 'spring', stiffness: 340, damping: 28 }}
-      className="relative w-full max-w-2xl rounded-2xl overflow-hidden"
-      style={{ 
-        background: '#0d0d0d', 
-        border: `2px solid transparent`,
-        backgroundImage: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${gradientFrom}, ${gradientFrom}80) border-box`,
-        boxShadow: `0 0 45px -10px ${gradientFrom}60`
-      }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {title && (
-        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-          <h2 className="text-white font-black text-lg tracking-tight uppercase">{title}</h2>
-          <button onClick={onClose} className="text-white/20 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-      <div className="p-6">{children}</div>
-    </motion.div>
-  </motion.div>
-);
-
-// ── PlayerDetailModal ──────────────────────────────────────────────────────
-const PlayerDetailModal = ({ jogador, puuid, onClose }: {
-  jogador: Jogador;
-  puuid?: string;
-  onClose: () => void;
-}) => {
-  const { playSound } = useSound();
-  const roleConfig = ROLE_CONFIG[jogador.rolePrincipal];
-  const PRIMARY_COLOR = '#FFB700';
-
-  const [stats, setStats] = useState<{
-    eloDisplay: string;
-    eloType: EloType;
-    partidas: number;
-    winRate: number;
-  } | null>(null);
-  const [loadingStats, setLoadingStats] = useState(!!puuid);
-
-  useEffect(() => {
-    if (!puuid) { setLoadingStats(false); return; }
-    buscarStatsModal(puuid).then(s => {
-      if (s) setStats({ eloDisplay: s.rank, eloType: s.elo, partidas: s.partidas, winRate: s.winRate });
-      setLoadingStats(false);
-    });
-  }, [puuid]);
-
-  const eloFinal: EloType = stats?.eloType ?? jogador.elo;
-  const eloStyle = ELO_STYLES[eloFinal];
-
-  return (
-    <ModalBase onClose={onClose} title={jogador.riotId} gradientFrom={eloStyle.border}>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-5">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-full blur-xl" style={{ background: eloStyle.border }} />
-            <img
-              src={getIconeUrl(jogador.iconeId)}
-              className="w-24 h-24 rounded-full border-3 relative z-10 shadow-2xl"
-              style={{ borderColor: eloStyle.border }}
-              alt={jogador.nome}
-            />
-            <div className="absolute -bottom-1 -right-1 px-2 py-0.5 rounded-full text-[11px] font-bold text-black border-2 border-[#0a0a0a] z-20"
-              style={{ background: PRIMARY_COLOR }}>
-              {jogador.nivel}
-            </div>
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-2xl font-black text-white">{jogador.riotId}</h3>
-              {jogador.isVerified && <ShieldCheck className="w-5 h-5" style={{ color: eloStyle.border }} />}
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${eloStyle.bg} ${eloStyle.text}`}>
-                {loadingStats ? '...' : (stats?.eloDisplay ?? eloFinal)}
-              </span>
-              {jogador.timeTag && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold"
-                  style={{ background: `${jogador.timeColor}20`, color: jogador.timeColor, border: `1px solid ${jogador.timeColor}40` }}>
-                  #{jogador.timeTag}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { icon: <Activity className="w-4 h-4" />, label: 'Partidas',  value: loadingStats ? '...' : (stats?.partidas ?? 0).toLocaleString() },
-            { icon: <TrendingUp className="w-4 h-4" />, label: 'Win Rate', value: loadingStats ? '...' : `${stats?.winRate ?? 0}%`, color: (stats?.winRate ?? 0) >= 50 ? '#4ade80' : '#ef4444' },
-            { icon: <Trophy className="w-4 h-4" />, label: 'Títulos', value: jogador.titulos },
-            { icon: <Gamepad2 className="w-4 h-4" />, label: 'KDA', value: '—' },
-            { icon: <Activity className="w-4 h-4" />, label: 'CS/min',   value: '—' },
-            { icon: <Users className="w-4 h-4" />, label: 'KP%',        value: '—' },
-          ].map((stat, idx) => (
-            <div key={idx} className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
-              <div className="flex items-center justify-center gap-1 mb-1 text-white/40">
-                {stat.icon}
-                <span className="text-[10px] font-bold uppercase">{stat.label}</span>
-              </div>
-              <p className="text-white font-black text-lg" style={stat.color ? { color: stat.color } : {}}>{stat.value}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Roles */}
-        <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-          <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">Posições</p>
-          <div className="flex items-center gap-3">
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-full ${roleConfig.bg} border border-white/10`}>
-              <img src={roleConfig.img} alt={roleConfig.label} className="w-5 h-5 object-contain" />
-              <span className={`text-sm font-bold ${roleConfig.color}`}>Principal: {roleConfig.label}</span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/5 border border-white/5">
-              <img src={ROLE_CONFIG[jogador.roleSecundaria].img} alt={ROLE_CONFIG[jogador.roleSecundaria].label} className="w-4 h-4 object-contain opacity-60" />
-              <span className="text-xs text-white/40">{ROLE_CONFIG[jogador.roleSecundaria].label}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Conquistas */}
-        {jogador.conquistas.length > 0 && (
-          <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">Conquistas</p>
-            <div className="flex flex-wrap gap-2">
-              {jogador.conquistas.map((conquista, idx) => (
-                <div key={idx} className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-primary/10 border border-primary/20">
-                  <Medal className="w-3 h-3 text-primary" />
-                  <span className="text-xs text-white/80">{conquista}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Footer */}
-        <div className="flex items-center justify-between pt-2 border-t border-white/5">
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3 h-3 text-white/30" />
-            <span className="text-[10px] text-white/30">Temporada 2025</span>
-          </div>
-          <button
-            onClick={() => { playSound('click'); onClose(); }}
-            className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-white/60 transition-all"
-          >
-            Fechar
-          </button>
-        </div>
-      </div>
-    </ModalBase>
-  );
-};
 
 // ── Mapas ──────────────────────────────────────────────────────────────────
-const TIER_MAP: Record<string, EloType> = {
-  IRON: 'Ferro', BRONZE: 'Bronze', SILVER: 'Prata', GOLD: 'Ouro',
-  PLATINUM: 'Platina', EMERALD: 'Esmeralda', DIAMOND: 'Diamante',
-  MASTER: 'Mestre', GRANDMASTER: 'Grão-Mestre', CHALLENGER: 'Desafiante',
-};
-
 const LANE_MAP: Record<string, Role> = {
   Top: 'TOP', Jungle: 'JG', Middle: 'MID', Bottom: 'ADC', Support: 'SUP', Fill: 'RES',
 };
@@ -485,42 +261,6 @@ async function carregarJogadores(): Promise<Jogador[]> {
   });
 }
 
-// ── Busca stats da Riot API (chamada ao abrir o modal) ─────────────────────
-import { buscarElo } from '../api/riot';
-
-interface StatsModal {
-  elo: EloType;
-  rank: string;
-  pdl: number;
-  partidas: number;
-  winRate: number;
-  kda: number;
-  csPorMinuto: number;
-  participacaoKill: number;
-}
-
-async function buscarStatsModal(puuid: string): Promise<StatsModal | null> {
-  try {
-    const ranqueadas = await buscarElo(puuid);
-
-    const solo = (ranqueadas ?? []).find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
-    const tier = solo?.tier ?? '';
-    const eloType: EloType = TIER_MAP[tier] ?? 'Ferro';
-
-    return {
-      elo:              eloType,
-      rank:             solo ? `${solo.tier} ${solo.rank}` : 'Sem Rank',
-      pdl:              solo?.leaguePoints ?? 0,
-      partidas:         (solo?.wins ?? 0) + (solo?.losses ?? 0),
-      winRate:          solo ? Math.round((solo.wins / ((solo.wins + solo.losses) || 1)) * 100) : 0,
-      kda:              0, // Riot API requer cálculo por partida individal
-      csPorMinuto:      0,
-      participacaoKill: 0,
-    };
-  } catch {
-    return null;
-  }
-}
 
 // ── Componente Principal ────────────────────────────────────────────────────
 export default function App() {
@@ -557,28 +297,34 @@ export default function App() {
       for (const jogador of todosJogadores) {
         if (cancelado) break;
         const puuid = (jogador as any)._puuid;
-        if (!puuid) continue;
-        try {
-          const ranqueadas = await buscarElo(puuid);
-          const solo = (ranqueadas ?? []).find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
-          const eloType: EloType = solo ? (TIER_MAP[solo.tier] ?? 'Ferro') : 'Ferro';
-          const partidas = solo ? (solo.wins + solo.losses) : 0;
-          const winRate  = solo && partidas > 0 ? Math.round((solo.wins / partidas) * 100) : 0;
-          if (cancelado) break;
-          setTodosJogadores(prev =>
-            prev.map((j: any) =>
-              j.id === jogador.id
-                ? { ...j, elo: eloType, partidas, winRate, _carregando: false }
-                : j
-            )
-          );
-        } catch {
-          // marca como carregado mesmo sem dados
+        if (!puuid) {
           setTodosJogadores(prev =>
             prev.map((j: any) => j.id === jogador.id ? { ...j, _carregando: false } : j)
           );
+          continue;
         }
-        await new Promise(r => setTimeout(r, 350));
+        let ranqueadas: any[] = [];
+        try {
+          ranqueadas = await buscarElo(puuid);
+        } catch {
+          // Rate limit (429): espera 3s e tenta uma vez mais
+          await new Promise(r => setTimeout(r, 3000));
+          if (cancelado) break;
+          try { ranqueadas = await buscarElo(puuid); } catch { ranqueadas = []; }
+        }
+        if (cancelado) break;
+        const solo = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
+        const eloType: EloType = solo ? (TIER_MAP[solo.tier] ?? 'Ferro') : 'Ferro';
+        const partidas = solo ? (solo.wins + solo.losses) : 0;
+        const winRate  = solo && partidas > 0 ? Math.round((solo.wins / partidas) * 100) : 0;
+        setTodosJogadores(prev =>
+          prev.map((j: any) =>
+            j.id === jogador.id
+              ? { ...j, elo: eloType, partidas, winRate, _carregando: false }
+              : j
+          )
+        );
+        await new Promise(r => setTimeout(r, 700));
       }
     };
 
@@ -725,13 +471,10 @@ export default function App() {
       </motion.div>
 
       {/* Filtros */}
-      <div className="w-full rounded-[28px] p-[1.5px] mb-12 relative overflow-hidden group"
-        style={{ 
-          background: `linear-gradient(135deg, #FFD700, #FFB700, #FF8C00, #FFD700)`,
-          boxShadow: `0 0 40px -15px ${PRIMARY_COLOR}60`
-        }}
+      <div className="w-full rounded-2xl border border-white/10 p-6 mb-12 relative overflow-hidden"
+        style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%)' }}
       >
-        <div className="bg-[#0d0d0d] rounded-[26.5px] p-6 relative z-10">
+        <div className="relative z-10">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
             {/* Busca */}
             <div className="relative">
@@ -743,7 +486,7 @@ export default function App() {
                 placeholder="Buscar por Riot ID ou nome..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-black/50 border border-white/10 rounded-2xl pl-12 pr-4 py-3 text-white placeholder:text-white/20 focus:outline-none transition-all"
+                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-12 pr-4 py-3 text-white placeholder:text-white/20 focus:outline-none transition-all"
               />
             </div>
 
@@ -755,7 +498,7 @@ export default function App() {
               <select
                 value={filtroElo}
                 onChange={(e) => setFiltroElo(e.target.value as EloType | 'todos')}
-                className="w-full bg-black/50 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-white/80 focus:outline-none cursor-pointer appearance-none"
+                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-10 pr-4 py-3 text-white/80 focus:outline-none cursor-pointer appearance-none"
               >
                 <option value="todos">Todos os Elos</option>
                 {ELOS_ORDER.map(elo => (
@@ -772,7 +515,7 @@ export default function App() {
               <select
                 value={filtroRole}
                 onChange={(e) => setFiltroRole(e.target.value as Role | 'todos')}
-                className="w-full bg-black/50 border border-white/10 rounded-2xl pl-10 pr-4 py-3 text-white/80 focus:outline-none cursor-pointer appearance-none"
+                className="w-full bg-black/40 border border-white/5 rounded-2xl pl-10 pr-4 py-3 text-white/80 focus:outline-none cursor-pointer appearance-none"
               >
                 <option value="todos">Todas as Roles</option>
                 {ROLES_ORDER.map(role => (

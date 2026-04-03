@@ -12,35 +12,17 @@ import {
 } from 'lucide-react';
 import { useSound } from '../hooks/useSound';
 import { supabase } from '../lib/supabase';
+import {
+  TeamCardModal,
+  type TeamCardInfo,
+  type TeamPlayer,
+  type UserRole,
+} from '../components/teams/TeamCardModal';
 
-// ── Tipos ──────────────────────────────────────────────────────────────────
+// ── Tipos (aliados aos tipos compartilhados) ─────────────────────────────────
 type Role = 'TOP' | 'JG' | 'MID' | 'ADC' | 'SUP' | 'RES';
-type UserRole = 'leader' | 'member' | 'visitor';
-
-interface Player {
-  name: string;
-  role: Role;
-  elo: string;
-  balance: number;
-  isLeader?: boolean;
-  userId?: string;
-}
-
-interface Team {
-  id: number | string;
-  name: string;
-  tag: string;
-  logoUrl?: string;
-  gradientFrom: string;
-  gradientTo: string;
-  players: Player[];
-  pdl: number;
-  winrate: number;
-  ranking: number;
-  wins: number;
-  gamesPlayed: number;
-  userRole: UserRole;
-}
+type Player = TeamPlayer;
+type Team   = TeamCardInfo;
 
 // ── Configuração visual de rotas ───────────────────────────────────────────
 const ROLE_CONFIG: Record<Role, { label: string; img: string; color: string; bg: string }> = {
@@ -95,7 +77,7 @@ const ModalBase = ({ onClose, children, gradientFrom, title }: {
 }) => (
   <motion.div
     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+    className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
     onClick={onClose}
   >
     <motion.div
@@ -266,10 +248,13 @@ const INITIAL_TEAMS: Team[] = [
 ];
 
 // ── PlayerRow ─────────────────────────────────────────────────────────────
-const PlayerRow = ({ player, gradientFrom, labelOverride, showBalance = false }: any) => {
+const PlayerRow = ({ player, gradientFrom, labelOverride, showBalance = false, onClick }: any) => {
   const cfg = ROLE_CONFIG[player.role as Role];
   return (
-    <div className="flex items-center gap-2.5 py-1">
+    <div 
+      className="flex items-center gap-2.5 py-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors px-1 -mx-1"
+      onClick={() => onClick?.(player)}
+    >
       <div className="flex items-center gap-1.5 w-[52px] shrink-0">
         <img src={cfg.img} alt={cfg.label} className="w-4 h-4 object-contain" />
         <span className={`text-[11px] font-bold ${cfg.color}`}>{labelOverride || cfg.label}</span>
@@ -294,7 +279,7 @@ const PlayerRow = ({ player, gradientFrom, labelOverride, showBalance = false }:
 };
 
 // ── RoleRow ────────────────────────────────────────────────────────────────
-const RoleRow = ({ role, player, team, isApplied, showBalance = false, labelOverride }: any) => {
+const RoleRow = ({ role, player, team, isApplied, showBalance = false, labelOverride, onPlayerClick }: any) => {
   const cfg = ROLE_CONFIG[role as Role];
   const displayLabel = labelOverride || role;
   if (player) {
@@ -303,7 +288,7 @@ const RoleRow = ({ role, player, team, isApplied, showBalance = false, labelOver
       const resIndex = team.players.filter((pl: any) => pl.role === 'RES').indexOf(player);
       finalLabel = `R${resIndex + 1}`;
     }
-    return <PlayerRow player={player} gradientFrom={team.gradientFrom} labelOverride={finalLabel} showBalance={showBalance} />;
+    return <PlayerRow player={player} gradientFrom={team.gradientFrom} labelOverride={finalLabel} showBalance={showBalance} onClick={onPlayerClick} />;
   }
   return (
     <div className={`flex items-center gap-2.5 py-1 ${isApplied ? '' : 'opacity-40'}`}>
@@ -347,29 +332,30 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
       <div className="rounded-[13px] overflow-hidden relative">
         <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[80px] opacity-20 pointer-events-none" style={{ background: team.gradientFrom }} />
         <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-15 pointer-events-none" style={{ background: team.gradientTo || team.gradientFrom }} />
-        <div className="relative z-10 p-5">
+        <div className="relative z-10 p-6">
           
-          {/* Header: Nome e Tag */}
-          <div className="flex items-start justify-between mb-3">
+          {/* Header: Nome, Tag e Ranking */}
+          <div className="flex items-start justify-between mb-4">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1.5">
-                {team.userRole === 'leader' && (
-                  <motion.div animate={{ rotate: [0, -10, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }}>
-                    <Crown className="w-4 h-4 shrink-0" style={{ color: team.gradientFrom }} />
-                  </motion.div>
-                )}
-                <h3 className="text-white font-black text-xl tracking-tight leading-none truncate">{team.name}</h3>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="inline-block text-[13px] font-black px-3 py-1 rounded-lg tracking-widest"
-                  style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
-                  #{team.tag}
-                </span>
-                {/* Ranking agora fica do lado da tag */}
-                <span className="inline-block text-[13px] font-black px-3 py-1 rounded-lg tracking-widest"
-                  style={{ color: team.gradientFrom, background: `${team.gradientFrom}10`, border: `1px solid ${team.gradientFrom}30` }}>
-                  #{team.ranking}
-                </span>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2">
+                  {team.userRole === 'leader' && (
+                    <motion.div animate={{ rotate: [0, -10, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }}>
+                      <Crown className="w-5 h-5 shrink-0" style={{ color: team.gradientFrom }} />
+                    </motion.div>
+                  )}
+                  <h3 className="text-white font-black text-2xl tracking-tight leading-none truncate">{team.name}</h3>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
+                    style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
+                    #{team.tag}
+                  </span>
+                  <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
+                    style={{ color: team.gradientFrom, background: `${team.gradientFrom}10`, border: `1px solid ${team.gradientFrom}30` }}>
+                    #{team.ranking}
+                  </span>
+                </div>
               </div>
             </div>
             
@@ -1273,243 +1259,6 @@ const ManageLineupModal = ({
   );
 };
 
-// ── TeamDetailModal ────────────────────────────────────────────────────────
-const TeamDetailModal = ({
-  team,
-  onClose,
-  onInvite,
-  onEdit,
-  onManageLineup,
-  onApply,
-  appliedSlots = [],
-  alreadyInTeam = false,
-}: {
-  team: Team;
-  onClose: () => void;
-  onInvite?: () => void;
-  onEdit?: () => void;
-  onManageLineup?: () => void;
-  onApply?: () => void;
-  appliedSlots?: string[];
-  alreadyInTeam?: boolean;
-}) => {
-  const { playSound } = useSound();
-  const financial = teamPower(team.players);
-  const [notCapMsg, setNotCapMsg] = useState(false);
-
-  const handleLineupClick = () => {
-    playSound('click');
-    if (team.userRole === 'leader') {
-      onManageLineup?.();
-    } else {
-      setNotCapMsg(true);
-      setTimeout(() => setNotCapMsg(false), 3000);
-    }
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.92, y: 24 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.92, y: 24 }}
-        transition={{ type: 'spring', stiffness: 340, damping: 28 }}
-        className="w-full max-w-xl rounded-2xl overflow-hidden relative"
-        style={{
-          border: '3px solid transparent',
-          background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-          boxShadow: `0 0 45px -10px ${team.gradientFrom}80`
-        }}
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      >
-        {/* Glows de fundo no modal */}
-        <div className="absolute -top-40 -left-40 w-80 h-80 rounded-full blur-[100px] opacity-25 pointer-events-none" style={{ background: team.gradientFrom }} />
-        <div className="absolute -bottom-40 -right-40 w-80 h-80 rounded-full blur-[100px] opacity-20 pointer-events-none" style={{ background: team.gradientTo || team.gradientFrom }} />
-
-        <div
-          className="rounded-[13px] overflow-hidden relative z-10"
-          style={{ maxHeight: '92vh', overflowY: 'auto' }}
-        >
-          {/* BG radial removido a pedido do usuário */}
-
-          {/* Header */}
-          <div className="relative p-6 pb-4 border-b border-white/[0.07] flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div
-                className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 relative overflow-hidden"
-                style={{
-                  border: '2px solid transparent',
-                  background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-                  boxShadow: `0 0 12px -4px ${team.gradientFrom}80`,
-                }}
-              >
-                {/* Glow interno sutil */}
-                <div 
-                  className="absolute inset-0 opacity-15 blur-lg pointer-events-none"
-                  style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }}
-                />
-                
-                {team.logoUrl ? (
-                  <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" />
-                ) : (
-                  <span className="font-black text-xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>
-                )}
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {team.userRole === 'leader' && <Crown className="w-4 h-4" style={{ color: team.gradientFrom }} />}
-                  <h2 className="text-white font-black text-2xl leading-none">{team.name}</h2>
-                </div>
-                <span
-                  className="text-sm font-black px-2.5 py-0.5 rounded-full tracking-widest"
-                  style={{ color: team.gradientFrom, background: `${team.gradientFrom}20` }}
-                >
-                  #{team.tag}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => { playSound('click'); onClose(); }}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          <div className="p-6 space-y-5">
-            {/* Stats */}
-            <div className="grid grid-cols-4 gap-2.5">
-              {[
-                { label: 'Ranking',  value: `#${team.ranking}`,               accent: false },
-                { label: 'PDL',      value: team.pdl.toLocaleString('pt-BR'), accent: true  },
-                { label: 'Win Rate', value: `${team.winrate}%`,               green: true   },
-                { label: 'Vitórias', value: `${team.wins}`, sub: `/${team.gamesPlayed}`, accent: false },
-              ].map((s: any, i) => (
-                <div key={i} className="bg-black/50 rounded-xl p-3 text-center border border-white/[0.05]">
-                  <p className="text-white/30 text-[10px] uppercase tracking-wider mb-1.5">{s.label}</p>
-                  <p
-                    className={`font-black text-xl leading-none ${s.green ? 'text-green-400' : s.accent ? '' : 'text-white'}`}
-                    style={s.accent ? { color: team.gradientFrom } : undefined}
-                  >
-                    {s.value}
-                  </p>
-                  {s.sub && <p className="text-white/20 text-[10px] mt-0.5">{s.sub}</p>}
-                </div>
-              ))}
-            </div>
-
-            {/* Financial */}
-            <div
-              className="flex items-center justify-between p-4 rounded-2xl border"
-              style={{ background: `${team.gradientFrom}0e`, borderColor: `${team.gradientFrom}35` }}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: `${team.gradientFrom}20` }}>
-                  <Wallet className="w-5 h-5" style={{ color: team.gradientFrom }} />
-                </div>
-                <div>
-                  <p className="text-white font-semibold text-sm">Poder Financeiro</p>
-                  <p className="text-white/35 text-xs">Saldo combinado dos jogadores</p>
-                </div>
-              </div>
-              <p className="font-black text-xl" style={{ color: team.gradientFrom }}>{formatBRL(financial)}</p>
-            </div>
-
-            {/* Roster */}
-            <div>
-              <p className="text-white/30 text-[11px] uppercase tracking-widest font-semibold mb-3">Lineup</p>
-              <div className="space-y-2">
-                {['TOP', 'JG', 'MID', 'ADC', 'SUP', 'RES1', 'RES2'].map((roleKey) => {
-                  const isRes = roleKey.startsWith('RES');
-                  const role = isRes ? 'RES' : roleKey as Role;
-                  const resIndex = isRes ? parseInt(roleKey.slice(3)) - 1 : -1;
-                  
-                  const player = isRes 
-                    ? team.players.filter(p => p.role === 'RES')[resIndex]
-                    : team.players.find(p => p.role === role);
-                    
-                  const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`) || (isRes && appliedSlots.includes(`${team.id}-RES`));
-                  
-                  return (
-                    <div key={roleKey} className="bg-black/35 rounded-xl p-3 border border-white/[0.04]">
-                      <RoleRow 
-                        role={role} 
-                        player={player} 
-                        team={team} 
-                        isApplied={isApplied}
-                        showBalance={true}
-                        labelOverride={isRes ? `R${resIndex + 1}` : undefined}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Histórico */}
-            <div className="bg-black/20 rounded-xl p-4 border border-white/[0.04]">
-              <div className="flex items-center gap-2">
-                <Trophy className="w-4 h-4 text-white/20" />
-                <span className="text-white/25 text-sm font-medium">Histórico de Campeonatos</span>
-                <span className="text-xs text-white/20 bg-white/5 px-2 py-0.5 rounded-full">Em breve</span>
-              </div>
-            </div>
-
-            {/* Ações */}
-            <div className="flex gap-3 pt-1">
-              {(team.userRole === 'leader' || team.userRole === 'member') && (
-                <>
-                  <button onClick={() => { playSound('click'); onInvite?.(); }}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all hover:scale-105"
-                    style={{ background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}50`, color: team.gradientFrom }}>
-                    <UserPlus className="w-4 h-4" /> Convidar
-                  </button>
-                  <button onClick={() => { playSound('click'); onEdit?.(); }}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 transition-all">
-                    <Settings className="w-4 h-4" /> Editar
-                  </button>
-                  <button onClick={handleLineupClick}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 transition-all">
-                    <Users className="w-4 h-4" /> Lineup
-                  </button>
-                  {notCapMsg && (
-                    <div className="w-full col-span-3 text-center text-[11px] text-yellow-400/80 font-semibold py-1">
-                      Apenas o capitão pode gerenciar o lineup
-                    </div>
-                  )}
-                  {team.userRole === 'member' && (
-                    <button onClick={() => playSound('click')}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 transition-all">
-                      <LogOut className="w-4 h-4" /> Sair do Time
-                    </button>
-                  )}
-                </>
-              )}
-              {team.userRole === 'visitor' && (
-                alreadyInTeam ? (
-                  <div className="flex-1 text-center py-3 text-yellow-400/70 text-xs font-semibold">
-                    Você já está em um time. Saia antes de solicitar entrada em outro.
-                  </div>
-                ) : (
-                  <button onClick={() => { playSound('click'); onApply?.(); }}
-                    className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all hover:scale-105"
-                    style={{ background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}50`, color: team.gradientFrom }}>
-                    <Send className="w-4 h-4" /> Solicitar Entrada
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-};
-
 // ── ConfirmLeaveModal ────────────────────────────────────────────────────────
 const ConfirmLeaveModal = ({ onClose, onConfirm }: { onClose: () => void; onConfirm: () => void }) => {
   const { playSound } = useSound();
@@ -1591,7 +1340,6 @@ export default function App() {
   const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
   const [loading, setLoading] = useState(true);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-
   const uidRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -1639,9 +1387,9 @@ export default function App() {
   const [modalSair,      setModalSair]      = useState(false);
   const [modalSolicitar, setModalSolicitar] = useState(false);
 
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [headerBannerUrl, setHeaderBannerUrl] = useState<string | null>(null);
+  const [myTeamBannerUrl, setMyTeamBannerUrl] = useState<string | null>(null);
   const [appliedSlots] = useState<string[]>([]);
 
   const handleHeaderBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1650,6 +1398,15 @@ export default function App() {
       playSound('click');
       const localUrl = URL.createObjectURL(file);
       setHeaderBannerUrl(localUrl);
+    }
+  };
+
+  const handleMyTeamBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      playSound('click');
+      const localUrl = URL.createObjectURL(file);
+      setMyTeamBannerUrl(localUrl);
     }
   };
 
@@ -1834,137 +1591,131 @@ export default function App() {
 
   return (
     <div className="min-h-screen text-white p-4 md:p-8 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
+      <div className="max-w-7xl mx-auto space-y-12">
 
-
-        {/* Header banner */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} 
-          animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-2xl border border-white/8 p-6 group"
-          style={{ background: 'linear-gradient(135deg, #2a1a00 0%, #0a0a0a 60%)' }}
-        >
-          {headerBannerUrl && (
-            <div className="absolute inset-0 z-0">
-              <img 
-                src={headerBannerUrl} 
-                alt="" 
-                className="w-full h-full object-cover opacity-80 group-hover:scale-103 transition-transform duration-700"
-                referrerPolicy="no-referrer"
-              />
-
-        
-              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
-            </div>
-          )}
-
-          <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Users className="w-5 h-5" style={{ color: '#FFB700' }} />
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#FFB700' }}>
-                  Arena de Times
-                </span>
+        {/* Minha Equipe Section */}
+        <div className="space-y-6">
+          {/* Minha Equipe Banner */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-2xl p-6 group transition-all duration-500"
+            style={{
+              background: 'linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 60%)',
+              border: '1px solid rgba(255,255,255,0.08)'
+            }}
+          >
+            {myTeamBannerUrl && (
+              <div className="absolute inset-0 z-0">
+                <img 
+                  src={myTeamBannerUrl} 
+                  alt="" 
+                  className="w-full h-full object-cover opacity-80 group-hover:scale-103 transition-transform duration-700"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
               </div>
-
-              <h1 className="text-2xl md:text-3xl font-black text-white mb-2">
-                Equipes
-              </h1>
-
-              <p className="text-white/50 text-sm max-w-lg">
-                Gerencie seu time, analise os rivais e descubra quais equipes dominam a plataforma.
-              </p>
-            </div>
-
-            <label className="shrink-0 cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleHeaderBannerUpload}
-              />
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold text-xs transition-all backdrop-blur-md">
-                <Upload className="w-3.5 h-3.5" />
-                {headerBannerUrl ? 'Trocar Fundo' : 'Adicionar Fundo'}
-              </div>
-            </label>
-          </div>
-
-          {!headerBannerUrl && (
-            <div 
-              className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-20"
-              style={{ background: 'radial-gradient(circle, #FFB700, transparent)' }}
-            />
-          )}
-        </motion.div>
-
-        {/* Minha Equipe */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Crown className="w-7 h-7 text-primary" />
-              <h2 className="text-white font-bold text-lg">Minha Equipe</h2>
-            </div>
-            {!myTeam && (
-              <button onClick={() => { playSound('click'); setModalCriar(true); }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 font-bold text-sm hover:bg-white/10 transition-all">
-                <Plus className="w-4 h-4" /> Criar Equipe
-              </button>
             )}
-          </div>
 
-          {myTeam ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5 items-start">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                  <TimeCard 
-                    team={myTeam} 
-                    onClick={setSelectedTeam} 
-                    isLarge={true} 
-                    appliedSlots={appliedSlots}
-                  />
-                </motion.div>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Users className="w-5 h-5 text-white/60" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/60">
+                    Minha Equipe
+                  </span>
+                </div>
 
-                {/* Sidebar de ações */}
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
-                  className="bg-white/[0.04] border border-white/8 rounded-2xl p-5 lg:w-56 space-y-2"
-                >
-                  {(myTeam.userRole === 'leader' || myTeam.userRole === 'member') && (
-                    <>
-                      <p className="text-white/30 text-[11px] uppercase tracking-widest font-semibold mb-3">Gerenciar</p>
-                      {[
-                        { icon: UserPlus,    label: 'Convidar Jogador', action: () => { playSound('click'); setModalConvidar(true); } },
-                        { icon: Paintbrush, label: 'Editar Time',       action: () => { playSound('click'); setModalEditar(true); }   },
-                        { icon: Users,      label: 'Gerenciar Lineup',  action: handleSidebarLineup },
-                      ].map(({ icon: Icon, label, action }) => (
-                        <button
-                          key={label} onClick={action}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-white/60 hover:text-white text-sm font-medium transition-all group"
-                        >
-                          <Icon className="w-4 h-4 group-hover:scale-110 transition-transform"
-                            style={{ color: myTeam.gradientFrom }} />
-                          {label}
-                        </button>
-                      ))}
-                      {notCapSidebar && (
-                        <p className="text-yellow-400/80 text-[11px] font-semibold text-center py-1">
-                          Apenas o capitão pode gerenciar o lineup
-                        </p>
-                      )}
-                      <div className="pt-2 mt-2 border-t border-white/5" />
-                    </>
-                  )}
+                <h1 className="text-2xl md:text-3xl font-black text-white mb-2">
+                  Minha Equipe
+                </h1>
 
-                  <button
-                    onClick={() => { playSound('click'); setModalSair(true); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/15 border border-red-500/10 hover:border-red-500/30 text-red-400/70 hover:text-red-400 text-sm font-medium transition-all group"
-                  >
-                    <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                    Sair da Equipe
-                  </button>
-                </motion.div>
+                <p className="text-white/50 text-sm max-w-lg">
+                  Gerencie sua equipe e lidere seus companheiros rumo à vitória.
+                </p>
               </div>
+
+              <div className="flex items-center gap-3">
+                {!myTeam && (
+                  <button onClick={() => { playSound('click'); setModalCriar(true); }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all backdrop-blur-md">
+                    <Plus className="w-4 h-4" /> Criar Equipe
+                  </button>
+                )}
+                <label className="shrink-0 cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleMyTeamBannerUpload}
+                  />
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold text-xs transition-all backdrop-blur-md">
+                    <Upload className="w-3.5 h-3.5" />
+                    {myTeamBannerUrl ? 'Trocar Fundo' : 'Adicionar Fundo'}
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {!myTeamBannerUrl && (
+              <div 
+                className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-10"
+                style={{ background: 'radial-gradient(circle, #ffffff, transparent)' }}
+              />
+            )}
+          </motion.div>
+
+          {/* Minha Equipe Content */}
+          {myTeam ? (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5 items-start">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                <TimeCard 
+                  team={myTeam} 
+                  onClick={setSelectedTeam} 
+                  isLarge={true} 
+                  appliedSlots={appliedSlots}
+                />
+              </motion.div>
+
+              {/* Sidebar de ações */}
+              <motion.div
+                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
+                className="bg-white/[0.04] border border-white/8 rounded-2xl p-5 lg:w-56 space-y-2"
+              >
+                {(myTeam.userRole === 'leader' || myTeam.userRole === 'member') && (
+                  <>
+                    <p className="text-white/30 text-[11px] uppercase tracking-widest font-semibold mb-3">Gerenciar</p>
+                    {[
+                      { icon: UserPlus,    label: 'Convidar Jogador', action: () => { playSound('click'); setModalConvidar(true); } },
+                      { icon: Paintbrush, label: 'Editar Time',       action: () => { playSound('click'); setModalEditar(true); }   },
+                      { icon: Users,      label: 'Gerenciar Lineup',  action: handleSidebarLineup },
+                    ].map(({ icon: Icon, label, action }) => (
+                      <button
+                        key={label} onClick={action}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-white/60 hover:text-white text-sm font-medium transition-all group"
+                      >
+                        <Icon className="w-4 h-4 group-hover:scale-110 transition-transform"
+                          style={{ color: myTeam.gradientFrom }} />
+                        {label}
+                      </button>
+                    ))}
+                    {notCapSidebar && (
+                      <p className="text-yellow-400/80 text-[11px] font-semibold text-center py-1">
+                        Apenas o capitão pode gerenciar o lineup
+                      </p>
+                    )}
+                    <div className="pt-2 mt-2 border-t border-white/5" />
+                  </>
+                )}
+
+                <button
+                  onClick={() => { playSound('click'); setModalSair(true); }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/15 border border-red-500/10 hover:border-red-500/30 text-red-400/70 hover:text-red-400 text-sm font-medium transition-all group"
+                >
+                  <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
+                  Sair da Equipe
+                </button>
+              </motion.div>
             </div>
           ) : (
             <motion.div
@@ -1982,73 +1733,91 @@ export default function App() {
           )}
         </div>
 
-        {/* Ranking Global */}
-        <div>
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <Trophy className="w-7 h-7 text-primary" />
-              <h2 className="text-white font-black text-xl tracking-tight">Ranking Global</h2>
-              <span className="text-white/25 text-xs bg-white/5 px-2.5 py-0.5 rounded-full font-bold">{filteredTeams.length} Equipes</span>
-            </div>
+        {/* Arena de Times Section (Replacing Ranking Global) */}
+        <div className="space-y-6">
+          {/* Arena de Times Banner */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden rounded-2xl border border-white/8 p-6 group"
+            style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 60%)' }}
+          >
+            {headerBannerUrl && (
+              <div className="absolute inset-0 z-0">
+                <img 
+                  src={headerBannerUrl} 
+                  alt="" 
+                  className="w-full h-full object-cover opacity-80 group-hover:scale-103 transition-transform duration-700"
+                  referrerPolicy="no-referrer"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
+              </div>
+            )}
 
-            <div className="flex items-center gap-3">
-              {!myTeam && (
-                <button onClick={() => { playSound('click'); setModalCriar(true); }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 font-bold text-sm hover:bg-white/10 transition-all">
-                  <Plus className="w-4 h-4" /> Criar Equipe
-                </button>
-              )}
-              
-              <div className="flex items-center gap-2">
-                <AnimatePresence mode="wait">
-                  {isSearchOpen ? (
-                    <motion.div
-                      key="search-input"
-                      initial={{ width: 0, opacity: 0 }}
-                      animate={{ width: 'auto', opacity: 1 }}
-                      exit={{ width: 0, opacity: 0 }}
-                      className="relative flex items-center"
-                    >
-                      <Search className="absolute left-3 w-4 h-4 text-white/30" />
-                      <input
-                        autoFocus
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Buscar time ou tag..."
-                        className="bg-white/5 border border-white/10 rounded-xl pl-9 pr-10 py-2 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 w-full md:w-64 transition-all"
-                      />
-                      <button
-                        onClick={() => {
-                          setIsSearchOpen(false);
-                          setSearchQuery('');
-                          playSound('click');
-                        }}
-                        className="absolute right-2 p-1 rounded-lg hover:bg-white/10 text-white/30 hover:text-white transition-all"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </motion.div>
-                  ) : (
-                    <motion.button
-                      key="search-button"
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.8, opacity: 0 }}
-                      onClick={() => {
-                        setIsSearchOpen(true);
-                        playSound('click');
-                      }}
-                      className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 transition-all"
-                    >
-                      <Search className="w-5 h-5" />
-                    </motion.button>
-                  )}
-                </AnimatePresence>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-2">
+                  <Trophy className="w-5 h-5" style={{ color: '#FFB700' }} />
+                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#FFB700' }}>
+                    Arena de Times
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4 mb-2">
+                  <h1 className="text-2xl md:text-3xl font-black text-white">
+                    Equipes
+                  </h1>
+                  <span className="text-white/25 text-xs bg-white/10 px-2.5 py-0.5 rounded-full font-bold self-center">
+                    {filteredTeams.length} Equipes
+                  </span>
+                </div>
+
+                <p className="text-white/50 text-sm max-w-lg">
+                  Analise os rivais e descubra quais equipes dominam a plataforma.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="shrink-0 cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleHeaderBannerUpload}
+                  />
+                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold text-xs transition-all backdrop-blur-md">
+                    <Upload className="w-3.5 h-3.5" />
+                    {headerBannerUrl ? 'Trocar Fundo' : 'Adicionar Fundo'}
+                  </div>
+                </label>
               </div>
             </div>
-          </div>
 
+            {!headerBannerUrl && (
+              <div 
+                className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-20"
+                style={{ background: 'radial-gradient(circle, #FFB700, transparent)' }}
+              />
+            )}
+          </motion.div>
+
+          {/* Barra de Pesquisa */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full bg-black border border-white/10 rounded-xl flex items-center px-4 py-2.5 gap-3"
+          >
+            <Search className="w-4 h-4 text-white/30" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar times..."
+              className="bg-transparent border-none outline-none text-sm text-white w-full placeholder:text-white/20"
+            />
+          </motion.div>
+
+          {/* Ranking List */}
           {filteredTeams.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {filteredTeams.map((team, index) => (
@@ -2089,7 +1858,7 @@ export default function App() {
         {/* Modais */}
         <AnimatePresence>
           {selectedTeam && !modalSolicitar && !modalConvidar && !modalEditar && !modalLineup && !modalSair && (
-            <TeamDetailModal
+            <TeamCardModal
               team={selectedTeam}
               onClose={() => setSelectedTeam(null)}
               onInvite={() => setModalConvidar(true)}
@@ -2121,6 +1890,7 @@ export default function App() {
             <ConfirmLeaveModal onClose={() => setModalSair(false)} onConfirm={handleSairTime} />
           )}
         </AnimatePresence>
+
       </div>
     </div>
   );

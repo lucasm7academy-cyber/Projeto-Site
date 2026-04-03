@@ -291,9 +291,9 @@ export default function Layout() {
                             </>
                           ) : (
                             <>
-                              <h3 className="text-white font-headline font-bold text-base md:text-lg">
+                              <h2 className="text-white font-headline font-bold text-base md:text-lg">
                                 {contaRiot ? contaRiot.riot_id : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jogador')}
-                              </h3>
+                              </h2>
                               {contaRiot ? (
                                 <p className="text-primary font-headline text-xs md:text-sm tracking-[0.1em] uppercase font-semibold mt-1">
                                   {contaRiot.elo || 'SEM RANQUEADA'}
@@ -406,9 +406,9 @@ export default function Layout() {
                 <button 
                   key={item.label}
                   onClick={() => navigateWithSound(item.path)}
-                  className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-r-sm font-headline text-xs font-medium uppercase tracking-wider transition-all duration-100 w-full ${
+                  className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-r-sm font-headline font-bold text-sm uppercase tracking-wider transition-all duration-100 w-full ${
                     isActive 
-                      ? 'text-primary bg-primary/10 shadow-lg shadow-primary/5' 
+                      ? 'text-primary bg-primary/20 shadow-lg shadow-primary/5' 
                       : 'text-white/50 hover:text-white hover:bg-white/5'
                   }`}
                 >
@@ -590,52 +590,27 @@ export default function Layout() {
                   </button>
                 </div>
 
-                <div className="space-y-4">
-                  <div className="bg-white/5 border border-white/10 rounded-2xl p-3 md:p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 md:w-10 md:h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                        <Zap className="text-primary w-4 h-4 md:w-5 md:h-5" />
-                      </div>
-                      <div>
-                        <p className="text-white font-bold text-xs md:text-sm">PIX Instantâneo</p>
-                        <p className="text-white/40 text-[8px] md:text-[10px] uppercase tracking-wider">Processamento imediato</p>
-                      </div>
+                <div className="py-8 md:py-12 flex flex-col items-center justify-center text-center">
+                  <div className="relative mb-4 md:mb-6">
+                    <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse"></div>
+                    <div className="relative w-16 h-16 md:w-20 md:h-20 bg-black/40 border border-primary/30 rounded-2xl flex items-center justify-center shadow-2xl">
+                      <Zap className="text-primary w-8 h-8 md:w-10 md:h-10" />
                     </div>
-                    <div className="w-1.5 h-1.5 md:w-2 md:h-2 bg-green-500 rounded-full shadow-[0_0_8px_rgba(34,197,94,0.5)]"></div>
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2 md:gap-3">
-                    {[20, 50, 100, 200, 500, 1000].map((amount) => (
-                      <button 
-                        key={amount}
-                        onClick={() => playSound('click')}
-                        className="py-2 md:py-3 bg-white/5 border border-white/10 rounded-xl text-white font-bold text-xs md:text-sm hover:border-primary/50 hover:bg-primary/5 transition-all"
-                      >
-                        R$ {amount}
-                      </button>
-                    ))}
+                  
+                  <h3 className="text-xl md:text-2xl font-black text-white font-headline italic uppercase tracking-tighter mb-2">
+                    EM BREVE
+                  </h3>
+                  <p className="text-white/40 text-[10px] md:text-xs uppercase tracking-[0.2em] font-medium max-w-[200px] md:max-w-[240px] leading-relaxed">
+                    Esta funcionalidade será lançada na próxima atualização.
+                  </p>
+                  
+                  <div className="mt-6 md:mt-8 flex gap-1.5">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0.2s]"></div>
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0.4s]"></div>
                   </div>
-
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      placeholder="Outro valor"
-                      className="w-full bg-white/5 border border-white/10 rounded-xl py-3 md:py-4 px-4 md:px-5 text-white font-bold text-sm md:text-base placeholder:text-white/20 focus:outline-none focus:border-primary/50 transition-all"
-                    />
-                    <div className="absolute right-4 md:right-5 top-1/2 -translate-y-1/2 text-primary font-bold text-xs md:text-sm">BRL</div>
-                  </div>
-
-                  <button 
-                    onClick={() => playSound('click')}
-                    className="w-full py-3 md:py-4 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-black text-xs md:text-sm uppercase tracking-widest hover:brightness-110 transition-all shadow-lg shadow-primary/20 mt-2 md:mt-4"
-                  >
-                    GERAR QR CODE PIX
-                  </button>
                 </div>
-
-                <p className="text-center text-[8px] md:text-[10px] text-white/20 mt-4 md:mt-6 uppercase tracking-widest">
-                  Ao depositar você concorda com nossos termos de uso
-                </p>
               </div>
             </motion.div>
           </div>
