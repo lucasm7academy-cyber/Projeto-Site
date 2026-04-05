@@ -56,25 +56,35 @@ const ELO_COLORS: Record<string, string> = {
   'Grão-Mestre': 'text-red-400', Desafiante: 'text-yellow-300',
 };
 const getEloColor = (elo: string) => ELO_COLORS[elo.split(' ')[0]] ?? 'text-white/60';
-const formatBRL   = (v: number)  => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const teamPower   = (players: TeamPlayer[]) => players.reduce((s, p) => s + p.balance, 0);
 
 const ROLE_ORDER: Role[] = ['TOP', 'JG', 'MID', 'ADC', 'SUP', 'RES'];
 
+const getCardStyle = () => ({
+  border: '1px solid rgba(255, 255, 255, 0.1)',
+  background: 'rgba(255, 255, 255, 0.03)',
+  backdropFilter: 'blur(16px)',
+});
+
+const LABEL_CLASS = 'text-xs text-white/30 font-normal uppercase tracking-widest';
+
 // ── PlayerRow (interno) ───────────────────────────────────────────────────────
 const PlayerRow = ({
-  player, gradientFrom, labelOverride, showBalance = false, onClick,
+  player, gradientFrom, labelOverride, onClick,
 }: {
   player: TeamPlayer;
   gradientFrom: string;
   labelOverride?: string;
-  showBalance?: boolean;
   onClick?: (p: TeamPlayer) => void;
 }) => {
   const cfg = ROLE_CONFIG[player.role];
   return (
     <div
-      className="flex items-center gap-2.5 py-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors px-1 -mx-1"
+      className="flex items-center gap-2.5 py-2.5 px-4 cursor-pointer rounded-xl transition-all border"
+      style={{ 
+        background: 'rgba(0, 0, 0, 0.25)', 
+        borderColor: `${gradientFrom}50`,
+        boxShadow: `0 0 15px -5px ${gradientFrom}20`,
+      }}
       onClick={() => onClick?.(player)}
     >
       <div className="flex items-center gap-1.5 w-[52px] shrink-0">
@@ -93,9 +103,6 @@ const PlayerRow = ({
         )}
       </div>
       <div className="flex items-center gap-3 shrink-0">
-        {showBalance && (
-          <span className="text-white/20 text-[10px] font-medium">{formatBRL(player.balance)}</span>
-        )}
         <span className={`text-[11px] font-semibold ${getEloColor(player.elo)}`}>{player.elo}</span>
       </div>
     </div>
@@ -104,17 +111,9 @@ const PlayerRow = ({
 
 // ── RoleRow (interno) ─────────────────────────────────────────────────────────
 const RoleRow = ({
-  role, player, team, isApplied, showBalance = false, labelOverride, onPlayerClick,
-}: {
-  role: Role;
-  player?: TeamPlayer;
-  team: TeamCardInfo;
-  isApplied?: boolean;
-  showBalance?: boolean;
-  labelOverride?: string;
-  onPlayerClick?: (p: TeamPlayer) => void;
-}) => {
-  const cfg = ROLE_CONFIG[role];
+  role, player, team, isApplied, labelOverride, onPlayerClick,
+}: any) => {
+  const cfg = ROLE_CONFIG[role as Role];
   const displayLabel = labelOverride || role;
   if (player) {
     let finalLabel = displayLabel;
@@ -127,13 +126,18 @@ const RoleRow = ({
         player={player}
         gradientFrom={team.gradientFrom}
         labelOverride={finalLabel}
-        showBalance={showBalance}
         onClick={onPlayerClick}
       />
     );
   }
   return (
-    <div className={`flex items-center gap-2.5 py-1 ${isApplied ? '' : 'opacity-40'}`}>
+    <div 
+      className={`flex items-center gap-2.5 py-2.5 px-4 rounded-xl border ${isApplied ? '' : 'opacity-40'}`}
+      style={{ 
+        background: isApplied ? `${team.gradientFrom}05` : 'rgba(0, 0, 0, 0.1)', 
+        borderColor: isApplied ? `${team.gradientFrom}20` : 'rgba(255,255,255,0.05)',
+      }}
+    >
       <div className="flex items-center gap-1.5 w-[52px] shrink-0">
         <img src={cfg.img} alt={cfg.label} className="w-3.5 h-3.5 object-contain" />
         <span className={`text-[11px] font-bold ${cfg.color}`}>{displayLabel}</span>
@@ -171,7 +175,6 @@ export const TeamCardModal = ({
   alreadyInTeam?: boolean;
 }) => {
   const { playSound } = useSound();
-  const financial = teamPower(team.players);
   const [notCapMsg, setNotCapMsg] = useState(false);
 
   // Gerenciamento interno do PlayerDetailModal
@@ -205,6 +208,7 @@ export const TeamCardModal = ({
       timeTag:          team.tag,
       timeColor:        team.gradientFrom,
       timeLogo:         team.logoUrl,
+      timeId:           team.id,
     };
     setSelectedJogador({ jogador, puuid: data?.puuid ?? undefined });
   };
@@ -231,112 +235,97 @@ export const TeamCardModal = ({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.92, y: 24 }}
           transition={{ type: 'spring', stiffness: 340, damping: 28 }}
-          className="w-full max-w-lg rounded-2xl overflow-hidden relative"
+          className="w-full max-w-lg rounded-[2.5rem] overflow-hidden relative"
           style={{
-            border: '3px solid transparent',
-            background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-            boxShadow: `0 0 45px -10px ${team.gradientFrom}80`,
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: 'rgba(13, 13, 13, 0.8)',
+            backgroundImage: `linear-gradient(rgba(13, 13, 13, 0.8), rgba(13, 13, 13, 0.8)) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}40) border-box`,
+            boxShadow: `0 0 60px -15px ${team.gradientFrom}40`,
+            backdropFilter: 'blur(24px)'
           }}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Glows */}
-          <div className="absolute -top-40 -left-40 w-80 h-80 rounded-full blur-[100px] opacity-25 pointer-events-none" style={{ background: team.gradientFrom }} />
-          <div className="absolute -bottom-40 -right-40 w-80 h-80 rounded-full blur-[100px] opacity-20 pointer-events-none" style={{ background: team.gradientTo || team.gradientFrom }} />
+          <div className="absolute -top-40 -left-40 w-80 h-80 rounded-full blur-[120px] opacity-20 pointer-events-none" style={{ background: team.gradientFrom }} />
+          <div className="absolute -bottom-40 -right-40 w-80 h-80 rounded-full blur-[120px] opacity-15 pointer-events-none" style={{ background: team.gradientTo || team.gradientFrom }} />
 
-          <div className="rounded-[13px] overflow-hidden relative z-10" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+          <div className="relative z-10" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
             {/* Header */}
-            <div className="relative p-5 pb-3 border-b border-white/[0.07] flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div className="relative p-8 pb-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+              <div className="flex items-center gap-4">
                 <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 relative overflow-hidden"
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 relative overflow-hidden"
                   style={{
-                    border: '2px solid transparent',
-                    background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-                    boxShadow: `0 0 12px -4px ${team.gradientFrom}80`,
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    boxShadow: `0 0 20px -5px ${team.gradientFrom}40`,
                   }}
                 >
                   <div
-                    className="absolute inset-0 opacity-15 blur-lg pointer-events-none"
+                    className="absolute inset-0 opacity-10 blur-lg pointer-events-none"
                     style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }}
                   />
                   {team.logoUrl ? (
                     <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" />
                   ) : (
-                    <span className="font-black text-lg tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>
+                    <span className="font-black text-xl tracking-widest relative z-10 uppercase" style={{ color: team.gradientFrom }}>{team.tag}</span>
                   )}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    {team.userRole === 'leader' && <Crown className="w-3.5 h-3.5" style={{ color: team.gradientFrom }} />}
-                    <h2 className="text-white font-black text-xl leading-none">{team.name}</h2>
+                  <div className="flex items-center gap-2.5 mb-1">
+                    {team.userRole === 'leader' && <Crown className="w-4 h-4" style={{ color: team.gradientFrom }} />}
+                    <h2 className="text-white font-black text-2xl leading-none uppercase tracking-tight">{team.name}</h2>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <span
-                      className="inline-block text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-widest"
+                      className="inline-block text-[10px] font-black px-2 py-0.5 rounded-lg tracking-widest uppercase"
                       style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}
                     >
                       #{team.tag}
                     </span>
                     <span
-                      className="inline-block text-[9px] font-black px-1.5 py-0.5 rounded-md tracking-widest"
+                      className="inline-block text-[10px] font-black px-2 py-0.5 rounded-lg tracking-widest uppercase"
                       style={{ color: team.gradientFrom, background: `${team.gradientFrom}10`, border: `1px solid ${team.gradientFrom}30` }}
                     >
-                      #{team.ranking}
+                      #{team.ranking}º RANKING
                     </span>
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => { playSound('click'); onClose(); }}
-                className="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/40 hover:text-white transition-all"
+                className="p-2.5 rounded-2xl bg-white/5 hover:bg-white/10 text-white/20 hover:text-white transition-all border border-white/5"
               >
-                <X className="w-5 h-5" />
+                <X className="w-6 h-6" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="p-8 space-y-8">
               {/* Stats */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-4 gap-3">
                 {[
                   { label: 'Ranking',  value: `#${team.ranking}`,                accent: false },
                   { label: 'PDL',      value: team.pdl.toLocaleString('pt-BR'),  accent: true  },
                   { label: 'Win Rate', value: `${team.winrate}%`,                green: true   },
                   { label: 'Vitórias', value: `${team.wins}`, sub: `/${team.gamesPlayed}`, accent: false },
                 ].map((s: any, i) => (
-                  <div key={i} className="bg-black/50 rounded-xl p-2.5 text-center border border-white/[0.05]">
-                    <p className="text-white/30 text-[9px] uppercase tracking-wider mb-1">{s.label}</p>
+                  <div key={i} className="bg-white/5 rounded-2xl p-4 text-center border border-white/5">
+                    <p className="text-white/30 text-[10px] font-black uppercase tracking-widest mb-1.5">{s.label}</p>
                     <p
-                      className={`font-black text-lg leading-none ${s.green ? 'text-green-400' : s.accent ? '' : 'text-white'}`}
+                      className={`font-black text-xl leading-none uppercase ${s.green ? 'text-green-400' : s.accent ? '' : 'text-white'}`}
                       style={s.accent ? { color: team.gradientFrom } : undefined}
                     >
                       {s.value}
                     </p>
-                    {s.sub && <p className="text-white/20 text-[9px] mt-0.5">{s.sub}</p>}
+                    {s.sub && <p className="text-white/20 text-[10px] font-black mt-1 uppercase tracking-widest">{s.sub}</p>}
                   </div>
                 ))}
               </div>
 
-              {/* Poder financeiro */}
-              <div
-                className="flex items-center justify-between p-3 rounded-2xl border"
-                style={{ background: `${team.gradientFrom}0e`, borderColor: `${team.gradientFrom}35` }}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${team.gradientFrom}20` }}>
-                    <Wallet className="w-4 h-4" style={{ color: team.gradientFrom }} />
-                  </div>
-                  <div>
-                    <p className="text-white font-semibold text-xs">Poder Financeiro</p>
-                    <p className="text-white/35 text-[10px]">Saldo combinado dos jogadores</p>
-                  </div>
-                </div>
-                <p className="font-black text-lg" style={{ color: team.gradientFrom }}>{formatBRL(financial)}</p>
-              </div>
-
               {/* Lineup */}
               <div>
-                <p className="text-white/30 text-[10px] uppercase tracking-widest font-semibold mb-2">Lineup</p>
-                <div className="space-y-1.5">
+                <p className={LABEL_CLASS + " mb-4"}>Lineup da Equipe</p>
+                <div className="bg-black/40 rounded-2xl p-4 space-y-3 border border-white/5">
                   {(['TOP', 'JG', 'MID', 'ADC', 'SUP', 'RES1', 'RES2'] as const).map((roleKey) => {
                     const isRes = roleKey.startsWith('RES');
                     const role: Role = isRes ? 'RES' : roleKey as Role;
@@ -348,45 +337,43 @@ export const TeamCardModal = ({
                       appliedSlots.includes(`${team.id}-${roleKey}`) ||
                       (isRes && appliedSlots.includes(`${team.id}-RES`));
                     return (
-                      <div key={roleKey} className="bg-black/35 rounded-xl p-2.5 border border-white/[0.04]">
-                        <RoleRow
-                          role={role}
-                          player={player}
-                          team={team}
-                          isApplied={isApplied}
-                          showBalance={true}
-                          labelOverride={isRes ? `R${resIndex + 1}` : undefined}
-                          onPlayerClick={handlePlayerClick}
-                        />
-                      </div>
+                      <RoleRow
+                        key={roleKey}
+                        role={role}
+                        player={player}
+                        team={team}
+                        isApplied={isApplied}
+                        labelOverride={isRes ? `R${resIndex + 1}` : undefined}
+                        onPlayerClick={handlePlayerClick}
+                      />
                     );
                   })}
                 </div>
               </div>
 
               {/* Histórico */}
-              <div className="bg-black/20 rounded-xl p-4 border border-white/[0.04]">
-                <div className="flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-white/20" />
-                  <span className="text-white/25 text-sm font-medium">Histórico de Campeonatos</span>
-                  <span className="text-xs text-white/20 bg-white/5 px-2 py-0.5 rounded-full">Em breve</span>
+              <div className="bg-white/5 rounded-2xl p-6 border border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Trophy className="w-5 h-5 text-white/20" />
+                  <span className="text-white/30 text-sm font-black uppercase tracking-widest">Histórico de Campeonatos</span>
                 </div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/20 bg-white/5 px-3 py-1 rounded-full border border-white/5">Em breve</span>
               </div>
 
               {/* Ações */}
-              <div className="flex gap-3 pt-1">
+              <div className="flex gap-4 pt-2">
                 {team.userRole === 'visitor' && (
                   alreadyInTeam ? (
-                    <div className="flex-1 text-center py-3 text-yellow-400/70 text-xs font-semibold">
-                      Você já está em um time. Saia antes de solicitar entrada em outro.
+                    <div className="flex-1 text-center py-4 text-yellow-400/70 text-[10px] font-black uppercase tracking-widest bg-yellow-400/5 rounded-2xl border border-yellow-400/10">
+                      Você já está em um time. Saia antes de solicitar entrada.
                     </div>
                   ) : (
                     <button
                       onClick={() => { playSound('click'); onApply?.(); }}
-                      className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all hover:scale-105"
+                      className="flex-1 flex items-center justify-center gap-3 py-5 rounded-2xl font-black text-sm uppercase tracking-widest transition-all shadow-xl"
                       style={{ background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}50`, color: team.gradientFrom }}
                     >
-                      <Send className="w-4 h-4" /> Solicitar Entrada
+                      <Send className="w-5 h-5" /> Solicitar Entrada
                     </button>
                   )
                 )}

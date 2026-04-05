@@ -101,6 +101,9 @@ export default function Vincular() {
       const { data: { session } } = await supabase.auth.getSession();
       const user = session?.user;
       if (user) {
+        // Remover do time automaticamente antes de desvincular
+        await supabase.from('time_membros').delete().eq('user_id', user.id);
+
         const { error, count } = await supabase
           .from('contas_riot')
           .delete({ count: 'exact' })
@@ -639,7 +642,7 @@ export default function Vincular() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white/[0.03] backdrop-blur-xl rounded-3xl border border-primary/30 p-12 text-center shadow-[0_0_50px_rgba(255,215,0,0.1)]"
+          className="bg-black/60 backdrop-blur-xl rounded-3xl border border-primary/30 p-12 text-center shadow-[0_0_50px_rgba(255,215,0,0.1)]"
         >
           <div className="relative w-24 h-24 mx-auto mb-8">
             <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse" />
@@ -676,7 +679,7 @@ export default function Vincular() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white/[0.03] backdrop-blur-xl rounded-3xl border border-red-500/30 p-10 text-center shadow-[0_0_50px_rgba(239,68,68,0.1)]"
+          className="bg-black/60 backdrop-blur-xl rounded-3xl border border-red-500/30 p-10 text-center shadow-[0_0_50px_rgba(239,68,68,0.1)]"
         >
           <div className="w-20 h-20 rounded-3xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-8">
             <AlertCircle className="w-10 h-10 text-red-500" />

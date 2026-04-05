@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users, Crown, Trophy, Search,
-  ShieldCheck, Gamepad2, X, Check, Upload
+  ShieldCheck, Gamepad2, X, Check
 } from 'lucide-react';
 import { useSound } from '../hooks/useSound';
 import { supabase } from '../lib/supabase';
@@ -219,7 +219,7 @@ async function carregarJogadores(): Promise<Jogador[]> {
 
   const timeIds = [...new Set((membros ?? []).map((m: any) => m.time_id))];
   const { data: times } = timeIds.length > 0
-    ? await supabase.from('times').select('id, tag, gradient_from').in('id', timeIds)
+    ? await supabase.from('times').select('id, tag, gradient_from, logo_url').in('id', timeIds)
     : { data: [] };
 
   const perfilMap = Object.fromEntries((perfis ?? []).map((p: any) => [p.id, p]));
@@ -252,8 +252,10 @@ async function carregarJogadores(): Promise<Jogador[]> {
       csPorMinuto:      0,
       participacaoKill: 0,
       conquistas:       [],
-      timeTag:          time?.tag ?? undefined,
+      timeTag:          time?.tag          ?? undefined,
       timeColor:        time?.gradient_from ?? undefined,
+      timeLogo:         time?.logo_url      ?? undefined,
+      timeId:           membro?.time_id     ?? undefined,
       // guarda puuid para buscar stats na Riot API ao abrir o modal
       _puuid:      c.puuid ?? undefined,
       _carregando: true,
@@ -275,7 +277,6 @@ export default function App() {
   const [selectedPuuid, setSelectedPuuid] = useState<string | undefined>(undefined);
   const [popup, setPopup] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [visibleCount, setVisibleCount] = useState(8);
-  const [headerBannerUrl, setHeaderBannerUrl] = useState<string | null>(null);
 
   const PRIMARY_COLOR = '#FFB700';
 
@@ -331,18 +332,6 @@ export default function App() {
     atualizar();
     return () => { cancelado = true; };
   }, [todosJogadores.length]);
-
-  const handleHeaderBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setHeaderBannerUrl(reader.result as string);
-        setPopup({ type: 'success', message: 'Fundo do cabeçalho atualizado!' });
-      };
-      reader.readAsDataURL(file);
-    }
-  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -409,66 +398,49 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Header banner */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }} 
-        animate={{ opacity: 1, y: 0 }}
-        className="relative overflow-hidden rounded-2xl border border-white/8 p-6 group mb-8"
-        style={{ background: 'linear-gradient(135deg, #2a1a00 0%, #0a0a0a 60%)' }}
-      >
-        {headerBannerUrl && (
+      {/* Arena de Jogadores Banner */}
+      <div className="space-y-0 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0a]/20 backdrop-blur-md mb-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} 
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden p-6 group transition-all duration-500"
+        >
+          {/* Imagem FIXA */}
           <div className="absolute inset-0 z-0">
             <img 
-              src={headerBannerUrl} 
-              alt="" 
-              className="w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-700"
-              referrerPolicy="no-referrer"
+              src="/images/fundoryzecortado.png"
+              alt="Arena de Jogadores" 
+              className="w-full h-full object-cover object-center"
             />
-
-            {/* 🔥 DEGRADE LATERAL CONTÍNUO */}
-            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/40 via-black/20 to-black/10" />
+            <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
           </div>
-        )}
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Users className="w-5 h-5" style={{ color: PRIMARY_COLOR }} />
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: PRIMARY_COLOR }}>
-                Arena de Jogadores
+          <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-5 h-5 text-white/60" />
+                <span className="text-xs font-bold uppercase tracking-wider text-white/60">
+                  Arena de Jogadores
+                </span>
+              </div>
+
+              <h1 className="text-2xl md:text-3xl font-black text-white mb-2 uppercase italic tracking-tighter">
+                Jogadores <span style={{ color: PRIMARY_COLOR }}>Rankeados</span>
+              </h1>
+
+              <p className="text-white/50 text-sm max-w-lg">
+                Conheça os melhores invocadores da comunidade, suas estatísticas e conquistas.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <span className="text-white/40 font-bold text-[10px] uppercase tracking-wider">
+                <span className="text-white font-black">{jogadores.length}</span> Jogadores
               </span>
             </div>
-
-            <h1 className="text-2xl md:text-3xl font-black text-white mb-2 uppercase italic tracking-tighter">
-              Jogadores <span style={{ color: PRIMARY_COLOR }}>Rankeados</span>
-            </h1>
-
-            <p className="text-white/50 text-sm max-w-lg">
-              Conheça os melhores invocadores da comunidade, suas estatísticas e conquistas.
-            </p>
           </div>
-
-          <label className="shrink-0 cursor-pointer">
-            <input
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleHeaderBannerUpload}
-            />
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold text-xs transition-all backdrop-blur-md">
-              <Upload className="w-3.5 h-3.5" />
-              {headerBannerUrl ? 'Trocar Fundo' : 'Adicionar Fundo'}
-            </div>
-          </label>
-        </div>
-
-        {!headerBannerUrl && (
-          <div 
-            className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-20"
-            style={{ background: 'radial-gradient(circle, #FFB700, transparent)' }}
-          />
-        )}
-      </motion.div>
+        </motion.div>
+      </div>
 
       {/* Filtros */}
       <div className="w-full rounded-2xl border border-white/10 p-6 mb-12 relative overflow-hidden"

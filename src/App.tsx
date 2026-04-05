@@ -12,6 +12,8 @@ import { VerificacaoProvider } from './contexts/VerificacaoContext';
 import VerificacaoStatus from './components/VerificacaoStatus';
 import ResetHandler from "./pages/ResetHandler";
 import Players from "./pages/players";
+import Jogar from "./pages/Jogar";
+import TimePage from "./pages/TimePage";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -57,7 +59,7 @@ export default function App() {
           
           <Route element={<Layout />}>
             <Route path="/lobby" element={<PrivateRoute><Lobby /></PrivateRoute>} />
-            <Route path="/jogar" element={<PrivateRoute><div>Jogar</div></PrivateRoute>} />
+            <Route path="/jogar" element={<PrivateRoute><Jogar /></PrivateRoute>} />
             <Route path="/campeonatos" element={<PrivateRoute><div>Campeonatos</div></PrivateRoute>} />
             <Route path="/estatisticas" element={<PrivateRoute><div>Estatísticas</div></PrivateRoute>} />
             <Route path="/historico" element={<PrivateRoute><div>Histórico</div></PrivateRoute>} />
@@ -69,6 +71,7 @@ export default function App() {
             <Route path="/politicas" element={<PrivateRoute><div>Políticas</div></PrivateRoute>} />
             <Route path="/suporte" element={<PrivateRoute><div>Suporte</div></PrivateRoute>} />
             <Route path="/players" element={<PrivateRoute><Players /></PrivateRoute>} />
+            <Route path="/times/:id" element={<PrivateRoute><TimePage /></PrivateRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

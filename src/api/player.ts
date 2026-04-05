@@ -10,7 +10,7 @@
  */
 
 import { supabase } from '../lib/supabase';
-import { buscarElo, buscarTopChampions } from './riot';
+import { buscarElo, buscarTopChampions, buscarEstatisticasRecentes } from './riot';
 
 // ── Tipos exportados ──────────────────────────────────────────────────────────
 
@@ -155,6 +155,67 @@ export async function buscarElosJogador(puuid: string): Promise<{ soloQ: EloInfo
   } catch {
     return { soloQ: null, flexQ: null };
   }
+}
+
+// ── Cache TTL ─────────────────────────────────────────────────────────────────
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hora
+
+export interface StatsCache {
+  soloQ:        EloInfo | null;
+  flexQ:        EloInfo | null;
+  topChampions: { championName: string; games: number; wins: number; winrate: number }[];
+  roles:        any[];
+  totalGames:   number;
+}
+
+/**
+ * Retorna stats do Supabase se tiver menos de 1 hora (cache).
+ * Caso contrário, busca da Riot API, salva no banco e retorna.
+ * Garante no máximo 1 ciclo de chamadas à API por hora por jogador.
+ */
+export async function buscarOuAtualizarStats(puuid: string): Promise<StatsCache> {
+  // 1. Checar cache
+  const { data } = await supabase
+    .from('contas_riot')
+    .select('elo_cache, champions_cache, stats_updated_at')
+    .eq('puuid', puuid)
+    .maybeSingle();
+
+  const updatedAt  = data?.stats_updated_at ? new Date(data.stats_updated_at) : null;
+  const isFresh    = !!updatedAt && (Date.now() - updatedAt.getTime()) < CACHE_TTL_MS;
+
+  if (isFresh && data?.elo_cache) {
+    return {
+      soloQ:        data.elo_cache.soloQ        ?? null,
+      flexQ:        data.elo_cache.flexQ         ?? null,
+      topChampions: data.champions_cache?.topChampions ?? [],
+      roles:        data.champions_cache?.roles        ?? [],
+      totalGames:   data.champions_cache?.totalGames   ?? 0,
+    };
+  }
+
+  // 2. Cache velho/inexistente — busca da Riot API em paralelo
+  const [{ soloQ, flexQ }, statsRaw] = await Promise.all([
+    buscarElosJogador(puuid),
+    buscarEstatisticasRecentes(puuid),
+  ]);
+
+  const topChampions = statsRaw?.topChampions ?? [];
+  const roles        = statsRaw?.roles        ?? [];
+  const totalGames   = statsRaw?.totalGames   ?? 0;
+
+  // 3. Salvar no banco (não bloqueia o retorno)
+  supabase
+    .from('contas_riot')
+    .update({
+      elo_cache:        { soloQ, flexQ },
+      champions_cache:  { topChampions, roles, totalGames },
+      stats_updated_at: new Date().toISOString(),
+    })
+    .eq('puuid', puuid)
+    .then();
+
+  return { soloQ, flexQ, topChampions, roles, totalGames };
 }
 
 /**

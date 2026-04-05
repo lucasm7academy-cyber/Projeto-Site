@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users, Crown, TrendingUp, Trophy, ChevronRight, X,
@@ -13,7 +14,6 @@ import {
 import { useSound } from '../hooks/useSound';
 import { supabase } from '../lib/supabase';
 import {
-  TeamCardModal,
   type TeamCardInfo,
   type TeamPlayer,
   type UserRole,
@@ -87,12 +87,14 @@ const ModalBase = ({ onClose, children, gradientFrom, title }: {
       transition={{ type: 'spring', stiffness: 340, damping: 28 }}
       className="relative w-full max-w-lg rounded-2xl overflow-hidden"
       style={gradientFrom ? {
-        border: '3px solid transparent',
-        background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${gradientFrom}, ${gradientFrom}80) border-box`,
-        boxShadow: `0 0 45px -10px ${gradientFrom}60`
+        border: `3px solid ${gradientFrom}`,
+        background: 'rgba(13, 13, 13, 0.6)',
+        boxShadow: `0 0 45px -10px ${gradientFrom}60`,
+        backdropFilter: 'blur(16px)'
       } : {
-        background: '#0d0d0d',
-        border: '1px solid rgba(255,255,255,0.1)'
+        background: 'rgba(13, 13, 13, 0.6)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(16px)'
       }}
       onClick={(e: React.MouseEvent) => e.stopPropagation()}
     >
@@ -252,7 +254,7 @@ const PlayerRow = ({ player, gradientFrom, labelOverride, showBalance = false, o
   const cfg = ROLE_CONFIG[player.role as Role];
   return (
     <div 
-      className="flex items-center gap-2.5 py-1 cursor-pointer hover:bg-white/5 rounded-lg transition-colors px-1 -mx-1"
+      className="flex items-center gap-2.5 py-1 px-1 -mx-1"
       onClick={() => onClick?.(player)}
     >
       <div className="flex items-center gap-1.5 w-[52px] shrink-0">
@@ -316,22 +318,21 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
   appliedSlots?: string[];
 }) => {
   const { playSound } = useSound();
-  const financial = teamPower(team.players);
   return (
     <motion.div
-      whileHover={{ scale: isLarge ? 1.005 : 1.02, y: -3 }}
       whileTap={{ scale: 0.98 }}
       onClick={() => { playSound('click'); onClick(team); }}
       className="rounded-2xl cursor-pointer overflow-hidden group transition-all duration-500"
       style={{
-        border: '3px solid transparent',
-        background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-        boxShadow: `0 0 25px -10px ${team.gradientFrom}a0, inset 0 0 20px -15px ${team.gradientFrom}60`,
+        border: `3px solid ${team.gradientFrom}`,
+        background: 'rgba(13, 13, 13, 0.6)',
+        boxShadow: '0 10px 30px -15px rgba(0,0,0,0.5)',
+        backdropFilter: 'blur(12px)'
       }}
     >
       <div className="rounded-[13px] overflow-hidden relative">
-        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[80px] opacity-20 pointer-events-none" style={{ background: team.gradientFrom }} />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-15 pointer-events-none" style={{ background: team.gradientTo || team.gradientFrom }} />
+        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[80px] opacity-0 pointer-events-none" style={{ background: team.gradientFrom }} />
+        <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-0 pointer-events-none" style={{ background: team.gradientTo || team.gradientFrom }} />
         <div className="relative z-10 p-6">
           
           {/* Header: Nome, Tag e Ranking */}
@@ -363,11 +364,12 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
             {!isLarge && (
               <div className="w-20 h-20 rounded-2xl flex items-center justify-center relative overflow-hidden hidden sm:flex shrink-0 ml-3"
                 style={{
-                  border: '2px solid transparent',
-                  background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-                  boxShadow: `0 0 10px -4px ${team.gradientFrom}80`,
+                  border: `2px solid ${team.gradientFrom}`,
+                  background: 'rgba(13, 13, 13, 0.6)',
+                  boxShadow: `0 4px 12px -4px rgba(0,0,0,0.5)`,
+                  backdropFilter: 'blur(8px)'
                 }}>
-                <div className="absolute inset-0 opacity-15 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }} />
+                <div className="absolute inset-0 opacity-0 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }} />
                 {team.logoUrl
                   ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
                   : <span className="font-black text-lg tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
@@ -379,11 +381,12 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
           <div className="flex justify-center mb-5 sm:hidden">
             <div className="w-36 h-36 rounded-2xl flex items-center justify-center relative overflow-hidden"
               style={{
-                border: '2px solid transparent',
-                background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-                boxShadow: `0 0 15px -4px ${team.gradientFrom}80`,
+                border: `2px solid ${team.gradientFrom}`,
+                background: 'rgba(13, 13, 13, 0.6)',
+                boxShadow: `0 8px 20px -8px rgba(0,0,0,0.6)`,
+                backdropFilter: 'blur(8px)'
               }}>
-              <div className="absolute inset-0 opacity-20 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }} />
+              <div className="absolute inset-0 opacity-0 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }} />
               {team.logoUrl
                 ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
                 : <span className="font-black text-3xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
@@ -391,35 +394,59 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
           </div>
 
           {/* Conteúdo Principal */}
-          <div className={isLarge ? 'flex gap-12 mb-4 items-center' : ''}>
-            <div className={isLarge ? 'flex-1 min-w-0' : ''}>
-              {/* Lista de Jogadores */}
-              <div className="bg-black/30 rounded-xl px-3 py-2 mb-4 space-y-0.5 border border-white/[0.04]">
-                {['TOP', 'JG', 'MID', 'ADC', 'SUP', 'RES1', 'RES2'].map((roleKey) => {
-                  const isRes = roleKey.startsWith('RES');
-                  const role = isRes ? 'RES' : roleKey as Role;
-                  const resIndex = isRes ? parseInt(roleKey.slice(3)) - 1 : -1;
-                  const player = isRes ? team.players.filter(p => p.role === 'RES')[resIndex] : team.players.find(p => p.role === role);
-                  const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`) || (isRes && appliedSlots.includes(`${team.id}-RES`));
-                  return <RoleRow key={roleKey} role={role} player={player} team={team} isApplied={isApplied} labelOverride={isRes ? `R${resIndex + 1}` : undefined} />;
-                })}
+          <div className={isLarge ? 'flex flex-col lg:flex-row gap-8 mb-4 items-start' : ''}>
+            <div className={isLarge ? 'flex-1 w-full min-w-0' : ''}>
+              {/* Lista de Jogadores - Container com fundo "bloco" */}
+              <div className="grid grid-cols-2 gap-4 mb-4 p-4 rounded-2xl bg-black/20 border border-white/5">
+                {/* Pilha 1: Rotas Principais */}
+                <div className="flex flex-col gap-1.5 w-full min-w-0">
+                  <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-1 px-1">Lineup</p>
+                  {['TOP', 'JG', 'MID', 'ADC', 'SUP'].map((roleKey) => {
+                    const role = roleKey as Role;
+                    const player = team.players.find(p => p.role === role);
+                    const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`);
+                    return (
+                      <div key={roleKey} className="bg-[rgba(13,13,13,0.4)] rounded-xl p-2 border border-white/5 transition-all">
+                        <RoleRow role={role} player={player} team={team} isApplied={isApplied} />
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pilha 2: Reservas */}
+                <div className="flex flex-col gap-1.5 w-full min-w-0">
+                  <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-1 px-1">Reservas</p>
+                  {['RES1', 'RES2'].map((roleKey) => {
+                    const resIndex = parseInt(roleKey.slice(3)) - 1;
+                    const player = team.players.filter(p => p.role === 'RES')[resIndex];
+                    const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`) || appliedSlots.includes(`${team.id}-RES`);
+                    return (
+                      <div key={roleKey} className="bg-[rgba(13,13,13,0.4)] rounded-xl p-2 border border-white/5 transition-all">
+                        <RoleRow role="RES" player={player} team={team} isApplied={isApplied} labelOverride={`R${resIndex + 1}`} />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
               
-              {/* Stats Cards */}
-              <div className="grid grid-cols-3 gap-2 mb-3">
-                {[
-                  { icon: <Flame className="w-3 h-3" style={{ color: team.gradientFrom }} />, label: 'PDL', value: team.pdl.toLocaleString('pt-BR'), color: team.gradientFrom },
-                  { icon: <TrendingUp className="w-3 h-3 text-green-400" />, label: 'WIN%', value: `${team.winrate}%`, color: '#4ade80' },
-                  { icon: <Trophy className="w-3 h-3 text-white/30" />, label: 'W/L', value: `${team.wins}/${team.gamesPlayed - team.wins}`, color: 'white' },
-                ].map(m => (
-                  <div key={m.label} className="bg-black/40 rounded-xl p-2.5 text-center border border-white/[0.04]">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      {m.icon}
-                      <span className="text-[9px] text-white/35 uppercase tracking-wider">{m.label}</span>
+              {/* Stats & Details Row */}
+              <div className="relative flex items-center mb-3 pr-8">
+                <div className="grid grid-cols-3 gap-2 flex-1">
+                  {[
+                    { icon: <Flame className="w-3 h-3" style={{ color: team.gradientFrom }} />, label: 'PDL', value: team.pdl.toLocaleString('pt-BR'), color: team.gradientFrom },
+                    { icon: <TrendingUp className="w-3 h-3 text-green-400" />, label: 'WIN%', value: `${team.winrate}%`, color: '#4ade80' },
+                    { icon: <Trophy className="w-3 h-3 text-white/30" />, label: 'W/L', value: `${team.wins}/${team.gamesPlayed - team.wins}`, color: 'white' },
+                  ].map(m => (
+                    <div key={m.label} className="bg-black/80 rounded-xl p-2.5 text-center border border-white/[0.04] flex flex-col justify-center h-full">
+                      <div className="flex items-center justify-center gap-1 mb-1">
+                        {m.icon}
+                        <span className="text-[9px] text-white/35 uppercase tracking-wider">{m.label}</span>
+                      </div>
+                      <span className="font-black text-sm" style={{ color: m.color }}>{m.value}</span>
                     </div>
-                    <span className="font-black text-sm" style={{ color: m.color }}>{m.value}</span>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              
               </div>
             </div>
             
@@ -429,11 +456,12 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
                 <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
                   className="w-64 h-64 rounded-2xl flex items-center justify-center relative overflow-hidden"
                   style={{
-                    border: '3px solid transparent',
-                    background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-                    boxShadow: `0 0 25px -8px ${team.gradientFrom}60`,
+                    border: `3px solid ${team.gradientFrom}`,
+                    background: 'rgba(13, 13, 13, 0.6)',
+                    boxShadow: `0 12px 30px -10px rgba(0,0,0,0.7)`,
+                    backdropFilter: 'blur(12px)'
                   }}>
-                  <div className="absolute inset-0 opacity-20 blur-2xl pointer-events-none" style={{ background: `radial-gradient(circle at center, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}, transparent)` }} />
+                  <div className="absolute inset-0 opacity-0 blur-2xl pointer-events-none" style={{ background: `radial-gradient(circle at center, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}, transparent)` }} />
                   <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none z-10" />
                   {team.logoUrl
                     ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
@@ -441,22 +469,6 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
                 </motion.div>
               </div>
             )}
-          </div>
-
-          {/* Footer: Poder Financeiro */}
-          <div className="flex items-center justify-between px-3 py-2.5 rounded-xl border mt-2"
-            style={{ background: `${team.gradientFrom}0d`, borderColor: `${team.gradientFrom}30` }}>
-            <div className="flex items-center gap-2">
-              <Wallet className="w-4 h-4" style={{ color: team.gradientFrom }} />
-              <span className="text-xs text-white/50">Poder Financeiro</span>
-            </div>
-            <span className="font-bold text-sm text-white">{formatBRL(financial)}</span>
-          </div>
-          
-          {/* Ver detalhes */}
-          <div className="mt-3 flex items-center justify-end gap-1 text-xs text-white/20">
-            <span>Ver detalhes</span>
-            <ChevronRight className="w-3 h-3" />
           </div>
         </div>
       </div>
@@ -513,9 +525,10 @@ const InvitePlayerModal = ({ team, onClose }: { team: Team; onClose: () => void 
   return (
     <ModalBase onClose={onClose}>
       <div className="rounded-2xl overflow-hidden relative" style={{
-        background: '#0d0d0d', border: '3px solid transparent',
-        backgroundImage: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-        boxShadow: `0 0 35px -10px ${team.gradientFrom}70`
+        background: 'rgba(13, 13, 13, 0.6)',
+        border: `3px solid ${team.gradientFrom}`,
+        boxShadow: `0 0 35px -10px ${team.gradientFrom}70`,
+        backdropFilter: 'blur(16px)'
       }}>
         <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: team.gradientFrom }} />
         <div className="relative z-10">
@@ -612,7 +625,7 @@ const InvitePlayerModal = ({ team, onClose }: { team: Team; onClose: () => void 
             <div className="flex gap-3 pt-2">
               <button onClick={onClose} className="flex-1 py-3 bg-white/5 border border-white/10 text-white/60 rounded-xl text-sm font-bold hover:bg-white/10 transition-all">Cancelar</button>
               <button onClick={handleInvite} disabled={!selectedPlayer || !selectedRole || sent || sending}
-                className="flex-[1.5] py-3 rounded-xl text-sm font-black transition-all hover:scale-[1.02] disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
+                className="flex-[1.5] py-3 rounded-xl text-sm font-black transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center justify-center gap-2"
                 style={{ background: team.gradientFrom, color: 'white' }}>
                 {sending ? <><RefreshCw className="w-4 h-4 animate-spin" /> Enviando...</> : sent ? <><Check className="w-4 h-4" /> Enviado!</> : <><Send className="w-4 h-4" /> Confirmar Convite</>}
               </button>
@@ -672,7 +685,7 @@ const JoinRequestModal = ({ team, onClose, alreadyInTeam = false }: { team: Team
               const cfg = ROLE_CONFIG[role]; const isSelected = selectedRole === role;
               return (
                 <button key={role} onClick={() => { playSound('click'); setSelectedRole(role); }}
-                  className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${isSelected ? 'bg-white/10 border-white/20 scale-[1.02]' : 'bg-black/40 border-white/[0.04] hover:bg-white/5 opacity-50'}`}>
+                  className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${isSelected ? 'bg-white/10 border-white/20' : 'bg-black/40 border-white/[0.04] hover:bg-white/5 opacity-50'}`}>
                   <img src={cfg.img} alt={cfg.label} className="w-5 h-5 object-contain" />
                   <span className={`text-[10px] font-black tracking-widest ${isSelected ? cfg.color : 'text-white'}`}>{role}</span>
                 </button>
@@ -686,7 +699,7 @@ const JoinRequestModal = ({ team, onClose, alreadyInTeam = false }: { team: Team
             className="w-full bg-black/40 border border-white/[0.08] rounded-xl p-4 text-sm text-white placeholder:text-white/10 focus:outline-none focus:border-white/20 transition-all min-h-[100px] resize-none" />
         </div>
         <button onClick={handleSubmit} disabled={!selectedRole || submitting}
-          className={`w-full py-4 rounded-xl font-black text-sm tracking-widest transition-all flex items-center justify-center gap-2 ${selectedRole && !submitting ? 'bg-white text-black hover:scale-[1.02] active:scale-95 shadow-xl shadow-white/10' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}>
+          className={`w-full py-4 rounded-xl font-black text-sm tracking-widest transition-all flex items-center justify-center gap-2 ${selectedRole && !submitting ? 'bg-white text-black active:scale-95 shadow-xl shadow-white/10' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}>
           {submitting ? <><RefreshCw className="w-4 h-4 animate-spin" /> Enviando...</> : 'CONFIRMAR SOLICITAÇÃO'}
         </button>
       </div>
@@ -743,15 +756,12 @@ const EditTeamModal = ({
       <div
         className="rounded-2xl overflow-hidden relative"
         style={{ 
-          background: '#0d0d0d',
-          border: '3px solid transparent',
-          backgroundImage: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
-          boxShadow: `0 0 35px -10px ${theme.from}70`
+          background: 'rgba(13, 13, 13, 0.6)',
+          border: `3px solid ${theme.from}`,
+          boxShadow: `0 0 35px -10px ${theme.from}70`,
+          backdropFilter: 'blur(16px)'
         }}
       >
-        {/* Glows de fundo sutil */}
-        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: theme.from }} />
-        
         <div className="relative z-10">
           <div
             className="px-6 py-4 border-b border-white/8 flex items-center justify-between"
@@ -800,8 +810,9 @@ const EditTeamModal = ({
                 className="w-16 h-16 rounded-xl flex items-center justify-center relative overflow-hidden bg-white/5 shrink-0"
                 style={{
                   border: '2px solid transparent',
-                  background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
+                  background: `linear-gradient(rgba(13, 13, 13, 0.6), rgba(13, 13, 13, 0.6)) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
                   boxShadow: `0 0 12px -4px ${theme.from}80`,
+                  backdropFilter: 'blur(8px)'
                 }}
               >
                 {/* Glow interno sutil */}
@@ -826,7 +837,7 @@ const EditTeamModal = ({
                   onChange={handleLogoUpload}
                 />
                 <div
-                  className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed transition-all hover:scale-105 cursor-pointer"
+                  className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed transition-all cursor-pointer"
                   style={{
                     borderColor: `${theme.from}50`,
                     background: `${theme.from}10`,
@@ -852,7 +863,7 @@ const EditTeamModal = ({
                 <button
                   key={t.label}
                   onClick={() => setTheme({ from: t.from, to: t.to })}
-                  className="relative h-10 rounded-xl overflow-hidden border-2 transition-all hover:scale-110"
+                  className="relative h-10 rounded-xl overflow-hidden border-2 transition-all"
                   style={{
                     background: `linear-gradient(135deg, ${t.from}, ${t.to})`,
                     borderColor: theme.from === t.from ? 'white' : 'transparent',
@@ -885,7 +896,7 @@ const EditTeamModal = ({
             </button>
             <button
               onClick={handleSave}
-              className="flex-1 py-3 rounded-xl text-sm font-black transition-all hover:scale-105"
+              className="flex-1 py-3 rounded-xl text-sm font-black transition-all"
               style={{ background: theme.from, color: 'white' }}
             >
               Salvar
@@ -946,10 +957,11 @@ const CreateTeamModal = ({
       <div
         className="rounded-2xl overflow-hidden relative"
         style={{ 
-          background: '#0d0d0d',
+          background: 'rgba(13, 13, 13, 0.6)',
           border: '3px solid transparent',
-          backgroundImage: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
-          boxShadow: `0 0 35px -10px ${theme.from}70`
+          backgroundImage: `linear-gradient(rgba(13, 13, 13, 0.6), rgba(13, 13, 13, 0.6)) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
+          boxShadow: `0 0 35px -10px ${theme.from}70`,
+          backdropFilter: 'blur(16px)'
         }}
       >
         <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: theme.from }} />
@@ -999,9 +1011,10 @@ const CreateTeamModal = ({
                 <div
                   className="w-16 h-16 rounded-xl flex items-center justify-center relative overflow-hidden bg-white/5 shrink-0"
                   style={{
-                    border: '2px solid transparent',
-                    background: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
+                    border: `2px solid ${theme.from}`,
+                    background: 'rgba(13, 13, 13, 0.6)',
                     boxShadow: `0 0 12px -4px ${theme.from}80`,
+                    backdropFilter: 'blur(8px)'
                   }}
                 >
                   <div className="absolute inset-0 opacity-15 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${theme.from}, transparent)` }} />
@@ -1015,7 +1028,7 @@ const CreateTeamModal = ({
                 <label className="flex-1 cursor-pointer">
                   <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleLogoUpload} />
                   <div
-                    className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed transition-all hover:scale-105 cursor-pointer"
+                    className="flex items-center justify-center gap-2 py-3 rounded-xl border border-dashed transition-all cursor-pointer"
                     style={{ borderColor: `${theme.from}50`, background: `${theme.from}10`, color: theme.from }}
                   >
                     {logoUploading
@@ -1036,7 +1049,7 @@ const CreateTeamModal = ({
                   <button
                     key={t.label}
                     onClick={() => setTheme({ from: t.from, to: t.to })}
-                    className="relative h-10 rounded-xl overflow-hidden border-2 transition-all hover:scale-110"
+                    className="relative h-10 rounded-xl overflow-hidden border-2 transition-all"
                     style={{
                       background: `linear-gradient(135deg, ${t.from}, ${t.to})`,
                       borderColor: theme.from === t.from ? 'white' : 'transparent',
@@ -1057,7 +1070,7 @@ const CreateTeamModal = ({
               <button
                 onClick={handleCreate}
                 disabled={!name || tag.length < 3}
-                className="w-full py-4 rounded-xl font-black text-white uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100 shadow-xl"
+                className="w-full py-4 rounded-xl font-black text-white uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 disabled:hover:scale-100 shadow-xl"
                 style={{ 
                   background: `linear-gradient(135deg, ${theme.from}, ${theme.to})`,
                   boxShadow: `0 10px 20px -5px ${theme.from}50`
@@ -1134,10 +1147,11 @@ const ManageLineupModal = ({
       <div
         className="rounded-2xl overflow-hidden relative"
         style={{ 
-          background: '#0d0d0d',
+          background: 'rgba(13, 13, 13, 0.6)',
           border: '3px solid transparent',
-          backgroundImage: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
-          boxShadow: `0 0 35px -10px ${team.gradientFrom}70`
+          backgroundImage: `linear-gradient(rgba(13, 13, 13, 0.6), rgba(13, 13, 13, 0.6)) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
+          boxShadow: `0 0 35px -10px ${team.gradientFrom}70`,
+          backdropFilter: 'blur(16px)'
         }}
       >
         {/* Glows de fundo sutil */}
@@ -1181,7 +1195,7 @@ const ManageLineupModal = ({
               labelOverride = `R${resIndex + 1}`;
             }
             return (
-              <div key={player.name} className="flex items-center gap-3 bg-white/5 rounded-xl p-3 border border-white/5">
+              <div key={player.name} className="flex items-center gap-3 bg-[rgba(13,13,13,0.6)] rounded-xl p-3 border border-white/10 hover:border-white/20 transition-all">
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${cfg.bg}`}>
                   <img src={cfg.img} alt={cfg.label} className="w-5 h-5 object-contain" />
                 </div>
@@ -1205,7 +1219,7 @@ const ManageLineupModal = ({
                       className="bg-black/40 text-white/60 text-[10px] font-bold px-2 py-0.5 rounded border border-white/10 focus:outline-none focus:border-white/30 cursor-pointer"
                     >
                       {(Object.keys(ROLE_CONFIG) as Role[]).map(r => (
-                        <option key={r} value={r} className="bg-[#0d0d0d]">{ROLE_CONFIG[r].label}</option>
+                        <option key={r} value={r} className="bg-[#0d0d0d]/90">{ROLE_CONFIG[r].label}</option>
                       ))}
                     </select>
                   </div>
@@ -1247,7 +1261,7 @@ const ManageLineupModal = ({
 
           <button
             onClick={handleSave}
-            className="w-full mt-2 py-3 rounded-xl font-black text-white text-sm transition-all hover:scale-105"
+            className="w-full mt-2 py-3 rounded-xl font-black text-white text-sm transition-all"
             style={{ background: team.gradientFrom }}
           >
             Salvar Lineup
@@ -1270,7 +1284,7 @@ const ConfirmLeaveModal = ({ onClose, onConfirm }: { onClose: () => void; onConf
     >
       <motion.div
         initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-        className="bg-[#0f0f0f] border border-white/10 rounded-3xl p-8 max-w-sm w-full text-center"
+        className="bg-[#0f0f0f]/80 backdrop-blur-xl border border-white/10 rounded-3xl p-8 max-w-sm w-full text-center"
         onClick={e => e.stopPropagation()}
       >
         <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -1337,15 +1351,26 @@ async function carregarTimesDoSupabase(currentUserId: string | null): Promise<Te
 // ── Main App Component ──────────────────────────────────────────────────────
 export default function App() {
   const { playSound } = useSound();
+  const navigate = useNavigate();
   const [teams, setTeams] = useState<Team[]>(INITIAL_TEAMS);
   const [loading, setLoading] = useState(true);
-  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
+  const [hasRiot, setHasRiot] = useState(false);
   const uidRef = useRef<string | null>(null);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(async ({ data }) => {
       const uid = data?.user?.id ?? null;
       uidRef.current = uid;
+
+      if (uid) {
+        const { data: conta } = await supabase
+          .from('contas_riot')
+          .select('user_id')
+          .eq('user_id', uid)
+          .maybeSingle();
+        setHasRiot(!!conta);
+      }
+
       carregarTimesDoSupabase(uid).then(loaded => {
         setTeams(loaded);
         setLoading(false);
@@ -1385,21 +1410,11 @@ export default function App() {
   const [modalEditar,    setModalEditar]    = useState(false);
   const [modalLineup,    setModalLineup]    = useState(false);
   const [modalSair,      setModalSair]      = useState(false);
-  const [modalSolicitar, setModalSolicitar] = useState(false);
+
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [headerBannerUrl, setHeaderBannerUrl] = useState<string | null>(null);
   const [myTeamBannerUrl, setMyTeamBannerUrl] = useState<string | null>(null);
   const [appliedSlots] = useState<string[]>([]);
-
-  const handleHeaderBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      playSound('click');
-      const localUrl = URL.createObjectURL(file);
-      setHeaderBannerUrl(localUrl);
-    }
-  };
 
   const handleMyTeamBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1577,7 +1592,6 @@ export default function App() {
     const loaded = await carregarTimesDoSupabase(user.id);
     setTeams(loaded);
     setModalSair(false);
-    setSelectedTeam(null);
     playSound('click');
   };
 
@@ -1593,29 +1607,24 @@ export default function App() {
     <div className="min-h-screen text-white p-4 md:p-8 font-sans">
       <div className="max-w-7xl mx-auto space-y-12">
 
-        {/* Minha Equipe Section */}
-        <div className="space-y-6">
+
+        <div className="space-y-0 rounded-2xl overflow-hidden border border-white/10 bg-[rgba(13,13,13,0.6)] backdrop-blur-md">
           {/* Minha Equipe Banner */}
           <motion.div
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }}
-            className="relative overflow-hidden rounded-2xl p-6 group transition-all duration-500"
-            style={{
-              background: 'linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 60%)',
-              border: '1px solid rgba(255,255,255,0.08)'
-            }}
+            className="relative overflow-hidden p-6 group transition-all duration-500"
           >
-            {myTeamBannerUrl && (
-              <div className="absolute inset-0 z-0">
-                <img 
-                  src={myTeamBannerUrl} 
-                  alt="" 
-                  className="w-full h-full object-cover opacity-80 group-hover:scale-103 transition-transform duration-700"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
-              </div>
-            )}
+            {/* Imagem FIXA que você escolheu - SEM input */}
+            <div className="absolute inset-0 z-0">
+              <img 
+                src="/images/fundo fanaticaaa.png"
+                alt="Fundo League of Legends" 
+                className="w-full h-full object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
+            </div>
+
 
             <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
@@ -1626,8 +1635,8 @@ export default function App() {
                   </span>
                 </div>
 
-                <h1 className="text-2xl md:text-3xl font-black text-white mb-2">
-                  Minha Equipe
+                <h1 className="text-2xl md:text-3xl font-black text-white mb-2 uppercase italic tracking-tighter">
+                  Minha <span className="text-primary">Equipe</span>
                 </h1>
 
                 <p className="text-white/50 text-sm max-w-lg">
@@ -1637,245 +1646,208 @@ export default function App() {
 
               <div className="flex items-center gap-3">
                 {!myTeam && (
-                  <button onClick={() => { playSound('click'); setModalCriar(true); }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10 border border-white/10 text-white font-bold text-sm hover:bg-white/20 transition-all backdrop-blur-md">
-                    <Plus className="w-4 h-4" /> Criar Equipe
-                  </button>
-                )}
-                <label className="shrink-0 cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleMyTeamBannerUpload}
-                  />
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold text-xs transition-all backdrop-blur-md">
-                    <Upload className="w-3.5 h-3.5" />
-                    {myTeamBannerUrl ? 'Trocar Fundo' : 'Adicionar Fundo'}
+                  <div className="relative group">
+                    <button
+                      onClick={() => { if (!hasRiot) return; playSound('click'); setModalCriar(true); }}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-bold text-sm transition-all backdrop-blur-md ${hasRiot ? 'bg-white/10 border-white/10 text-white hover:bg-white/20' : 'bg-white/5 border-white/5 text-white/30 cursor-not-allowed'}`}
+                    >
+                      <Plus className="w-4 h-4" /> Criar Equipe
+                    </button>
+                    {!hasRiot && (
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-black/90 border border-white/10 rounded-lg text-[11px] text-white/70 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                        Vincule sua conta Riot para criar uma equipe
+                      </div>
+                    )}
                   </div>
-                </label>
+                )}
               </div>
             </div>
 
-            {!myTeamBannerUrl && (
-              <div 
-                className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-10"
-                style={{ background: 'radial-gradient(circle, #ffffff, transparent)' }}
-              />
-            )}
+            {/* REMOVIDO: condicional de !myTeamBannerUrl */}
           </motion.div>
 
           {/* Minha Equipe Content */}
-          {myTeam ? (
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5 items-start">
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                <TimeCard 
-                  team={myTeam} 
-                  onClick={setSelectedTeam} 
-                  isLarge={true} 
-                  appliedSlots={appliedSlots}
-                />
-              </motion.div>
+          <div className="p-6 border-t border-white/10 bg-[rgba(13,13,13,0.6)] backdrop-blur-md">
+            {myTeam ? (
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5 items-start">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                  <TimeCard 
+                    team={myTeam} 
+                    onClick={(team) => navigate(`/times/${team.id}`)}
+                    isLarge={true} 
+                    appliedSlots={appliedSlots}
+                  />
+                </motion.div>
 
-              {/* Sidebar de ações */}
-              <motion.div
-                initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
-                className="bg-white/[0.04] border border-white/8 rounded-2xl p-5 lg:w-56 space-y-2"
-              >
-                {(myTeam.userRole === 'leader' || myTeam.userRole === 'member') && (
-                  <>
-                    <p className="text-white/30 text-[11px] uppercase tracking-widest font-semibold mb-3">Gerenciar</p>
-                    {[
-                      { icon: UserPlus,    label: 'Convidar Jogador', action: () => { playSound('click'); setModalConvidar(true); } },
-                      { icon: Paintbrush, label: 'Editar Time',       action: () => { playSound('click'); setModalEditar(true); }   },
-                      { icon: Users,      label: 'Gerenciar Lineup',  action: handleSidebarLineup },
-                    ].map(({ icon: Icon, label, action }) => (
-                      <button
-                        key={label} onClick={action}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-white/60 hover:text-white text-sm font-medium transition-all group"
-                      >
-                        <Icon className="w-4 h-4 group-hover:scale-110 transition-transform"
-                          style={{ color: myTeam.gradientFrom }} />
-                        {label}
-                      </button>
-                    ))}
-                    {notCapSidebar && (
-                      <p className="text-yellow-400/80 text-[11px] font-semibold text-center py-1">
-                        Apenas o capitão pode gerenciar o lineup
-                      </p>
-                    )}
-                    <div className="pt-2 mt-2 border-t border-white/5" />
-                  </>
-                )}
-
-                <button
-                  onClick={() => { playSound('click'); setModalSair(true); }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/15 border border-red-500/10 hover:border-red-500/30 text-red-400/70 hover:text-red-400 text-sm font-medium transition-all group"
+                {/* Sidebar de ações (Manager Card) */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
+                  className="bg-white/[0.04] border border-white/8 rounded-2xl p-5 lg:w-56 space-y-2"
                 >
-                  <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                  Sair da Equipe
-                </button>
+                  {(myTeam.userRole === 'leader' || myTeam.userRole === 'member') && (
+                    <>
+                      <p className="text-white/30 text-[11px] uppercase tracking-widest font-semibold mb-3">Gerenciar</p>
+                      {[
+                        { icon: UserPlus,    label: 'Convidar Jogador', action: () => { playSound('click'); setModalConvidar(true); } },
+                        { icon: Paintbrush, label: 'Editar Time',       action: () => { playSound('click'); setModalEditar(true); }   },
+                        { icon: Users,      label: 'Gerenciar Lineup',  action: handleSidebarLineup },
+                      ].map(({ icon: Icon, label, action }) => (
+                        <button
+                          key={label} onClick={action}
+                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-white/60 hover:text-white text-sm font-medium transition-all group"
+                        >
+                          <Icon className="w-4 h-4 transition-transform"
+                            style={{ color: myTeam.gradientFrom }} />
+                          {label}
+                        </button>
+                      ))}
+                      {notCapSidebar && (
+                        <p className="text-yellow-400/80 text-[11px] font-semibold text-center py-1">
+                          Apenas o capitão pode gerenciar o lineup
+                        </p>
+                      )}
+                      <div className="pt-2 mt-2 border-t border-white/5" />
+                    </>
+                  )}
+
+                  <button
+                    onClick={() => { playSound('click'); setModalSair(true); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/15 border border-red-500/10 hover:border-red-500/30 text-red-400/70 hover:text-red-400 text-sm font-medium transition-all group"
+                  >
+                    <LogOut className="w-4 h-4 transition-transform" />
+                    Sair da Equipe
+                  </button>
+                </motion.div>
+              </div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+                className="bg-white/[0.03] border border-dashed border-white/10 rounded-2xl p-12 text-center"
+              >
+                <Users className="w-14 h-14 text-white/10 mx-auto mb-4" />
+                <p className="text-white/35 font-semibold mb-1">Você não está em nenhuma equipe</p>
+                <p className="text-white/20 text-sm mb-5">Crie sua equipe ou solicite entrada em um time abaixo.</p>
+                <div className="relative group inline-block">
+                  <button
+                    onClick={() => { if (!hasRiot) return; playSound('click'); setModalCriar(true); }}
+                    className={`inline-flex items-center gap-2 px-6 py-2.5 rounded-xl border font-bold text-sm transition-all ${hasRiot ? 'bg-white/5 border-white/10 text-white/50 hover:bg-white/10' : 'bg-white/[0.02] border-white/5 text-white/20 cursor-not-allowed'}`}
+                  >
+                    <Plus className="w-4 h-4" /> Criar Equipe
+                  </button>
+                  {!hasRiot && (
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-black/90 border border-white/10 rounded-lg text-[11px] text-white/70 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                      Vincule sua conta Riot para criar uma equipe
+                    </div>
+                  )}
+                </div>
               </motion.div>
-            </div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-              className="bg-white/[0.03] border border-dashed border-white/10 rounded-2xl p-12 text-center"
-            >
-              <Users className="w-14 h-14 text-white/10 mx-auto mb-4" />
-              <p className="text-white/35 font-semibold mb-1">Você não está em nenhuma equipe</p>
-              <p className="text-white/20 text-sm mb-5">Crie sua equipe ou solicite entrada em um time abaixo.</p>
-              <button onClick={() => { playSound('click'); setModalCriar(true); }}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/50 font-bold text-sm hover:bg-white/10 transition-all">
-                <Plus className="w-4 h-4" /> Criar Equipe
-              </button>
-            </motion.div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Arena de Times Section (Replacing Ranking Global) */}
-        <div className="space-y-6">
+        <div className="space-y-0 rounded-2xl overflow-hidden border border-white/10 bg-[rgba(13,13,13,0.6)] backdrop-blur-md">
           {/* Arena de Times Banner */}
           <motion.div
             initial={{ opacity: 0, y: 20 }} 
             animate={{ opacity: 1, y: 0 }}
-            className="relative overflow-hidden rounded-2xl border border-white/8 p-6 group"
-            style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 60%)' }}
+            className="relative overflow-hidden p-6 group transition-all duration-500"
           >
-            {headerBannerUrl && (
-              <div className="absolute inset-0 z-0">
-                <img 
-                  src={headerBannerUrl} 
-                  alt="" 
-                  className="w-full h-full object-cover opacity-80 group-hover:scale-103 transition-transform duration-700"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
-              </div>
-            )}
+            {/* Imagem FIXA */}
+            <div className="absolute inset-0 z-0">
+              <img 
+                src="/images/fundoSKTRYZEAZUL.png"
+                alt="Arena de Times" 
+                className="w-full h-full object-cover object-center"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
+            </div>
 
             <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2 mb-2">
-                  <Trophy className="w-5 h-5" style={{ color: '#FFB700' }} />
-                  <span className="text-xs font-bold uppercase tracking-wider" style={{ color: '#FFB700' }}>
+                  <Trophy className="w-5 h-5 text-white/60" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-white/60">
                     Arena de Times
                   </span>
                 </div>
 
-                <div className="flex items-center gap-4 mb-2">
-                  <h1 className="text-2xl md:text-3xl font-black text-white">
-                    Equipes
-                  </h1>
-                  <span className="text-white/25 text-xs bg-white/10 px-2.5 py-0.5 rounded-full font-bold self-center">
-                    {filteredTeams.length} Equipes
-                  </span>
-                </div>
+                <h1 className="text-2xl md:text-3xl font-black text-white mb-2 uppercase italic tracking-tighter">
+                  Arena de <span className="text-[#FFB700]">Times</span>
+                </h1>
 
                 <p className="text-white/50 text-sm max-w-lg">
-                  Analise os rivais e descubra quais equipes dominam a plataforma.
+                  Analise os rivais e descubra quais equipes dominarão a plataforma.
                 </p>
               </div>
 
               <div className="flex items-center gap-3">
-                <label className="shrink-0 cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleHeaderBannerUpload}
-                  />
-                  <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-bold text-xs transition-all backdrop-blur-md">
-                    <Upload className="w-3.5 h-3.5" />
-                    {headerBannerUrl ? 'Trocar Fundo' : 'Adicionar Fundo'}
-                  </div>
-                </label>
+                <span className="text-white/40 font-bold text-[10px] uppercase tracking-wider">
+                  <span className="text-white font-black">{filteredTeams.length}</span> Equipes
+                </span>
               </div>
             </div>
-
-            {!headerBannerUrl && (
-              <div 
-                className="absolute top-0 right-0 w-72 h-72 rounded-full blur-3xl opacity-20"
-                style={{ background: 'radial-gradient(circle, #FFB700, transparent)' }}
-              />
-            )}
           </motion.div>
 
-          {/* Barra de Pesquisa */}
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="w-full bg-black border border-white/10 rounded-xl flex items-center px-4 py-2.5 gap-3"
-          >
-            <Search className="w-4 h-4 text-white/30" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Buscar times..."
-              className="bg-transparent border-none outline-none text-sm text-white w-full placeholder:text-white/20"
-            />
-          </motion.div>
-
-          {/* Ranking List */}
-          {filteredTeams.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {filteredTeams.map((team, index) => (
-                <motion.div 
-                  key={team.id} 
-                  layout
-                  initial={{ opacity: 0, y: 20 }} 
-                  animate={{ opacity: 1, y: 0 }} 
-                  transition={{ delay: 0.05 * index }}
-                >
-                  <TimeCard 
-                    team={team} 
-                    onClick={setSelectedTeam} 
-                    isLarge={false}
-                    appliedSlots={appliedSlots}
-                  />
-                </motion.div>
-              ))}
-            </div>
-          ) : (
+          {/* Arena de Times Content (Search + Grid) */}
+          <div className="p-6 border-t border-white/10 bg-[rgba(13,13,13,0.6)] backdrop-blur-md space-y-6">
+            {/* Barra de Pesquisa */}
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white/[0.02] border border-dashed border-white/5 rounded-2xl p-16 text-center"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full bg-black/60 backdrop-blur-md border border-white/10 rounded-xl flex items-center px-4 py-2.5 gap-3 transition-all focus-within:border-white/30"
             >
-              <Search className="w-14 h-14 text-white/5 mx-auto mb-4" />
-              <p className="text-white/30 font-medium text-lg">Nenhum time encontrado para "{searchQuery}"</p>
-              <button
-                onClick={() => setSearchQuery('')}
-                className="mt-4 text-xs font-bold uppercase tracking-widest text-[#FFB700] hover:underline"
-              >
-                Limpar busca
-              </button>
+              <Search className="w-4 h-4 text-white/30" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar times..."
+                className="bg-transparent border-none outline-none text-sm text-white w-full placeholder:text-white/20"
+              />
             </motion.div>
-          )}
+
+            {/* Ranking List */}
+            {filteredTeams.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredTeams.map((team, index) => (
+                  <motion.div 
+                    key={team.id} 
+                    layout
+                    initial={{ opacity: 0, y: 20 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    transition={{ delay: 0.05 * index }}
+                  >
+                    <TimeCard 
+                      team={team} 
+                      onClick={(team) => navigate(`/times/${team.id}`)}
+                      isLarge={false}
+                      appliedSlots={appliedSlots}
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-white/[0.02] border border-dashed border-white/5 rounded-2xl p-16 text-center"
+              >
+                <Search className="w-14 h-14 text-white/5 mx-auto mb-4" />
+                <p className="text-white/30 font-medium text-lg">Nenhum time encontrado para "{searchQuery}"</p>
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="mt-4 text-xs font-bold uppercase tracking-widest text-[#FFB700] hover:underline"
+                >
+                  Limpar busca
+                </button>
+              </motion.div>
+            )}
+          </div>
         </div>
 
         {/* Modais */}
         <AnimatePresence>
-          {selectedTeam && !modalSolicitar && !modalConvidar && !modalEditar && !modalLineup && !modalSair && (
-            <TeamCardModal
-              team={selectedTeam}
-              onClose={() => setSelectedTeam(null)}
-              onInvite={() => setModalConvidar(true)}
-              onEdit={() => setModalEditar(true)}
-              onManageLineup={() => setModalLineup(true)}
-              onApply={() => setModalSolicitar(true)}
-              appliedSlots={appliedSlots}
-              alreadyInTeam={myTeam !== null}
-            />
-          )}
-          {selectedTeam && modalSolicitar && (
-            <JoinRequestModal
-              team={selectedTeam}
-              onClose={() => setModalSolicitar(false)}
-              alreadyInTeam={myTeam !== null}
-            />
-          )}
           {modalCriar && (
             <CreateTeamModal onClose={() => setModalCriar(false)} onCreate={handleCreateTeam} />
           )}
