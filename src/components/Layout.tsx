@@ -123,7 +123,7 @@ export default function Layout() {
   const profileMenuItems = [
     { label: 'Minha conta', icon: UserIcon, path: '/perfil' },
     { label: 'Minhas partidas', icon: Gamepad2, path: '/partidas' },
-    { label: 'Equipes', icon: Users, path: '/time' },
+    { label: 'Equipes', icon: Users, path: '/times' },
     { label: 'Vincular conta', icon: LinkIcon, path: '/vincular' },
     { label: 'Configurações', icon: Settings, path: '/configuracoes' },
     { label: 'Políticas', icon: ShieldCheck, path: '/politicas' },
@@ -139,7 +139,7 @@ export default function Layout() {
     <div 
       className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed"
       style={{ 
-        backgroundImage: `url(${getImageUrl('fundo m7-infinito.png')})`,
+        backgroundImage: `url(${getImageUrl('fundoescuro.png')})`,
         backgroundColor: '#0a0b0f'
       }}
     >
@@ -226,8 +226,8 @@ export default function Layout() {
               className="bg-gradient-to-r from-primary to-[#E6A600] text-black px-2 md:px-3 lg:px-4 py-1 md:py-1.5 rounded-full font-bold text-[10px] md:text-[11px] uppercase tracking-wider hover:brightness-110 transition-all active:scale-95 shadow-lg shadow-primary/20 flex items-center gap-1"
             >
               <CreditCard className="w-2.5 h-2.5 md:w-3 md:h-3" />
-              <span className="hidden sm:inline">DEPOSITAR</span>
-              <span className="sm:hidden">DEPOSITAR</span>
+              <span className="hidden sm:inline">Carteira</span>
+              <span className="sm:hidden">Carteira</span>
             </button>
 
             {/* Notification Bell - apenas desktop */}

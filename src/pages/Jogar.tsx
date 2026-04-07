@@ -1,15 +1,14 @@
 // src/pages/jogar.tsx
 // Página completa de "Jogar" - Lobby de partidas com Salas Abertas
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Zap, Users, Sword, Trophy, DoorOpen,
-  Crown, Shield, ChevronRight, LogIn, Plus,
-  Search, Lock, Globe, Clock, UserPlus, X,
-  Copy, Trash2, ArrowLeft
+import {
+  Zap, Users, Trophy, DoorOpen,
+  Crown, Shield, ChevronRight, ArrowLeft
 } from 'lucide-react';
-import SalaAberta from '../components/partidas/salaaberta';
+import SalaAberta from '../components/partidas/SalaAberta';
+import { supabase } from '../lib/supabase';
 
 // ============================================
 // TIPOS
@@ -17,36 +16,74 @@ import SalaAberta from '../components/partidas/salaaberta';
 
 type GameMode = 'solo' | 'team_vs_random' | 'team_vs_team' | 'open';
 
-interface UserTeam {
-  id: string;
-  nome: string;
-  tag: string;
-  members: number;
-}
-
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 
 const Jogar = () => {
-  const [selectedMode, setSelectedMode] = useState<GameMode | null>(null);
   const [showSalaAberta, setShowSalaAberta] = useState(false);
-  
-  // Dados do usuário logado (depois vem do auth)
-  const usuarioAtual = {
-    id: '1',
-    nome: 'Lucks',
-    elo: 'Ouro',
-    role: 'MID'
-  };
+  const [usuarioAtual, setUsuarioAtual] = useState<{
+    id: string; nome: string; tag?: string; elo: string; role: string;
+  } | null>(null);
+  const [userTeam, setUserTeam] = useState<{
+    id: string; nome: string; tag: string; logo?: string;
+  } | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true); // eslint-disable-line
 
-  // Time do usuário (se tiver)
-  const userTeam: UserTeam | null = {
-    id: '1',
-    nome: 'Nexus Dragon',
-    tag: 'NDX',
-    members: 5,
-  };
+  useEffect(() => {
+    const carregar = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { setLoadingUser(false); return; }
+
+      const [{ data: perfil }, { data: riot }, { data: membro }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
+        supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle(),
+        supabase.from('time_membros').select('time_id, role').eq('user_id', user.id).maybeSingle(),
+      ]);
+
+      const riotAny = riot as any;
+      const riotId: string = riotAny?.riot_id ?? '';
+      const [gameName, tagLine] = riotId.includes('#') ? riotId.split('#') : [riotId, ''];
+      const elo = riotAny?.elo_cache?.soloQ?.tier ?? 'Sem Elo';
+      const role = membro?.role ?? 'RES';
+      const perfilAny = perfil as any;
+
+      // Avatar: ícone do perfil Riot via DDragon
+      let avatar: string | undefined;
+      if (riotAny?.profile_icon_id) {
+        const ddrVer = '15.8.1'; // fallback estático, boa o suficiente aqui
+        avatar = `https://ddragon.leagueoflegends.com/cdn/${ddrVer}/img/profileicon/${riotAny.profile_icon_id}.png`;
+      }
+
+      setUsuarioAtual({
+        id: user.id,
+        nome: gameName || perfilAny?.username || perfilAny?.full_name || user.email?.split('@')[0] || 'Jogador',
+        tag: tagLine ? `#${tagLine}` : undefined,
+        elo,
+        role,
+        avatar,
+      });
+
+      if (membro?.time_id) {
+        const { data: time } = await supabase
+          .from('times')
+          .select('id, nome, tag, logo_url')
+          .eq('id', membro.time_id)
+          .maybeSingle();
+        if (time) {
+          setUserTeam({
+            id: String(time.id),
+            nome: time.nome,
+            tag: time.tag,
+            logo: time.logo_url ?? undefined,
+          });
+        }
+      }
+
+      setLoadingUser(false);
+    };
+    carregar();
+  }, []);
 
   const modes = [
     {
@@ -106,6 +143,18 @@ const Jogar = () => {
     }
   };
 
+  // Loading
+  if (loadingUser || !usuarioAtual) {
+    return (
+      <div className="p-6 flex items-center justify-center min-h-[300px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#FFB700] border-t-transparent mx-auto mb-4" />
+          <p className="text-white/40 font-bold uppercase tracking-widest text-xs">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Tela de Salas Abertas
   if (showSalaAberta) {
     return (
@@ -118,8 +167,8 @@ const Jogar = () => {
             <ArrowLeft className="w-4 h-4" />
             Voltar para Modos
           </button>
-          
-          <SalaAberta 
+
+          <SalaAberta
             usuarioAtual={usuarioAtual}
             userTeam={userTeam || undefined}
           />

@@ -88,11 +88,11 @@ const ModalBase = ({ onClose, children, gradientFrom, title }: {
       className="relative w-full max-w-lg rounded-2xl overflow-hidden"
       style={gradientFrom ? {
         border: `3px solid ${gradientFrom}`,
-        background: 'rgba(13, 13, 13, 0.6)',
+        background: 'rgba(13, 13, 13, 1)',
         boxShadow: `0 0 45px -10px ${gradientFrom}60`,
         backdropFilter: 'blur(16px)'
       } : {
-        background: 'rgba(13, 13, 13, 0.6)',
+        background: 'rgba(13, 13, 13, 1)',
         border: '1px solid rgba(255,255,255,0.1)',
         backdropFilter: 'blur(16px)'
       }}
@@ -322,39 +322,43 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
     <motion.div
       whileTap={{ scale: 0.98 }}
       onClick={() => { playSound('click'); onClick(team); }}
-      className="rounded-2xl cursor-pointer overflow-hidden group transition-all duration-500"
+      className="rounded-3xl cursor-pointer overflow-hidden group transition-all duration-500 border-[5px] border-transparent"
       style={{
-        border: `3px solid ${team.gradientFrom}`,
-        background: 'rgba(13, 13, 13, 0.6)',
-        boxShadow: '0 10px 30px -15px rgba(0,0,0,0.5)',
-        backdropFilter: 'blur(12px)'
+        background: `linear-gradient(rgba(13, 13, 13, 1), rgba(13, 13, 13, 1)) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
+        backdropFilter: 'blur(16px)'
       }}
     >
-      <div className="rounded-[13px] overflow-hidden relative">
-        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[80px] opacity-0 pointer-events-none" style={{ background: team.gradientFrom }} />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-0 pointer-events-none" style={{ background: team.gradientTo || team.gradientFrom }} />
+      <div className="rounded-[19px] overflow-hidden relative">
         <div className="relative z-10 p-6">
           
           {/* Header: Nome, Tag e Ranking */}
           <div className="flex items-start justify-between mb-4">
             <div className="flex-1 min-w-0">
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  {team.userRole === 'leader' && (
+                <div className="flex items-center gap-2 min-w-0">
+                  {team.userRole !== 'visitor' && (
                     <motion.div animate={{ rotate: [0, -10, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }}>
                       <Crown className="w-5 h-5 shrink-0" style={{ color: team.gradientFrom }} />
                     </motion.div>
                   )}
                   <h3 className="text-white font-black text-2xl tracking-tight leading-none truncate">{team.name}</h3>
+                  {isLarge && (
+                    <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest shrink-0"
+                      style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
+                      #{team.tag}
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
-                    style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
-                    #{team.tag}
-                  </span>
+                  {!isLarge && (
+                    <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
+                      style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
+                      #{team.tag}
+                    </span>
+                  )}
                   <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
                     style={{ color: team.gradientFrom, background: `${team.gradientFrom}10`, border: `1px solid ${team.gradientFrom}30` }}>
-                    #{team.ranking}
+                    RANK #{team.ranking}
                   </span>
                 </div>
               </div>
@@ -365,11 +369,10 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
               <div className="w-20 h-20 rounded-2xl flex items-center justify-center relative overflow-hidden hidden sm:flex shrink-0 ml-3"
                 style={{
                   border: `2px solid ${team.gradientFrom}`,
-                  background: 'rgba(13, 13, 13, 0.6)',
+                  background: 'black',
                   boxShadow: `0 4px 12px -4px rgba(0,0,0,0.5)`,
                   backdropFilter: 'blur(8px)'
                 }}>
-                <div className="absolute inset-0 opacity-0 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }} />
                 {team.logoUrl
                   ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
                   : <span className="font-black text-lg tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
@@ -378,55 +381,72 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
           </div>
 
           {/* Logo Mobile - Centralizada em cima (aparece apenas no mobile) */}
-          <div className="flex justify-center mb-5 sm:hidden">
+          <div className="flex flex-col items-center mb-5 sm:hidden">
             <div className="w-36 h-36 rounded-2xl flex items-center justify-center relative overflow-hidden"
               style={{
                 border: `2px solid ${team.gradientFrom}`,
-                background: 'rgba(13, 13, 13, 0.6)',
+                background: 'black',
                 boxShadow: `0 8px 20px -8px rgba(0,0,0,0.6)`,
                 backdropFilter: 'blur(8px)'
               }}>
-              <div className="absolute inset-0 opacity-0 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${team.gradientFrom}, transparent)` }} />
               {team.logoUrl
                 ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
                 : <span className="font-black text-3xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
             </div>
+            {isLarge && (
+              <span className="mt-3 inline-block text-[12px] font-black px-3 py-1 rounded-md tracking-widest"
+                style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
+                #{team.tag}
+              </span>
+            )}
           </div>
 
           {/* Conteúdo Principal */}
           <div className={isLarge ? 'flex flex-col lg:flex-row gap-8 mb-4 items-start' : ''}>
             <div className={isLarge ? 'flex-1 w-full min-w-0' : ''}>
               {/* Lista de Jogadores - Container com fundo "bloco" */}
-              <div className="grid grid-cols-2 gap-4 mb-4 p-4 rounded-2xl bg-black/20 border border-white/5">
+              <div className={`grid ${isLarge ? 'grid-cols-2 gap-4' : 'grid-cols-1 gap-2'} mb-4`}>
                 {/* Pilha 1: Rotas Principais */}
-                <div className="flex flex-col gap-1.5 w-full min-w-0">
-                  <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-1 px-1">Lineup</p>
+                <div className="flex flex-col gap-2 w-full min-w-0">
                   {['TOP', 'JG', 'MID', 'ADC', 'SUP'].map((roleKey) => {
                     const role = roleKey as Role;
                     const player = team.players.find(p => p.role === role);
                     const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`);
                     return (
-                      <div key={roleKey} className="bg-[rgba(13,13,13,0.4)] rounded-xl p-2 border border-white/5 transition-all">
+                      <div key={roleKey} className="transition-all bg-white/[0.03] border border-white/5 rounded-xl px-3 py-1.5">
                         <RoleRow role={role} player={player} team={team} isApplied={isApplied} />
                       </div>
                     );
                   })}
-                </div>
-
-                {/* Pilha 2: Reservas */}
-                <div className="flex flex-col gap-1.5 w-full min-w-0">
-                  <p className="text-[10px] font-black text-white/20 uppercase tracking-[0.2em] mb-1 px-1">Reservas</p>
-                  {['RES1', 'RES2'].map((roleKey) => {
+                  
+                  {/* Reservas integrados na mesma pilha se não for isLarge */}
+                  {!isLarge && ['RES1', 'RES2'].map((roleKey) => {
                     const resIndex = parseInt(roleKey.slice(3)) - 1;
                     const player = team.players.filter(p => p.role === 'RES')[resIndex];
                     const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`) || appliedSlots.includes(`${team.id}-RES`);
                     return (
-                      <div key={roleKey} className="bg-[rgba(13,13,13,0.4)] rounded-xl p-2 border border-white/5 transition-all">
+                      <div key={roleKey} className="transition-all bg-white/[0.03] border border-white/5 rounded-xl px-3 py-1.5">
                         <RoleRow role="RES" player={player} team={team} isApplied={isApplied} labelOverride={`R${resIndex + 1}`} />
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Pilha 2: Reservas (Apenas se for isLarge) */}
+                {isLarge && (
+                  <div className="flex flex-col gap-2 w-full min-w-0">
+                    {['RES1', 'RES2'].map((roleKey) => {
+                      const resIndex = parseInt(roleKey.slice(3)) - 1;
+                      const player = team.players.filter(p => p.role === 'RES')[resIndex];
+                      const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`) || appliedSlots.includes(`${team.id}-RES`);
+                      return (
+                        <div key={roleKey} className="transition-all bg-white/[0.03] border border-white/5 rounded-xl px-3 py-1.5">
+                          <RoleRow role="RES" player={player} team={team} isApplied={isApplied} labelOverride={`R${resIndex + 1}`} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
               
               {/* Stats & Details Row */}
@@ -437,7 +457,7 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
                     { icon: <TrendingUp className="w-3 h-3 text-green-400" />, label: 'WIN%', value: `${team.winrate}%`, color: '#4ade80' },
                     { icon: <Trophy className="w-3 h-3 text-white/30" />, label: 'W/L', value: `${team.wins}/${team.gamesPlayed - team.wins}`, color: 'white' },
                   ].map(m => (
-                    <div key={m.label} className="bg-black/80 rounded-xl p-2.5 text-center border border-white/[0.04] flex flex-col justify-center h-full">
+                    <div key={m.label} className="bg-[rgba(13,13,13,1)] rounded-xl p-2.5 text-center border border-white/[0.04] flex flex-col justify-center h-full">
                       <div className="flex items-center justify-center gap-1 mb-1">
                         {m.icon}
                         <span className="text-[9px] text-white/35 uppercase tracking-wider">{m.label}</span>
@@ -452,21 +472,24 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [] }: {
             
             {/* Logo Grande no Desktop (apenas quando isLarge = true) */}
             {isLarge && (
-              <div className="shrink-0 flex flex-col justify-center hidden sm:flex">
+              <div className="shrink-0 flex flex-col items-center justify-center hidden sm:flex">
                 <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
                   className="w-64 h-64 rounded-2xl flex items-center justify-center relative overflow-hidden"
                   style={{
                     border: `3px solid ${team.gradientFrom}`,
-                    background: 'rgba(13, 13, 13, 0.6)',
+                    background: 'black',
                     boxShadow: `0 12px 30px -10px rgba(0,0,0,0.7)`,
                     backdropFilter: 'blur(12px)'
                   }}>
-                  <div className="absolute inset-0 opacity-0 blur-2xl pointer-events-none" style={{ background: `radial-gradient(circle at center, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}, transparent)` }} />
                   <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none z-10" />
                   {team.logoUrl
                     ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
                     : <span className="font-black text-3xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
                 </motion.div>
+                <span className="mt-4 inline-block text-[14px] font-black px-4 py-1.5 rounded-lg tracking-widest"
+                  style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
+                  #{team.tag}
+                </span>
               </div>
             )}
           </div>
@@ -525,14 +548,13 @@ const InvitePlayerModal = ({ team, onClose }: { team: Team; onClose: () => void 
   return (
     <ModalBase onClose={onClose}>
       <div className="rounded-2xl overflow-hidden relative" style={{
-        background: 'rgba(13, 13, 13, 0.6)',
+        background: 'rgba(13, 13, 13, 1)',
         border: `3px solid ${team.gradientFrom}`,
         boxShadow: `0 0 35px -10px ${team.gradientFrom}70`,
         backdropFilter: 'blur(16px)'
       }}>
-        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: team.gradientFrom }} />
         <div className="relative z-10">
-          <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between" style={{ background: `${team.gradientFrom}08` }}>
+          <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between" style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${team.gradientFrom}25` }}>
                 <UserPlus className="w-4 h-4" style={{ color: team.gradientFrom }} />
@@ -756,7 +778,7 @@ const EditTeamModal = ({
       <div
         className="rounded-2xl overflow-hidden relative"
         style={{ 
-          background: 'rgba(13, 13, 13, 0.6)',
+          background: 'rgba(13, 13, 13, 1)',
           border: `3px solid ${theme.from}`,
           boxShadow: `0 0 35px -10px ${theme.from}70`,
           backdropFilter: 'blur(16px)'
@@ -765,7 +787,7 @@ const EditTeamModal = ({
         <div className="relative z-10">
           <div
             className="px-6 py-4 border-b border-white/8 flex items-center justify-between"
-            style={{ background: `${theme.from}08` }}
+            style={{ background: 'rgba(255, 255, 255, 0.02)' }}
           >
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${theme.from}25` }}>
@@ -810,17 +832,12 @@ const EditTeamModal = ({
                 className="w-16 h-16 rounded-xl flex items-center justify-center relative overflow-hidden bg-white/5 shrink-0"
                 style={{
                   border: '2px solid transparent',
-                  background: `linear-gradient(rgba(13, 13, 13, 0.6), rgba(13, 13, 13, 0.6)) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
+                  background: `linear-gradient(rgba(13, 13, 13, 1), rgba(13, 13, 13, 1)) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
                   boxShadow: `0 0 12px -4px ${theme.from}80`,
                   backdropFilter: 'blur(8px)'
                 }}
               >
                 {/* Glow interno sutil */}
-                <div 
-                  className="absolute inset-0 opacity-15 blur-lg pointer-events-none"
-                  style={{ background: `radial-gradient(circle, ${theme.from}, transparent)` }}
-                />
-                
                 {logoPreview ? (
                   <img src={logoPreview} alt="Logo" className="w-full h-full object-cover relative z-10" />
                 ) : (
@@ -957,19 +974,17 @@ const CreateTeamModal = ({
       <div
         className="rounded-2xl overflow-hidden relative"
         style={{ 
-          background: 'rgba(13, 13, 13, 0.6)',
+          background: 'rgba(13, 13, 13, 1)',
           border: '3px solid transparent',
-          backgroundImage: `linear-gradient(rgba(13, 13, 13, 0.6), rgba(13, 13, 13, 0.6)) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
+          backgroundImage: `linear-gradient(rgba(13, 13, 13, 1), rgba(13, 13, 13, 1)) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
           boxShadow: `0 0 35px -10px ${theme.from}70`,
           backdropFilter: 'blur(16px)'
         }}
       >
-        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: theme.from }} />
-        
         <div className="relative z-10">
           <div
             className="px-6 py-4 border-b border-white/8 flex items-center justify-between"
-            style={{ background: `${theme.from}08` }}
+            style={{ background: 'rgba(255, 255, 255, 0.02)' }}
           >
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${theme.from}25` }}>
@@ -1012,13 +1027,12 @@ const CreateTeamModal = ({
                   className="w-16 h-16 rounded-xl flex items-center justify-center relative overflow-hidden bg-white/5 shrink-0"
                   style={{
                     border: `2px solid ${theme.from}`,
-                    background: 'rgba(13, 13, 13, 0.6)',
+                    background: 'rgba(13, 13, 13, 1)',
                     boxShadow: `0 0 12px -4px ${theme.from}80`,
                     backdropFilter: 'blur(8px)'
                   }}
                 >
-                  <div className="absolute inset-0 opacity-15 blur-lg pointer-events-none" style={{ background: `radial-gradient(circle, ${theme.from}, transparent)` }} />
-                  {logoPreview ? (
+                {logoPreview ? (
                     <img src={logoPreview} alt="Logo" className="w-full h-full object-cover relative z-10" />
                   ) : (
                     <Upload className="w-6 h-6 text-white/30 relative z-10" />
@@ -1147,20 +1161,18 @@ const ManageLineupModal = ({
       <div
         className="rounded-2xl overflow-hidden relative"
         style={{ 
-          background: 'rgba(13, 13, 13, 0.6)',
+          background: 'rgba(13, 13, 13, 1)',
           border: '3px solid transparent',
-          backgroundImage: `linear-gradient(rgba(13, 13, 13, 0.6), rgba(13, 13, 13, 0.6)) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
+          backgroundImage: `linear-gradient(rgba(13, 13, 13, 1), rgba(13, 13, 13, 1)) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
           boxShadow: `0 0 35px -10px ${team.gradientFrom}70`,
           backdropFilter: 'blur(16px)'
         }}
       >
         {/* Glows de fundo sutil */}
-        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: team.gradientFrom }} />
-        
         <div className="relative z-10">
           <div
             className="px-6 py-4 border-b border-white/8 flex items-center justify-between"
-            style={{ background: `${team.gradientFrom}08` }}
+            style={{ background: 'rgba(255, 255, 255, 0.02)' }}
           >
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${team.gradientFrom}25` }}>
@@ -1195,7 +1207,7 @@ const ManageLineupModal = ({
               labelOverride = `R${resIndex + 1}`;
             }
             return (
-              <div key={player.name} className="flex items-center gap-3 bg-[rgba(13,13,13,0.6)] rounded-xl p-3 border border-white/10 hover:border-white/20 transition-all">
+              <div key={player.name} className="flex items-center gap-3 bg-[rgba(13,13,13,1)] rounded-xl p-3 border border-white/10 hover:border-white/20 transition-all">
                 <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${cfg.bg}`}>
                   <img src={cfg.img} alt={cfg.label} className="w-5 h-5 object-contain" />
                 </div>
@@ -1393,24 +1405,8 @@ export default function App() {
     return () => { supabase.removeChannel(channel); };
   }, []);
 
-  const [notCapSidebar, setNotCapSidebar] = useState(false);
-  const handleSidebarLineup = () => {
-    playSound('click');
-    if (myTeam?.userRole === 'leader') {
-      setModalLineup(true);
-    } else {
-      setNotCapSidebar(true);
-      setTimeout(() => setNotCapSidebar(false), 3000);
-    }
-  };
-
   // Modais do capitão
   const [modalCriar,     setModalCriar]     = useState(false);
-  const [modalConvidar,  setModalConvidar]  = useState(false);
-  const [modalEditar,    setModalEditar]    = useState(false);
-  const [modalLineup,    setModalLineup]    = useState(false);
-  const [modalSair,      setModalSair]      = useState(false);
-
 
   const [searchQuery, setSearchQuery] = useState('');
   const [myTeamBannerUrl, setMyTeamBannerUrl] = useState<string | null>(null);
@@ -1488,113 +1484,6 @@ export default function App() {
     playSound('success');
   };
 
-  const handleUpdateTeam = async (updated: Partial<Team>) => {
-    if (!myTeam) return;
-    console.log('[handleUpdateTeam] logo_url sendo enviado ao DB:', updated.logoUrl);
-    const { error } = await supabase
-      .from('times')
-      .update({
-        nome:          updated.name,
-        tag:           updated.tag,
-        gradient_from: updated.gradientFrom,
-        gradient_to:   updated.gradientTo,
-        logo_url:      updated.logoUrl ?? null,
-      })
-      .eq('id', myTeam.id);
-
-    if (error) {
-      console.error('[handleUpdateTeam] Erro ao salvar time:', error);
-      return;
-    }
-    console.log('[handleUpdateTeam] Salvo com sucesso no DB');
-
-    setTeams(prev => prev.map(t =>
-      t.id === myTeam.id ? { ...t, ...updated } : t
-    ));
-  };
-
-  const handleUpdatePlayers = async (players: Player[]) => {
-    if (!myTeam) return;
-
-    // Deletar membros atuais e reinserir (estratégia simples)
-    await supabase.from('time_membros').delete().eq('time_id', myTeam.id);
-    if (players.length > 0) {
-      await supabase.from('time_membros').insert(
-        players.map(p => ({
-          time_id:   myTeam.id,
-          user_id:   (p as any).userId ?? null,
-          riot_id:   p.name,
-          cargo:     p.isLeader ? 'lider' : 'jogador',
-          role:      p.role,
-          is_leader: p.isLeader || false,
-          elo:       p.elo,
-          balance:   p.balance,
-        }))
-      );
-    }
-
-    setTeams(prev => prev.map(t =>
-      t.id === myTeam.id ? { ...t, players } : t
-    ));
-  };
-
-  const handleSairTime = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !myTeam) return;
-
-    // 1. Consulta todos os membros ANTES de deletar (enquanto ainda tem permissão)
-    const { data: todosMembros, error: errQuery } = await supabase
-      .from('time_membros')
-      .select('user_id, is_leader')
-      .eq('time_id', myTeam.id);
-
-    if (errQuery) {
-      console.error('Erro ao consultar membros:', errQuery);
-      return;
-    }
-
-    const restantes = (todosMembros || []).filter(m => m.user_id !== user.id);
-
-    if (restantes.length === 0) {
-      // Último membro → deleta o time inteiro (ainda é membro, tem permissão)
-      await supabase.from('time_membros').delete().eq('time_id', myTeam.id);
-      await supabase.from('times').delete().eq('id', myTeam.id);
-    } else {
-      // 2. Se era capitão, transfere ANTES de deletar a própria row
-      //    (enquanto ainda está em time_membros, o WITH CHECK da RLS passa)
-      if (myTeam.userRole === 'leader') {
-        const novoCapitao = restantes[0];
-        await supabase
-          .from('time_membros')
-          .update({ is_leader: true, cargo: 'lider' })
-          .eq('time_id', myTeam.id)
-          .eq('user_id', novoCapitao.user_id);
-        await supabase
-          .from('times')
-          .update({ dono_id: novoCapitao.user_id })
-          .eq('id', myTeam.id);
-      }
-
-      // 3. Agora sim deleta a própria row
-      const { error: errMembro } = await supabase
-        .from('time_membros')
-        .delete()
-        .eq('time_id', myTeam.id)
-        .eq('user_id', user.id);
-
-      if (errMembro) {
-        console.error('Erro ao sair do time:', errMembro);
-        return;
-      }
-    }
-
-    // 4. Recarrega do banco para garantir estado consistente
-    const loaded = await carregarTimesDoSupabase(user.id);
-    setTeams(loaded);
-    setModalSair(false);
-    playSound('click');
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -1608,7 +1497,15 @@ export default function App() {
       <div className="max-w-7xl mx-auto space-y-12">
 
 
-        <div className="space-y-0 rounded-2xl overflow-hidden border border-white/10 bg-[rgba(13,13,13,0.6)] backdrop-blur-md">
+        <div 
+          className="space-y-0 rounded-3xl overflow-hidden backdrop-blur-xl transition-all duration-500"
+          style={{
+            background: 'rgba(0, 0, 0, 0.4)',
+            border: myTeam ? `2px solid ${myTeam.gradientFrom}` : '1px solid rgba(255,255,255,0.1)',
+            boxShadow: myTeam ? `0 0 45px -10px ${myTeam.gradientFrom}40` : 'none'
+          }}
+        >
+          {!myTeam && <div className="absolute inset-0 border border-white/10 rounded-3xl pointer-events-none" />}
           {/* Minha Equipe Banner */}
           <motion.div
             initial={{ opacity: 0, y: 20 }} 
@@ -1667,56 +1564,16 @@ export default function App() {
           </motion.div>
 
           {/* Minha Equipe Content */}
-          <div className="p-6 border-t border-white/10 bg-[rgba(13,13,13,0.6)] backdrop-blur-md">
+          <div className="p-6 backdrop-blur-md">
             {myTeam ? (
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5 items-start">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <div className="flex flex-col gap-5 items-start">
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="w-full">
                   <TimeCard 
                     team={myTeam} 
                     onClick={(team) => navigate(`/times/${team.id}`)}
                     isLarge={true} 
                     appliedSlots={appliedSlots}
                   />
-                </motion.div>
-
-                {/* Sidebar de ações (Manager Card) */}
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
-                  className="bg-white/[0.04] border border-white/8 rounded-2xl p-5 lg:w-56 space-y-2"
-                >
-                  {(myTeam.userRole === 'leader' || myTeam.userRole === 'member') && (
-                    <>
-                      <p className="text-white/30 text-[11px] uppercase tracking-widest font-semibold mb-3">Gerenciar</p>
-                      {[
-                        { icon: UserPlus,    label: 'Convidar Jogador', action: () => { playSound('click'); setModalConvidar(true); } },
-                        { icon: Paintbrush, label: 'Editar Time',       action: () => { playSound('click'); setModalEditar(true); }   },
-                        { icon: Users,      label: 'Gerenciar Lineup',  action: handleSidebarLineup },
-                      ].map(({ icon: Icon, label, action }) => (
-                        <button
-                          key={label} onClick={action}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-white/15 text-white/60 hover:text-white text-sm font-medium transition-all group"
-                        >
-                          <Icon className="w-4 h-4 transition-transform"
-                            style={{ color: myTeam.gradientFrom }} />
-                          {label}
-                        </button>
-                      ))}
-                      {notCapSidebar && (
-                        <p className="text-yellow-400/80 text-[11px] font-semibold text-center py-1">
-                          Apenas o capitão pode gerenciar o lineup
-                        </p>
-                      )}
-                      <div className="pt-2 mt-2 border-t border-white/5" />
-                    </>
-                  )}
-
-                  <button
-                    onClick={() => { playSound('click'); setModalSair(true); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-red-500/5 hover:bg-red-500/15 border border-red-500/10 hover:border-red-500/30 text-red-400/70 hover:text-red-400 text-sm font-medium transition-all group"
-                  >
-                    <LogOut className="w-4 h-4 transition-transform" />
-                    Sair da Equipe
-                  </button>
                 </motion.div>
               </div>
             ) : (
@@ -1746,7 +1603,13 @@ export default function App() {
         </div>
 
         {/* Arena de Times Section (Replacing Ranking Global) */}
-        <div className="space-y-0 rounded-2xl overflow-hidden border border-white/10 bg-[rgba(13,13,13,0.6)] backdrop-blur-md">
+        <div 
+          className="space-y-0 rounded-3xl overflow-hidden backdrop-blur-xl transition-all duration-500"
+          style={{
+            background: 'rgba(0, 0, 0, 0.4)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
           {/* Arena de Times Banner */}
           <motion.div
             initial={{ opacity: 0, y: 20 }} 
@@ -1790,7 +1653,7 @@ export default function App() {
           </motion.div>
 
           {/* Arena de Times Content (Search + Grid) */}
-          <div className="p-6 border-t border-white/10 bg-[rgba(13,13,13,0.6)] backdrop-blur-md space-y-6">
+          <div className="p-6 backdrop-blur-md space-y-6">
             {/* Barra de Pesquisa */}
             <motion.div
               initial={{ opacity: 0, y: 10 }}
@@ -1850,16 +1713,6 @@ export default function App() {
         <AnimatePresence>
           {modalCriar && (
             <CreateTeamModal onClose={() => setModalCriar(false)} onCreate={handleCreateTeam} />
-          )}
-          {myTeam && modalConvidar && <InvitePlayerModal team={myTeam} onClose={() => setModalConvidar(false)} />}
-          {myTeam && modalEditar && (
-            <EditTeamModal team={myTeam} onClose={() => setModalEditar(false)} onSave={handleUpdateTeam} />
-          )}
-          {myTeam && modalLineup && (
-            <ManageLineupModal team={myTeam} onClose={() => setModalLineup(false)} onUpdateTeam={handleUpdatePlayers} />
-          )}
-          {myTeam && modalSair && (
-            <ConfirmLeaveModal onClose={() => setModalSair(false)} onConfirm={handleSairTime} />
           )}
         </AnimatePresence>
 

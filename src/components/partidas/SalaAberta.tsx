@@ -1,49 +1,19 @@
-// src/components/partidas/salaaberta.tsx
-// COMPONENTE COMPLETO - Salas Abertas
+// src/components/partidas/SalaAberta.tsx
+// COMPONENTE: Lista de salas abertas e criação de novas salas (conectado ao Supabase)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Plus, Search, Lock, Globe, Users, Sword, 
-  X, ChevronRight, Crown, Shield, Clock,
-  UserPlus, LogIn, ArrowLeft, Copy, Check,
-  Trash2, AlertCircle
-} from 'lucide-react';
-
-// ============================================
-// TIPOS
-// ============================================
-
-interface JogadorNaSala {
-  id: string;
-  nome: string;
-  tag: string;
-  elo: string;
-  role: string;
-  isLider: boolean;
-  isTimeA: boolean;
-}
-
-interface Sala {
-  id: string;
-  nome: string;
-  descricao: string;
-  criadorId: string;
-  criadorNome: string;
-  timeANome?: string;
-  timeATag?: string;
-  timeBNome?: string;
-  timeBTag?: string;
-  jogadores: JogadorNaSala[];
-  maxJogadores: number;
-  temSenha: boolean;
-  senha?: string;
-  tipo: 'casual' | 'ranqueada' | 'treino';
-  status: 'aberta' | 'cheia' | 'em_andamento';
-  eloMinimo?: string;
-  eloMaximo?: string;
-  createdAt: Date;
-}
+import { Plus, Search, Lock, Users, Crown, X, LogIn, Zap } from 'lucide-react';
+import { SalaInterna } from './SalaInterna';
+import {
+  MODOS_JOGO, OPCOES_ELO, OPCOES_MPOINTS, getModoInfo, getMPointsInfo,
+  getMaxJogadoresPorModo, type ModoJogo,
+} from './salaConfig';
+import {
+  carregarSalas, criarSala, deletarSala as deletarSalaDB,
+  type Sala,
+} from '../../api/salas';
+import { supabase } from '../../lib/supabase';
 
 // ============================================
 // MODAL SENHA
@@ -54,47 +24,54 @@ const ModalSenha = ({ nome, onClose, onConfirm, erro }: any) => {
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.95, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.95, y: 20 }}
-        className="bg-[#0d0d0d] rounded-[26.5px] max-w-sm w-full"
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        className="relative w-full max-w-sm rounded-2xl overflow-hidden"
+        style={{
+          background: 'rgba(13, 13, 13, 0.6)',
+          border: '3px solid #FFB700',
+          boxShadow: '0 0 45px -10px rgba(255, 183, 0, 0.6)',
+          backdropFilter: 'blur(16px)'
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Lock className="w-5 h-5 text-yellow-400" />
-            <h2 className="text-white font-black text-lg">Sala Privada</h2>
+        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: '#FFB700' }} />
+        <div className="relative z-10">
+          <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between bg-white/[0.02]">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-yellow-500/20">
+                <Lock className="w-4 h-4 text-yellow-400" />
+              </div>
+              <h2 className="text-white font-black text-lg tracking-tight uppercase">Sala Privada</h2>
+            </div>
+            <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <p className="text-white/60 text-sm mb-4">A sala <strong>{nome}</strong> requer senha para entrar</p>
-          <input
-            type="password"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            placeholder="Digite a senha"
-            className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white text-sm mb-4"
-            autoFocus
-          />
-          {erro && <p className="text-red-400 text-xs mb-3">{erro}</p>}
-          <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 py-2 rounded-xl bg-white/5 text-white/60 text-sm font-medium"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={() => onConfirm(senha)}
-              className="flex-1 py-2 rounded-xl bg-yellow-500/20 text-yellow-400 text-sm font-medium"
-            >
-              Entrar
-            </button>
+          <div className="p-6 space-y-6">
+            <p className="text-white/60 text-sm font-medium">A sala <span className="text-white font-bold">{nome}</span> requer senha para entrar</p>
+            <div className="space-y-2">
+              <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Senha da Sala</label>
+              <input
+                type="password" value={senha} onChange={(e) => setSenha(e.target.value)}
+                placeholder="Digite a senha"
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-white/30"
+                autoFocus
+              />
+            </div>
+            {erro && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+                <p className="text-red-400 text-xs font-medium">{erro}</p>
+              </motion.div>
+            )}
+            <div className="flex gap-3">
+              <button onClick={onClose} className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm font-bold hover:bg-white/10 transition-all">Cancelar</button>
+              <button onClick={() => onConfirm(senha)} className="flex-1 py-3 rounded-xl bg-yellow-500 text-black text-sm font-black hover:bg-yellow-400 transition-all shadow-lg shadow-yellow-500/20">Entrar</button>
+            </div>
           </div>
         </div>
       </motion.div>
@@ -107,186 +84,224 @@ const ModalSenha = ({ nome, onClose, onConfirm, erro }: any) => {
 // ============================================
 
 const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam }: any) => {
-  const [tipo, setTipo] = useState('casual');
+  const [modo, setModo] = useState<ModoJogo>('5v5');
+  const [mpoints, setMpoints] = useState(0);
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [temSenha, setTemSenha] = useState(false);
   const [senha, setSenha] = useState('');
-  const [usarTime, setUsarTime] = useState(false);
-  const [maxJogadores, setMaxJogadores] = useState(10);
   const [eloMinimo, setEloMinimo] = useState('');
+  const [usarTime, setUsarTime] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const tipos = [
-    { id: 'casual', nome: '🎮 Casual', cor: '#4ade80' },
-    { id: 'ranqueada', nome: '🏆 Ranqueada', cor: '#fbbf24' },
-    { id: 'treino', nome: '⚡ Treino', cor: '#3b82f6' },
-  ];
+  const modoInfo = getModoInfo(modo);
+  const mpInfo = getMPointsInfo(mpoints);
 
   const handleSubmit = async () => {
     setLoading(true);
-    await new Promise(r => setTimeout(r, 500));
-    onCreate({
-      tipo,
-      nome: nome || `Sala de ${usuarioAtual.nome}`,
-      descricao: descricao || `Partida ${tipo} - venha jogar!`,
+    const maxJogadores = getMaxJogadoresPorModo(modo);
+    await onCreate({
+      modo,
+      mpoints,
+      nome: nome || `Sala ${MODOS_JOGO[modo].nome} de ${usuarioAtual.nome}`,
+      descricao: descricao || MODOS_JOGO[modo].descricao,
       temSenha,
       senha: temSenha ? senha : undefined,
-      usarTime: usarTime && userTeam,
       maxJogadores,
       eloMinimo: eloMinimo || undefined,
+      timeANome: usarTime && userTeam ? userTeam.nome : undefined,
+      timeATag:  usarTime && userTeam ? userTeam.tag  : undefined,
+      timeALogo: usarTime && userTeam ? userTeam.logo : undefined,
     });
     setLoading(false);
   };
 
   return (
     <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.95, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.95, y: 20 }}
-        className="bg-[#0d0d0d] rounded-[26.5px] max-w-md w-full"
+        initial={{ scale: 0.95, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.95, y: 20 }}
+        className="relative w-full max-w-md rounded-2xl overflow-hidden"
+        style={{
+          background: 'rgba(13, 13, 13, 0.6)',
+          border: `3px solid ${modoInfo.cor}`,
+          boxShadow: `0 0 45px -10px ${modoInfo.cor}60`,
+          backdropFilter: 'blur(16px)'
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="p-5 border-b border-white/10 flex justify-between items-center">
-          <h2 className="text-white font-black text-xl">✨ Criar Sala</h2>
-          <button onClick={onClose} className="p-1 rounded-lg bg-white/5">
-            <X className="w-5 h-5 text-white/60" />
-          </button>
-        </div>
+        <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full blur-[60px] opacity-15 pointer-events-none" style={{ background: modoInfo.cor }} />
 
-        <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
-          {/* Tipo */}
-          <div>
-            <label className="text-white/60 text-xs font-bold uppercase mb-2 block">Tipo</label>
-            <div className="flex gap-2">
-              {tipos.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setTipo(t.id)}
-                  className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all ${
-                    tipo === t.id 
-                      ? 'bg-white/10 text-white border' 
-                      : 'bg-white/5 text-white/40 border border-white/10'
-                  }`}
-                  style={tipo === t.id ? { borderColor: t.cor } : {}}
-                >
-                  {t.nome}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Nome */}
-          <div>
-            <label className="text-white/60 text-xs font-bold uppercase mb-2 block">Nome da Sala</label>
-            <input
-              type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder={`Ex: Sala do ${usuarioAtual.nome}`}
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-2 text-white text-sm"
-            />
-          </div>
-
-          {/* Descrição */}
-          <div>
-            <label className="text-white/60 text-xs font-bold uppercase mb-2 block">Descrição</label>
-            <textarea
-              value={descricao}
-              onChange={(e) => setDescricao(e.target.value)}
-              placeholder="Descreva sua sala..."
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-2 text-white text-sm resize-none h-20"
-            />
-          </div>
-
-          {/* Time fixo */}
-          {userTeam && (
-            <div className="flex items-center justify-between p-3 rounded-xl bg-white/5">
-              <div>
-                <p className="text-white text-sm">Usar meu time</p>
-                <p className="text-white/30 text-xs">{userTeam.nome} #{userTeam.tag}</p>
+        <div className="relative z-10">
+          <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between bg-white/[0.02]">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${modoInfo.cor}25` }}>
+                <Plus className="w-4 h-4" style={{ color: modoInfo.cor }} />
               </div>
-              <button
-                onClick={() => setUsarTime(!usarTime)}
-                className={`w-10 h-5 rounded-full transition-all ${usarTime ? 'bg-blue-500' : 'bg-white/20'}`}
-              >
-                <div className={`w-4 h-4 rounded-full bg-white transition-all ${usarTime ? 'translate-x-5' : 'translate-x-1'}`} />
-              </button>
+              <h2 className="text-white font-black text-lg tracking-tight uppercase">Criar Sala</h2>
             </div>
-          )}
-
-          {/* Máximo de jogadores */}
-          <div>
-            <label className="text-white/60 text-xs font-bold uppercase mb-2 block">Máximo de Jogadores</label>
-            <select
-              value={maxJogadores}
-              onChange={(e) => setMaxJogadores(Number(e.target.value))}
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-2 text-white text-sm"
-            >
-              <option value={10}>10 jogadores (5v5)</option>
-              <option value={8}>8 jogadores (4v4)</option>
-              <option value={6}>6 jogadores (3v3)</option>
-              <option value={4}>4 jogadores (2v2)</option>
-            </select>
-          </div>
-
-          {/* ELO mínimo */}
-          <div>
-            <label className="text-white/60 text-xs font-bold uppercase mb-2 block">ELO Mínimo (opcional)</label>
-            <select
-              value={eloMinimo}
-              onChange={(e) => setEloMinimo(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-2 text-white text-sm"
-            >
-              <option value="">Sem restrição</option>
-              <option value="Ferro">Ferro+</option>
-              <option value="Bronze">Bronze+</option>
-              <option value="Prata">Prata+</option>
-              <option value="Ouro">Ouro+</option>
-              <option value="Platina">Platina+</option>
-              <option value="Esmeralda">Esmeralda+</option>
-              <option value="Diamante">Diamante+</option>
-            </select>
-          </div>
-
-          {/* Senha */}
-          <div className="flex items-center justify-between">
-            <span className="text-white text-sm">Sala Privada</span>
-            <button
-              onClick={() => setTemSenha(!temSenha)}
-              className={`w-10 h-5 rounded-full transition-all ${temSenha ? 'bg-yellow-500' : 'bg-white/20'}`}
-            >
-              <div className={`w-4 h-4 rounded-full bg-white transition-all ${temSenha ? 'translate-x-5' : 'translate-x-1'}`} />
+            <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
+              <X className="w-5 h-5" />
             </button>
           </div>
 
-          {temSenha && (
-            <input
-              type="text"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              placeholder="Digite uma senha"
-              className="w-full bg-black/40 border border-white/10 rounded-xl p-2 text-white text-sm"
-            />
-          )}
-        </div>
+          <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+            {/* Nome */}
+            <div className="space-y-2">
+              <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Nome da Sala</label>
+              <input
+                type="text" value={nome} onChange={(e) => setNome(e.target.value)}
+                placeholder={`Ex: ${MODOS_JOGO[modo].nome} do ${usuarioAtual.nome}`}
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-white/30"
+              />
+            </div>
 
-        <div className="p-5 border-t border-white/10">
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="w-full py-3 rounded-xl font-bold text-white transition-all hover:scale-[1.02]"
-            style={{ background: `linear-gradient(135deg, #3b82f6, #8b5cf6)` }}
-          >
-            {loading ? 'Criando...' : 'Criar Sala'}
-          </button>
+            {/* M Points */}
+            <div className="space-y-3">
+              <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">
+                Valor da Partida — M Points
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {OPCOES_MPOINTS.map((op) => (
+                  <button
+                    key={op.valor}
+                    onClick={() => setMpoints(op.valor)}
+                    className="p-3 rounded-xl text-center transition-all border"
+                    style={
+                      mpoints === op.valor
+                        ? { borderColor: op.cor, background: `${op.cor}18`, color: op.cor }
+                        : { borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)' }
+                    }
+                  >
+                    <p className="text-xs font-black uppercase tracking-tighter leading-tight">
+                      {op.valor === 0 ? '🎮 Casual' : `💰 ${op.valor.toLocaleString('pt-BR')} MP`}
+                    </p>
+                  </button>
+                ))}
+              </div>
+              {mpoints > 0 && (
+                <motion.p
+                  initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+                  className="text-[10px] font-bold uppercase tracking-widest"
+                  style={{ color: mpInfo.cor }}
+                >
+                  Cada jogador aposta {mpoints.toLocaleString('pt-BR')} MP · o vencedor leva tudo
+                </motion.p>
+              )}
+            </div>
+
+            {/* Modo */}
+            <div className="space-y-2">
+              <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Modo de Jogo</label>
+              <div className="grid grid-cols-2 gap-2">
+                {(Object.entries(MODOS_JOGO) as [ModoJogo, typeof MODOS_JOGO[ModoJogo]][]).map(([key, value]) => (
+                  <button
+                    key={key}
+                    onClick={() => setModo(key)}
+                    className="p-3 rounded-xl text-left transition-all border"
+                    style={
+                      modo === key
+                        ? { borderColor: value.cor, background: `${value.cor}15`, color: 'white' }
+                        : { borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.4)' }
+                    }
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-lg">{value.icone}</span>
+                      <span className="text-xs font-black uppercase tracking-tighter">{value.nome}</span>
+                    </div>
+                    <p className="text-[9px] font-medium opacity-60 leading-tight uppercase tracking-widest">{value.descricao}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Descrição */}
+            <div className="space-y-2">
+              <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Descrição</label>
+              <textarea
+                value={descricao} onChange={(e) => setDescricao(e.target.value)}
+                placeholder="Descreva sua sala..."
+                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm resize-none h-20 focus:outline-none focus:border-white/30"
+              />
+            </div>
+
+            {/* Time */}
+            {userTeam && (
+              <div className="flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/10">
+                    {userTeam.logo
+                      ? <img src={userTeam.logo} alt="Logo" className="w-7 h-7 rounded-lg object-cover" />
+                      : <Crown className="w-5 h-5 text-white/30" />}
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-sm tracking-tight">Usar meu time</p>
+                    <p className="text-white/30 text-[10px] font-bold uppercase tracking-widest">{userTeam.nome} #{userTeam.tag}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setUsarTime(!usarTime)}
+                  className={`w-12 h-6 rounded-full transition-all relative ${usarTime ? 'bg-blue-500' : 'bg-white/10'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${usarTime ? 'left-7' : 'left-1'}`} />
+                </button>
+              </div>
+            )}
+
+            {/* Elo + Privacidade */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">ELO Mínimo</label>
+                <select
+                  value={eloMinimo} onChange={(e) => setEloMinimo(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-white/30"
+                >
+                  {OPCOES_ELO.map(elo => (
+                    <option key={elo.valor} value={elo.valor} className="bg-[#0d0d0d]">{elo.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Privacidade</label>
+                <div className="flex items-center justify-between p-3 bg-white/5 border border-white/10 rounded-xl h-[46px]">
+                  <span className="text-white/60 text-xs font-bold uppercase tracking-widest">Privada</span>
+                  <button
+                    onClick={() => setTemSenha(!temSenha)}
+                    className={`w-10 h-5 rounded-full transition-all relative ${temSenha ? 'bg-yellow-500' : 'bg-white/10'}`}
+                  >
+                    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${temSenha ? 'left-5.5' : 'left-0.5'}`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {temSenha && (
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+                <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Senha da Sala</label>
+                <input
+                  type="text" value={senha} onChange={(e) => setSenha(e.target.value)}
+                  placeholder="Digite uma senha"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-white/30"
+                />
+              </motion.div>
+            )}
+          </div>
+
+          <div className="p-6 border-t border-white/8 bg-white/[0.02]">
+            <button
+              onClick={handleSubmit} disabled={loading}
+              className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest text-white transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg disabled:opacity-50"
+              style={{
+                background: `linear-gradient(135deg, ${modoInfo.cor}, ${modoInfo.cor}dd)`,
+                boxShadow: `0 8px 20px -6px ${modoInfo.cor}60`
+              }}
+            >
+              {loading ? 'Criando...' : 'Criar Sala'}
+            </button>
+          </div>
         </div>
       </motion.div>
     </motion.div>
@@ -294,490 +309,249 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam }: any) => {
 };
 
 // ============================================
-// COMPONENTE PRINCIPAL: SalaAberta
+// COMPONENTE PRINCIPAL: SALA ABERTA
 // ============================================
 
-const SalaAberta = ({ 
-  usuarioAtual,
-  userTeam,
-  onSair 
-}: { 
-  usuarioAtual: { id: string; nome: string; elo: string; role: string };
-  userTeam?: { id: string; nome: string; tag: string };
+interface SalaAbertaProps {
+  usuarioAtual: { id: string; nome: string; tag?: string; elo: string; role: string };
+  userTeam?: { id: string; nome: string; tag: string; logo?: string };
   onSair?: () => void;
-}) => {
-  // Estados
+}
+
+export const SalaAberta = ({ usuarioAtual, userTeam, onSair }: SalaAbertaProps) => {
   const [salas, setSalas] = useState<Sala[]>([]);
-  const [salaAtual, setSalaAtual] = useState<Sala | null>(null);
+  const [salaSelecionada, setSalaSelecionada] = useState<Sala | null>(null);
   const [showCriarModal, setShowCriarModal] = useState(false);
-  const [showSenhaModal, setShowSenhaModal] = useState<{ salaId: string; nome: string } | null>(null);
-  const [senhaDigitada, setSenhaDigitada] = useState('');
+  const [showSenhaModal, setShowSenhaModal] = useState<{ salaId: number; nome: string } | null>(null);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
   const [erroSenha, setErroSenha] = useState('');
 
-  // Carregar salas mockadas
+  const recarregar = useCallback(async () => {
+    const lista = await carregarSalas();
+    setSalas(lista);
+    setLoading(false);
+    // Atualiza sala selecionada se ainda existir
+    if (salaSelecionada) {
+      const atualizada = lista.find(s => s.id === salaSelecionada.id);
+      if (atualizada) setSalaSelecionada(atualizada);
+    }
+  }, [salaSelecionada]);
+
   useEffect(() => {
-    setTimeout(() => {
-      setSalas([
-        {
-          id: '1',
-          nome: '🔥 Partida Rápida',
-          descricao: 'Venham jogar, só diversão!',
-          criadorId: 'user2',
-          criadorNome: 'Joãozinho',
-          timeANome: userTeam?.nome || 'Time A',
-          timeATag: userTeam?.tag || 'TA',
-          jogadores: [
-            { id: usuarioAtual.id, nome: usuarioAtual.nome, tag: '#BR1', elo: usuarioAtual.elo, role: usuarioAtual.role, isLider: true, isTimeA: true },
-            { id: '2', nome: 'Fulano', tag: '#BR1', elo: 'Ouro', role: 'MID', isLider: false, isTimeA: true },
-          ],
-          maxJogadores: 10,
-          temSenha: false,
-          tipo: 'casual',
-          status: 'aberta',
-          createdAt: new Date(),
-        },
-        {
-          id: '2',
-          nome: '🏆 Ranqueada - Só fortes',
-          descricao: 'ELO mínimo Platina',
-          criadorId: 'user3',
-          criadorNome: 'Tryhard',
-          timeANome: 'Nexus Dragon',
-          timeATag: 'NDX',
-          jogadores: [
-            { id: '3', nome: 'Tryhard', tag: '#BR1', elo: 'Diamante', role: 'JG', isLider: true, isTimeA: true },
-            { id: '4', nome: 'ProPlayer', tag: '#BR1', elo: 'Mestre', role: 'MID', isLider: false, isTimeA: true },
-            { id: '5', nome: 'SuporteGod', tag: '#BR1', elo: 'Platina', role: 'SUP', isLider: false, isTimeA: true },
-          ],
-          maxJogadores: 10,
-          temSenha: false,
-          tipo: 'ranqueada',
-          status: 'aberta',
-          eloMinimo: 'Platina',
-          createdAt: new Date(),
-        },
-        {
-          id: '3',
-          nome: '🔒 Sala Privada',
-          descricao: 'Sala com senha - chamem no Discord',
-          criadorId: 'user6',
-          criadorNome: 'Private',
-          jogadores: [
-            { id: '6', nome: 'Private', tag: '#BR1', elo: 'Prata', role: 'TOP', isLider: true, isTimeA: true },
-          ],
-          maxJogadores: 10,
-          temSenha: true,
-          senha: '123',
-          tipo: 'treino',
-          status: 'aberta',
-          createdAt: new Date(),
-        },
-      ]);
-      setLoading(false);
-    }, 500);
+    recarregar();
+
+    // Realtime — atualiza lista quando algo mudar nas salas
+    const channel = supabase
+      .channel('salas_lobby')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' }, recarregar)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores' }, recarregar)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
-  // Filtrar salas
-  const salasFiltradas = salas.filter(sala => 
+  const salasFiltradas = salas.filter(sala =>
     sala.nome.toLowerCase().includes(busca.toLowerCase()) ||
     sala.descricao.toLowerCase().includes(busca.toLowerCase()) ||
-    sala.timeANome?.toLowerCase().includes(busca.toLowerCase())
+    sala.timeANome?.toLowerCase().includes(busca.toLowerCase()) ||
+    sala.codigo.includes(busca.toUpperCase())
   );
 
-  // Entrar na sala
   const entrarNaSala = (sala: Sala, senha?: string) => {
-    // Verificar senha
     if (sala.temSenha && senha !== sala.senha) {
       setErroSenha('Senha incorreta');
       return;
     }
-    
-    // Verificar se já está cheia
-    if (sala.jogadores.length >= sala.maxJogadores) {
-      alert('⚠️ Sala está cheia!');
-      return;
-    }
-    
-    // Verificar ELO mínimo
-    if (sala.eloMinimo && usuarioAtual.elo !== sala.eloMinimo) {
-      alert(`⚠️ Esta sala requer ELO mínimo: ${sala.eloMinimo}`);
-      return;
-    }
-    
-    // Adicionar jogador à sala
-    const novaSala = {
-      ...sala,
-      jogadores: [
-        ...sala.jogadores,
-        {
-          id: usuarioAtual.id,
-          nome: usuarioAtual.nome,
-          tag: '#BR1',
-          elo: usuarioAtual.elo,
-          role: usuarioAtual.role,
-          isLider: false,
-          isTimeA: sala.jogadores.filter(j => j.isTimeA).length < 5,
-        }
-      ]
-    };
-    
-    setSalas(salas.map(s => s.id === sala.id ? novaSala : s));
-    setSalaAtual(novaSala);
+    setSalaSelecionada(sala);
     setShowSenhaModal(null);
-    setSenhaDigitada('');
     setErroSenha('');
   };
 
-  // Sair da sala
-  const sairDaSala = (sala: Sala) => {
-    const novaSala = {
-      ...sala,
-      jogadores: sala.jogadores.filter(j => j.id !== usuarioAtual.id)
-    };
-    
-    setSalas(salas.map(s => s.id === sala.id ? novaSala : s));
-    setSalaAtual(null);
+  const atualizarSala = (salaAtualizada: Sala) => {
+    setSalas(prev => prev.map(s => s.id === salaAtualizada.id ? salaAtualizada : s));
+    setSalaSelecionada(salaAtualizada);
   };
 
-  // Criar nova sala
-  const criarSala = (dados: any) => {
-    const novaSala: Sala = {
-      id: Date.now().toString(),
-      nome: dados.nome || `Sala de ${usuarioAtual.nome}`,
-      descricao: dados.descricao || `Partida ${dados.tipo} - venha jogar!`,
-      criadorId: usuarioAtual.id,
-      criadorNome: usuarioAtual.nome,
-      timeANome: dados.usarTime ? userTeam?.nome : 'Time A',
-      timeATag: dados.usarTime ? userTeam?.tag : undefined,
-      jogadores: [
-        {
-          id: usuarioAtual.id,
-          nome: usuarioAtual.nome,
-          tag: '#BR1',
-          elo: usuarioAtual.elo,
-          role: usuarioAtual.role,
-          isLider: true,
-          isTimeA: true,
-        }
-      ],
-      maxJogadores: dados.maxJogadores || 10,
-      temSenha: dados.temSenha || false,
-      senha: dados.temSenha ? dados.senha : undefined,
-      tipo: dados.tipo || 'casual',
-      status: 'aberta',
-      eloMinimo: dados.eloMinimo,
-      createdAt: new Date(),
-    };
-    
-    setSalas([novaSala, ...salas]);
-    setSalaAtual(novaSala);
-    setShowCriarModal(false);
-  };
-
-  // Apagar sala
-  const apagarSala = (salaId: string) => {
-    if (confirm('Tem certeza que quer apagar esta sala?')) {
-      setSalas(salas.filter(s => s.id !== salaId));
-      if (salaAtual?.id === salaId) setSalaAtual(null);
+  const handleCriarSala = async (dados: any) => {
+    const nova = await criarSala(dados, usuarioAtual);
+    if (nova) {
+      setSalas(prev => [nova, ...prev]);
+      setSalaSelecionada(nova);
+      setShowCriarModal(false);
     }
   };
 
-  // Copiar código
-  const copiarCodigo = (salaId: string) => {
-    navigator.clipboard.writeText(salaId);
-    alert('✅ Código da sala copiado!');
+  const handleDeletarSala = async (salaId: number) => {
+    await deletarSalaDB(salaId);
+    setSalas(prev => prev.filter(s => s.id !== salaId));
+    if (salaSelecionada?.id === salaId) setSalaSelecionada(null);
   };
 
-  // ============================================
-  // TELA DENTRO DA SALA
-  // ============================================
-  
-  if (salaAtual) {
-    const isCriador = salaAtual.criadorId === usuarioAtual.id;
-    const timeA = salaAtual.jogadores.filter(j => j.isTimeA);
-    const timeB = salaAtual.jogadores.filter(j => !j.isTimeA);
-    const estaCheia = salaAtual.jogadores.length >= salaAtual.maxJogadores;
-    
+  // Se tem sala selecionada, mostra SalaInterna
+  if (salaSelecionada) {
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
-      >
-        <div className="bg-[#0d0d0d] rounded-[26.5px] max-w-5xl w-full max-h-[90vh] overflow-hidden">
-          {/* Header */}
-          <div className="p-5 border-b border-white/10 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <button 
-                onClick={() => sairDaSala(salaAtual)}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/10"
-              >
-                <ArrowLeft className="w-5 h-5 text-white/60" />
-              </button>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-white font-black text-xl">{salaAtual.nome}</h2>
-                  {salaAtual.temSenha && <Lock className="w-4 h-4 text-yellow-400" />}
-                </div>
-                <p className="text-white/40 text-sm">{salaAtual.descricao}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => copiarCodigo(salaAtual.id)}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/10"
-              >
-                <Copy className="w-4 h-4 text-white/60" />
-              </button>
-              {isCriador && (
-                <button 
-                  onClick={() => apagarSala(salaAtual.id)}
-                  className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20"
-                >
-                  <Trash2 className="w-4 h-4 text-red-400" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="p-5">
-            {/* Status */}
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${estaCheia ? 'bg-green-400' : 'bg-yellow-400'}`} />
-                <span className="text-white/60 text-sm">
-                  {estaCheia ? 'Sala cheia! Partida vai começar...' : `${salaAtual.jogadores.length}/${salaAtual.maxJogadores} jogadores`}
-                </span>
-              </div>
-              <span className={`px-2 py-1 rounded-full text-xs font-bold ${
-                salaAtual.tipo === 'ranqueada' ? 'bg-yellow-500/20 text-yellow-400' :
-                salaAtual.tipo === 'treino' ? 'bg-blue-500/20 text-blue-400' :
-                'bg-green-500/20 text-green-400'
-              }`}>
-                {salaAtual.tipo === 'ranqueada' ? '🏆 Ranqueada' : 
-                 salaAtual.tipo === 'treino' ? '⚡ Treino' : '🎮 Casual'}
-              </span>
-            </div>
-
-            {/* Times */}
-            <div className="grid grid-cols-2 gap-6">
-              {/* Time A */}
-              <div className="bg-white/[0.02] rounded-[20px] border border-white/5 overflow-hidden">
-                <div className="p-3 border-b border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Crown className="w-4 h-4 text-blue-400" />
-                    <span className="text-white font-bold">
-                      {salaAtual.timeANome || 'Time A'}
-                      {salaAtual.timeATag && <span className="text-white/40 ml-1">#{salaAtual.timeATag}</span>}
-                    </span>
-                  </div>
-                  <span className="text-white/40 text-xs">{timeA.length}/5</span>
-                </div>
-                <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
-                  {timeA.map(jogador => (
-                    <div key={jogador.id} className="flex items-center justify-between p-2 hover:bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 flex items-center justify-center">
-                          <span className="text-xs font-bold">{jogador.nome[0]}</span>
-                        </div>
-                        <div>
-                          <p className="text-white text-sm font-medium">{jogador.nome}</p>
-                          <p className="text-white/30 text-[10px]">{jogador.role} • {jogador.elo}</p>
-                        </div>
-                      </div>
-                      {jogador.isLider && <Crown className="w-3 h-3 text-yellow-400" />}
-                    </div>
-                  ))}
-                  {Array(5 - timeA.length).fill(0).map((_, i) => (
-                    <div key={`empty-a-${i}`} className="flex items-center gap-2 p-2 opacity-50">
-                      <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                        <UserPlus className="w-3 h-3 text-white/30" />
-                      </div>
-                      <span className="text-white/30 text-sm">Aguardando...</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Time B */}
-              <div className="bg-white/[0.02] rounded-[20px] border border-white/5 overflow-hidden">
-                <div className="p-3 border-b border-white/5 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-4 h-4 text-red-400" />
-                    <span className="text-white font-bold">{salaAtual.timeBNome || 'Time B'}</span>
-                  </div>
-                  <span className="text-white/40 text-xs">{timeB.length}/5</span>
-                </div>
-                <div className="p-2 space-y-1 max-h-[300px] overflow-y-auto">
-                  {timeB.map(jogador => (
-                    <div key={jogador.id} className="flex items-center justify-between p-2 hover:bg-white/5 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500/20 to-orange-500/20 flex items-center justify-center">
-                          <span className="text-xs font-bold">{jogador.nome[0]}</span>
-                        </div>
-                        <div>
-                          <p className="text-white text-sm font-medium">{jogador.nome}</p>
-                          <p className="text-white/30 text-[10px]">{jogador.role} • {jogador.elo}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {Array(5 - timeB.length).fill(0).map((_, i) => (
-                    <div key={`empty-b-${i}`} className="flex items-center gap-2 p-2 opacity-50">
-                      <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-                        <UserPlus className="w-3 h-3 text-white/30" />
-                      </div>
-                      <span className="text-white/30 text-sm">Aguardando...</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Botão Iniciar */}
-            {isCriador && estaCheia && (
-              <button
-                className="w-full mt-6 py-3 rounded-xl font-bold text-white transition-all hover:scale-[1.02]"
-                style={{ background: `linear-gradient(135deg, #4ade80, #22c55e)` }}
-                onClick={() => alert('🎮 Partida iniciada!')}
-              >
-                <Sword className="w-4 h-4 inline mr-2" />
-                Iniciar Partida
-              </button>
-            )}
-
-            {/* Aviso */}
-            {!estaCheia && (
-              <div className="mt-6 text-center p-3 rounded-xl bg-yellow-500/5 border border-yellow-500/20">
-                <Clock className="w-4 h-4 text-yellow-400 inline mr-2" />
-                <span className="text-yellow-400/60 text-sm">Aguardando {salaAtual.maxJogadores - salaAtual.jogadores.length} jogadores...</span>
-              </div>
-            )}
-          </div>
-        </div>
-      </motion.div>
+      <SalaInterna
+        sala={salaSelecionada}
+        usuarioAtual={usuarioAtual}
+        onAtualizarSala={atualizarSala}
+        onDeletarSala={handleDeletarSala}
+        onSair={() => setSalaSelecionada(null)}
+      />
     );
   }
 
-  // ============================================
-  // TELA LISTA DE SALAS
-  // ============================================
-
   return (
     <>
-      <div className="bg-[#0d0d0d] rounded-[26.5px] overflow-hidden">
-        {/* Header */}
-        <div className="p-5 border-b border-white/10">
-          <div className="flex justify-between items-center mb-4">
+      <div
+        className="relative rounded-2xl overflow-hidden"
+        style={{
+          background: 'rgba(13, 13, 13, 0.6)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          backdropFilter: 'blur(16px)'
+        }}
+      >
+        <div className="p-6 border-b border-white/8 bg-white/[0.02]">
+          <div className="flex justify-between items-center mb-6">
             <div>
-              <h2 className="text-white font-black text-xl">🔓 Salas Abertas</h2>
-              <p className="text-white/40 text-sm">Entre em uma sala ou crie a sua</p>
+              <h2 className="text-white font-black text-xl tracking-tight uppercase">🔓 Salas Abertas</h2>
+              <p className="text-white/40 text-xs font-medium uppercase tracking-widest mt-1">Entre em uma sala ou crie a sua</p>
             </div>
             <button
               onClick={() => setShowCriarModal(true)}
-              className="px-4 py-2 rounded-xl font-bold text-white flex items-center gap-2 transition-all hover:scale-105"
-              style={{ background: `linear-gradient(135deg, #3b82f6, #8b5cf6)` }}
+              className="px-6 py-3 rounded-xl font-black text-sm text-white flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-lg"
+              style={{
+                background: 'linear-gradient(135deg, #FFB700, #FF6600)',
+                boxShadow: '0 8px 20px -6px rgba(255, 183, 0, 0.4)'
+              }}
             >
-              <Plus className="w-4 h-4" />
-              Criar Sala
+              <Plus className="w-5 h-5" />
+              CRIAR SALA
             </button>
           </div>
 
-          {/* Busca */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20" />
             <input
               type="text"
-              placeholder="Buscar sala por nome, time ou descrição..."
+              placeholder="BUSCAR POR NOME, TIME OU CÓDIGO (#000001)..."
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
-              className="w-full bg-black/40 border border-white/10 rounded-xl py-2 pl-10 pr-4 text-white text-sm placeholder:text-white/30"
+              className="w-full bg-white/5 border border-white/10 rounded-2xl py-3.5 pl-12 pr-4 text-white text-sm placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-all uppercase font-bold tracking-tight"
             />
           </div>
         </div>
 
-        {/* Lista */}
-        <div className="p-5 max-h-[500px] overflow-y-auto space-y-3">
+        <div className="p-6 max-h-[600px] overflow-y-auto space-y-4 custom-scrollbar">
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 mx-auto mb-3" />
-              <p className="text-white/40">Carregando salas...</p>
+            <div className="text-center py-20">
+              <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#FFB700] border-t-transparent mx-auto mb-4" />
+              <p className="text-white/40 font-bold uppercase tracking-widest text-xs">Carregando salas...</p>
             </div>
           ) : salasFiltradas.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-white/10 mx-auto mb-3" />
-              <p className="text-white/30">Nenhuma sala encontrada</p>
-              <p className="text-white/20 text-sm mt-1">Crie uma sala para começar!</p>
+            <div className="text-center py-20 bg-white/[0.01] rounded-3xl border border-dashed border-white/5">
+              <Users className="w-16 h-16 text-white/5 mx-auto mb-4" />
+              <p className="text-white/30 font-black uppercase tracking-widest">Nenhuma sala encontrada</p>
+              <p className="text-white/10 text-[10px] font-bold uppercase tracking-widest mt-2">Crie uma sala para começar!</p>
             </div>
           ) : (
             salasFiltradas.map((sala) => {
+              const modoInfo = getModoInfo(sala.modo);
+              const mpInfo = getMPointsInfo(sala.mpoints);
               const estaCheia = sala.jogadores.length >= sala.maxJogadores;
-              const podeEntrar = !estaCheia && !sala.jogadores.some(j => j.id === usuarioAtual.id);
-              
+              const jaEsta = sala.jogadores.some(j => j.id === usuarioAtual.id);
+              const podeEntrar = !estaCheia && !jaEsta;
+
               return (
                 <motion.div
                   key={sala.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="bg-white/[0.02] border border-white/5 rounded-[20px] p-4 hover:bg-white/[0.04] transition-all"
+                  className="bg-white/[0.03] border border-white/5 rounded-2xl p-5 hover:bg-white/[0.06] hover:border-white/10 transition-all group relative overflow-hidden"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
+
+                  <div className="flex items-center justify-between relative z-10">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          sala.tipo === 'ranqueada' ? 'bg-yellow-500/20 text-yellow-400' :
-                          sala.tipo === 'treino' ? 'bg-blue-500/20 text-blue-400' :
-                          'bg-green-500/20 text-green-400'
-                        }`}>
-                          {sala.tipo === 'ranqueada' ? '🏆 Ranqueada' : 
-                           sala.tipo === 'treino' ? '⚡ Treino' : '🎮 Casual'}
+                      {/* Badges superiores */}
+                      <div className="flex items-center gap-2 mb-3 flex-wrap">
+                        {/* Código da partida */}
+                        <span className="px-2.5 py-1 rounded-lg bg-white/8 border border-white/10 text-[10px] font-black font-mono tracking-widest text-white/50">
+                          {sala.codigo}
                         </span>
-                        {sala.temSenha && <Lock className="w-3 h-3 text-yellow-400" />}
-                        {sala.eloMinimo && (
-                          <span className="text-[10px] text-white/30">🔰 Mín: {sala.eloMinimo}</span>
-                        )}
-                      </div>
-                      
-                      <h3 className="text-white font-bold text-lg">{sala.nome}</h3>
-                      <p className="text-white/40 text-sm mb-2">{sala.descricao}</p>
-                      
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1">
-                          <Users className="w-3 h-3 text-white/30" />
-                          <span className="text-white/40 text-xs">{sala.jogadores.length}/{sala.maxJogadores}</span>
+
+                        {/* Modo */}
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/5 bg-white/5">
+                          <span className="text-[10px] font-black uppercase tracking-tighter" style={{ color: modoInfo.cor }}>
+                            {modoInfo.icone} {modoInfo.nome}
+                          </span>
                         </div>
-                        {sala.timeANome && (
-                          <div className="flex items-center gap-1">
-                            <Crown className="w-3 h-3 text-blue-400" />
-                            <span className="text-white/40 text-xs">{sala.timeANome}</span>
+
+                        {/* M Points */}
+                        {sala.mpoints > 0 ? (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border" style={{ borderColor: `${mpInfo.cor}40`, background: `${mpInfo.cor}10` }}>
+                            <Zap className="w-3 h-3" style={{ color: mpInfo.cor }} />
+                            <span className="text-[10px] font-black uppercase tracking-tighter" style={{ color: mpInfo.cor }}>
+                              {sala.mpoints.toLocaleString('pt-BR')} MP
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-white/5 bg-white/5">
+                            <span className="text-[10px] font-black uppercase tracking-tighter text-white/30">🎮 Casual</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-1">
-                          <span className="text-white/30 text-xs">Criador: {sala.criadorNome}</span>
+
+                        {sala.temSenha && (
+                          <div className="w-6 h-6 rounded-lg bg-yellow-500/10 flex items-center justify-center border border-yellow-500/20">
+                            <Lock className="w-3.5 h-3.5 text-yellow-400" />
+                          </div>
+                        )}
+                        {sala.eloMinimo && (
+                          <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">🔰 Mín: {sala.eloMinimo}</span>
+                        )}
+                      </div>
+
+                      <h3 className="text-white font-black text-xl tracking-tight uppercase group-hover:text-[#FFB700] transition-colors">{sala.nome}</h3>
+                      <p className="text-white/40 text-xs font-medium uppercase tracking-wider mt-1 mb-4">{sala.descricao}</p>
+
+                      <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center">
+                            <Users className="w-3.5 h-3.5 text-white/30" />
+                          </div>
+                          <span className="text-white/40 text-[10px] font-black uppercase tracking-widest">{sala.jogadores.length} / {sala.maxJogadores}</span>
                         </div>
+                        {sala.timeANome && (
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                              <Crown className="w-3.5 h-3.5 text-blue-400" />
+                            </div>
+                            <span className="text-white/40 text-[10px] font-black uppercase tracking-widest">{sala.timeANome}</span>
+                          </div>
+                        )}
+                        <span className="text-white/20 text-[10px] font-black uppercase tracking-widest">CRIADOR: {sala.criadorNome}</span>
                       </div>
                     </div>
-                    
+
                     <button
                       onClick={() => {
-                        if (sala.temSenha) {
+                        if (sala.temSenha && !jaEsta) {
                           setShowSenhaModal({ salaId: sala.id, nome: sala.nome });
                         } else {
                           entrarNaSala(sala);
                         }
                       }}
-                      disabled={!podeEntrar}
-                      className={`px-4 py-2 rounded-xl font-bold text-sm transition-all flex items-center gap-2 ${
-                        podeEntrar 
-                          ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' 
-                          : 'bg-white/5 text-white/20 cursor-not-allowed'
+                      disabled={!podeEntrar && !jaEsta}
+                      className={`ml-4 px-8 py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all flex items-center gap-2 ${
+                        jaEsta
+                          ? 'bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20'
+                          : podeEntrar
+                          ? 'bg-white/5 border border-white/10 text-white/60 hover:bg-[#FFB700] hover:text-black hover:border-[#FFB700] hover:shadow-lg hover:shadow-[#FFB700]/20'
+                          : 'bg-white/5 text-white/10 border border-white/5 cursor-not-allowed'
                       }`}
                     >
-                      <LogIn className="w-3 h-3" />
-                      {estaCheia ? 'Cheia' : sala.jogadores.some(j => j.id === usuarioAtual.id) ? 'Dentro' : 'Entrar'}
+                      <LogIn className="w-4 h-4" />
+                      {jaEsta ? 'VOLTAR' : estaCheia ? 'CHEIA' : 'ENTRAR'}
                     </button>
                   </div>
                 </motion.div>
@@ -787,12 +561,11 @@ const SalaAberta = ({
         </div>
       </div>
 
-      {/* Modais */}
       <AnimatePresence>
         {showCriarModal && (
           <ModalCriarSala
             onClose={() => setShowCriarModal(false)}
-            onCreate={criarSala}
+            onCreate={handleCriarSala}
             usuarioAtual={usuarioAtual}
             userTeam={userTeam}
           />
@@ -803,10 +576,7 @@ const SalaAberta = ({
         {showSenhaModal && (
           <ModalSenha
             nome={showSenhaModal.nome}
-            onClose={() => {
-              setShowSenhaModal(null);
-              setErroSenha('');
-            }}
+            onClose={() => { setShowSenhaModal(null); setErroSenha(''); }}
             onConfirm={(senha: string) => {
               const sala = salas.find(s => s.id === showSenhaModal.salaId);
               if (sala) entrarNaSala(sala, senha);
