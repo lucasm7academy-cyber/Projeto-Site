@@ -37,6 +37,7 @@ const LOGO_URL = getImageUrl('logo-m7.png');
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const isSalaPage = location.pathname.startsWith('/sala/');
   const { playSound } = useSound();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -129,7 +130,7 @@ export default function Layout() {
     { label: 'Políticas', icon: ShieldCheck, path: '/politicas' },
   ];
 
-  const sidebarWidths = "hidden lg:flex lg:w-[220px] xl:w-[240px] 2xl:w-[260px] shrink-0";
+  const sidebarWidths = "hidden lg:flex lg:w-[220px] xl:w-[240px] 2xl:w-[200px] shrink-0";
 
   const riotIconUrl = contaRiot?.profile_icon_id 
     ? `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${contaRiot.profile_icon_id}.png`
@@ -137,14 +138,13 @@ export default function Layout() {
 
   return (
     <div 
-      className="min-h-screen bg-cover bg-center bg-no-repeat bg-fixed"
-      style={{ 
-        backgroundImage: `url(${getImageUrl('fundoescuro.png')})`,
-        backgroundColor: '#0a0b0f'
-      }}
+      className="min-h-screen bg-[#0a0b0f]"
     >
       {/* Header Responsivo */}
       <header className="bg-black/60 backdrop-blur-sm fixed top-0 z-50 w-full h-14 md:h-16 border-b border-primary shadow-lg">
+        {/* Linha amarela na base */}
+        <div className="absolute bottom-0 left-0 w-full h-0 bg-primary shadow-[0_0_10px_rgba(255,255,0,0.5)] z-50"></div>
+        
         <div className="flex justify-between items-center h-full px-3 md:px-6">
           {/* Lado esquerdo - Mobile: apenas menu hambúrguer | Desktop: menu + logo + nome + bem-vindo */}
           <div className="flex items-center gap-2 md:gap-4">
@@ -550,8 +550,14 @@ export default function Layout() {
         </AnimatePresence>
 
         {/* Main Content */}
-        <main className="flex-1 bg-gradient-to-br from-surface-variant/30 to-background/50 relative overflow-y-auto h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)]">
-          <div className="relative z-10 p-3 md:p-5 lg:p-8 h-full">
+        <main 
+          className="flex-1 relative overflow-y-auto h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] bg-cover bg-center bg-no-repeat bg-fixed"
+          style={{ 
+            backgroundImage: `url(${getImageUrl('fundoescuro.png')})`,
+          }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-surface-variant/30 to-background/50 z-0" />
+          <div className={`relative z-10 min-h-full flex flex-col ${isSalaPage ? 'p-0' : 'p-3 md:p-5 lg:p-8'}`}>
             <Outlet />
           </div>
         </main>

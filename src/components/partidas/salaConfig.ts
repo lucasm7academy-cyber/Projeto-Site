@@ -28,7 +28,7 @@ export const MODOS_JOGO: Record<ModoJogo, {
     icone: '🌉',
     descricao: 'Bridge of Progress - Caos total',
     maxJogadores: 10,
-    jogadoresPorTime: 5,
+    jogadoresPorTime: 2,
     cor: '#fbbf24'
   },
   '1v1': {

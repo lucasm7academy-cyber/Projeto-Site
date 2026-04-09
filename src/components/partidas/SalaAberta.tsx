@@ -1,18 +1,15 @@
 // src/components/partidas/SalaAberta.tsx
 // COMPONENTE: Lista de salas abertas e criação de novas salas (conectado ao Supabase)
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Search, Lock, Users, Crown, X, LogIn, Zap } from 'lucide-react';
-import { SalaInterna } from './SalaInterna';
 import {
   MODOS_JOGO, OPCOES_ELO, OPCOES_MPOINTS, getModoInfo, getMPointsInfo,
   getMaxJogadoresPorModo, type ModoJogo,
 } from './salaConfig';
-import {
-  carregarSalas, criarSala, deletarSala as deletarSalaDB,
-  type Sala,
-} from '../../api/salas';
+import { carregarSalas, criarSala, buscarSalaAtivaDoUsuario, type Sala } from '../../api/salas';
 import { supabase } from '../../lib/supabase';
 
 // ============================================
@@ -318,30 +315,37 @@ interface SalaAbertaProps {
   onSair?: () => void;
 }
 
-export const SalaAberta = ({ usuarioAtual, userTeam, onSair }: SalaAbertaProps) => {
+export const SalaAberta = ({ usuarioAtual, userTeam }: SalaAbertaProps) => {
+  const navigate = useNavigate();
   const [salas, setSalas] = useState<Sala[]>([]);
-  const [salaSelecionada, setSalaSelecionada] = useState<Sala | null>(null);
   const [showCriarModal, setShowCriarModal] = useState(false);
   const [showSenhaModal, setShowSenhaModal] = useState<{ salaId: number; nome: string } | null>(null);
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(true);
   const [erroSenha, setErroSenha] = useState('');
 
+  // Armazena sala vinculada no mount para checagem síncrona em entrarNaSala.
+  const salaVinculadaRef = useRef<Sala | null>(null);
+
   const recarregar = useCallback(async () => {
     const lista = await carregarSalas();
     setSalas(lista);
     setLoading(false);
-    // Atualiza sala selecionada se ainda existir
-    if (salaSelecionada) {
-      const atualizada = lista.find(s => s.id === salaSelecionada.id);
-      if (atualizada) setSalaSelecionada(atualizada);
-    }
-  }, [salaSelecionada]);
+  }, []);
 
   useEffect(() => {
-    recarregar();
+    const init = async () => {
+      // Se já está vinculado a uma partida ativa, vai direto para ela.
+      const vinculada = await buscarSalaAtivaDoUsuario(usuarioAtual.id);
+      if (vinculada) {
+        salaVinculadaRef.current = vinculada;
+        navigate(`/sala/${vinculada.id}`, { replace: true });
+        return;
+      }
+      await recarregar();
+    };
+    init();
 
-    // Realtime — atualiza lista quando algo mudar nas salas
     const channel = supabase
       .channel('salas_lobby')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' }, recarregar)
@@ -363,43 +367,24 @@ export const SalaAberta = ({ usuarioAtual, userTeam, onSair }: SalaAbertaProps) 
       setErroSenha('Senha incorreta');
       return;
     }
-    setSalaSelecionada(sala);
+    // Proteção: vinculado a outra sala → redireciona para lá.
+    const vinculada = salaVinculadaRef.current;
+    if (vinculada && vinculada.id !== sala.id) {
+      navigate(`/sala/${vinculada.id}`, { replace: true });
+      return;
+    }
+    navigate(`/sala/${sala.id}`);
     setShowSenhaModal(null);
     setErroSenha('');
-  };
-
-  const atualizarSala = (salaAtualizada: Sala) => {
-    setSalas(prev => prev.map(s => s.id === salaAtualizada.id ? salaAtualizada : s));
-    setSalaSelecionada(salaAtualizada);
   };
 
   const handleCriarSala = async (dados: any) => {
     const nova = await criarSala(dados, usuarioAtual);
     if (nova) {
-      setSalas(prev => [nova, ...prev]);
-      setSalaSelecionada(nova);
       setShowCriarModal(false);
+      navigate(`/sala/${nova.id}`);
     }
   };
-
-  const handleDeletarSala = async (salaId: number) => {
-    await deletarSalaDB(salaId);
-    setSalas(prev => prev.filter(s => s.id !== salaId));
-    if (salaSelecionada?.id === salaId) setSalaSelecionada(null);
-  };
-
-  // Se tem sala selecionada, mostra SalaInterna
-  if (salaSelecionada) {
-    return (
-      <SalaInterna
-        sala={salaSelecionada}
-        usuarioAtual={usuarioAtual}
-        onAtualizarSala={atualizarSala}
-        onDeletarSala={handleDeletarSala}
-        onSair={() => setSalaSelecionada(null)}
-      />
-    );
-  }
 
   return (
     <>

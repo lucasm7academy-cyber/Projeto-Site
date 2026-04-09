@@ -563,7 +563,7 @@ export default function App() {
                       </div>
                       <div>
                         <div className="flex items-center gap-1.5">
-                          <p className="text-white font-black text-lg tracking-tight">{jogador.riotId}</p>
+                          <p className="text-white font-black text-lg tracking-tight truncate max-w-[150px]">{jogador.riotId}</p>
                           {jogador.isVerified && (
                             <ShieldCheck className="w-3 h-3" style={{ color: eloStyle.border }} />
                           )}

@@ -14,6 +14,7 @@ import ResetHandler from "./pages/ResetHandler";
 import Players from "./pages/players";
 import Jogar from "./pages/Jogar";
 import TimePage from "./pages/TimePage";
+import SalaPage from "./pages/SalaPage";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -72,6 +73,7 @@ export default function App() {
             <Route path="/suporte" element={<PrivateRoute><div>Suporte</div></PrivateRoute>} />
             <Route path="/players" element={<PrivateRoute><Players /></PrivateRoute>} />
             <Route path="/times/:id" element={<PrivateRoute><TimePage /></PrivateRoute>} />
+            <Route path="/sala/:id"  element={<PrivateRoute><SalaPage /></PrivateRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>
