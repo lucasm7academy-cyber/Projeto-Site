@@ -227,7 +227,7 @@ export async function entrarNaVaga(
     return false;
   }
 
-  // Verifica se usuário está vinculado a outra sala
+  // Verifica se usuário está vinculado a outra sala (bloqueio absoluto)
   const { data: vinculo } = await supabase
     .from('sala_jogadores')
     .select('sala_id, vinculado')
@@ -240,6 +240,13 @@ export async function entrarNaVaga(
     console.warn('[entrarNaVaga] jogador vinculado a outra sala');
     return false;
   }
+
+  // Remove o usuário de qualquer outra sala em que esteja sem vínculo
+  // (impede que uma pessoa fique em duas salas ao mesmo tempo)
+  await supabase.from('sala_jogadores').delete()
+    .eq('user_id', usuario.id)
+    .eq('vinculado', false)
+    .neq('sala_id', salaId);
 
   // Remove vaga anterior nesta sala (DELETE é permitido por RLS)
   await supabase.from('sala_jogadores').delete()
@@ -443,4 +450,18 @@ export async function buscarSalaPorCodigo(codigo: string): Promise<Sala | null> 
     .from('salas').select('*, sala_jogadores(*)').eq('id', num).single();
   if (error || !data) return null;
   return mapSala(data, data.sala_jogadores ?? []);
+}
+
+// ── Códigos de partida (pool FIFO circular) ───────────────────────────────────
+
+/** Atribui o próximo código disponível à sala para o modo informado (FIFO). */
+export async function atribuirCodigoPartida(salaId: number, modo: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('atribuir_codigo_partida', { p_sala_id: salaId, p_modo: modo });
+  if (error) { console.error('[atribuirCodigoPartida]', error); return null; }
+  return data as string | null;
+}
+
+/** Libera o código quando a partida encerra. */
+export async function liberarCodigoPartida(salaId: number): Promise<void> {
+  await supabase.rpc('liberar_codigo_partida', { p_sala_id: salaId });
 }

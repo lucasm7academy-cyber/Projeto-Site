@@ -6,6 +6,7 @@ import {
   Crown, UserPlus, Check, ArrowLeft, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Trash2, Zap, RefreshCw, Clock, CheckCircle, Send
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { buildProfileIconUrl } from '../api/riot';
 import {
   buscarSalaCompleta, buscarSalaVinculadaDoUsuario, deletarSala,
   type Sala, type JogadorNaSala, type OpcaoVotoResultado,
@@ -50,7 +51,7 @@ async function carregarUsuario(): Promise<UsuarioAtual | null> {
 
   let avatar: string | undefined;
   if (riotAny?.profile_icon_id) {
-    avatar = `https://ddragon.leagueoflegends.com/cdn/15.8.1/img/profileicon/${riotAny.profile_icon_id}.png`;
+    avatar = buildProfileIconUrl(riotAny.profile_icon_id);
   }
 
   return {
@@ -280,9 +281,12 @@ function SalaChat({ salaId, usuarioAtual, jogadores }: {
     return jog.isTimeA ? '#3B82F6' : '#ef4444';
   };
 
+  const VISIVEL_MS = 5 * 60 * 1000; // 5 minutos
+  const visiveis = msgs.filter((m: MsgChat) => Date.now() - new Date(m.created_at).getTime() < VISIVEL_MS);
+
   useEffect(() => {
-    // Carrega histórico das últimas 24h
-    const desde = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    // Carrega histórico dos últimos 5 min
+    const desde = new Date(Date.now() - VISIVEL_MS).toISOString();
     supabase
       .from('sala_chat')
       .select('*')
@@ -291,7 +295,7 @@ function SalaChat({ salaId, usuarioAtual, jogadores }: {
       .order('created_at', { ascending: true })
       .then(({ data }) => { if (data) setMsgs(data as MsgChat[]); });
 
-    // Realtime
+    // Realtime — novas mensagens
     const ch = supabase
       .channel(`sala_chat_${salaId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sala_chat', filter: `sala_id=eq.${salaId}` },
@@ -299,12 +303,15 @@ function SalaChat({ salaId, usuarioAtual, jogadores }: {
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(ch); };
+    // Timer que re-filtra a cada 30s para sumir mensagens antigas
+    const timer = setInterval(() => setMsgs((prev: MsgChat[]) => [...prev]), 30_000);
+
+    return () => { supabase.removeChannel(ch); clearInterval(timer); };
   }, [salaId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [msgs]);
+  }, [visiveis.length]);
 
   const enviar = async () => {
     const t = texto.trim();
@@ -320,10 +327,10 @@ function SalaChat({ salaId, usuarioAtual, jogadores }: {
       {/* Mensagens */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pt-2 space-y-1.5 scrollbar-thin scrollbar-thumb-[#FFB700]/20 scrollbar-track-transparent">
         <div className="text-[0.8vmin] text-white/20 uppercase tracking-widest mb-1 font-bold">Chat da Sala</div>
-        {msgs.length === 0 && (
+        {visiveis.length === 0 && (
           <div className="text-[1vmin] text-white/10 italic">Nenhuma mensagem ainda.</div>
         )}
-        {msgs.map(m => (
+        {visiveis.map((m: MsgChat) => (
           <div key={m.id} className="text-[1vmin] text-white leading-snug break-words">
             <span className="font-black mr-1" style={{ color: corDoNick(m.user_id) }}>{m.nome}:</span>
             <span className="text-white/80">{m.texto}</span>
@@ -374,8 +381,8 @@ function HextechActionBar({
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[2px] bg-gradient-to-r from-transparent via-[#FFB700]/40 to-transparent blur-sm" />
 
-      {/* Mesmo gap-[68vmin] do MIDDLE SECTION — laterais alinham com as colunas dos slots */}
-      <div className="relative w-full flex items-end justify-center gap-[68vmin]">
+      {/* Mesmo gap do MIDDLE SECTION — laterais alinham com as colunas dos slots */}
+      <div className={`relative w-full flex items-end justify-center ${sala.modo === '1v1' ? 'gap-[60vmin]' : 'gap-[68vmin]'}`}>
 
         {/* ESQUERDA — alinha com coluna esquerda (items-start) */}
         <div className="flex items-end justify-start w-[36vmin] pb-1">
@@ -452,6 +459,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   } = useSalaRegras();
 
   const [copiado, setCopiado]           = useState(false);
+  const [copiadoCodigo, setCopiadoCodigo] = useState(false);
   const [showEncerrar, setShowEncerrar] = useState(false);
   const vagasEmAndamento                = useRef<Set<string>>(new Set());
 
@@ -463,18 +471,20 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     );
   }
 
-  const roles: Role[] = ['TOP', 'JG', 'MID', 'ADC', 'SUP'];
+  const isX1 = sala.modo === '1v1';
+  const roles: Role[] = isX1 ? ['MID'] : ['TOP', 'JG', 'MID', 'ADC', 'SUP'];
   const timeA = sala.jogadores.filter(j => j.isTimeA);
   const timeB = sala.jogadores.filter(j => !j.isTimeA);
   const isCriador = sala.criadorId === usuarioAtual.id;
 
-  const slotWidths = [
-    'w-[36vmin]', // TOP
-    'w-[34vmin]', // JG
-    'w-[32vmin]', // MID
-    'w-[34vmin]', // ADC
-    'w-[36vmin]', // SUP
-  ];
+  const slotWidths: Partial<Record<Role, string>> & Record<string, string> = {
+    TOP: 'w-[36vmin]',
+    JG:  'w-[34vmin]',
+    MID: isX1 ? 'w-[36vmin]' : 'w-[32vmin]',
+    ADC: 'w-[34vmin]',
+    SUP: 'w-[36vmin]',
+    RES: 'w-[32vmin]',
+  };
 
   const copiarLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -482,11 +492,11 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     setTimeout(() => setCopiado(false), 2000);
   };
 
-  const renderSlot = (role: Role, isTimeA: boolean, index: number) => {
+  const renderSlot = (role: Role, isTimeA: boolean) => {
     const jog = (isTimeA ? timeA : timeB).find(j => j.role === role);
     const roleIcon = ROLE_CONFIG[role];
     const isEu = jog?.id === usuarioAtual.id;
-    const widthClass = slotWidths[index];
+    const widthClass = slotWidths[role] ?? 'w-[32vmin]';
     const isLeft = isTimeA;
     const teamColor = isTimeA ? '#3B82F6' : '#ef4444';
 
@@ -509,12 +519,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         >
           {isTimeA ? (
             // Time Azul — tudo agrupado na direita (lado interno):
-            // [avatar] [nome] [tag] [ícone rota]
+            // [nome] [tag] [avatar] [ícone rota]
             <div className="flex items-center gap-[0.8vmin] overflow-hidden">
-              {avatarEl}
               <span className="text-[1.6vmin] font-black tracking-tight truncate" style={{ color: teamColor }}>{jog.nome}</span>
               <span className="text-white/60 text-[1.6vmin] font-semibold shrink-0">{jog.tag}</span>
               {jog.isLider && <Crown className="w-[1.2vmin] h-[1.2vmin] text-yellow-400 shrink-0" />}
+              {avatarEl}
               <img src={roleIcon.img} className="w-[3.2vmin] h-[3.2vmin] opacity-80 shrink-0" alt={role} />
             </div>
           ) : (
@@ -575,74 +585,111 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         <div className="absolute inset-10 rounded-full border border-white/[0.02]" />
         <ArcaneIndicators />
         <CentralDisplay />
-        
-        {/* Overlay de Confirmação */}
-        {sala.estado === 'confirmacao' && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-30 rounded-full">
-            <span className="text-[15vmin] font-black text-white tabular-nums leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">{timerConfirmacao}</span>
-            <span className="text-[2vmin] font-black text-white/40 uppercase tracking-[1em] mt-6">CONFIRME AGORA</span>
-          </div>
-        )}
-
-        {/* Overlay de Votação de Início */}
-        {sala.estado === 'aguardando_inicio' && jogadorAtual && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md z-30 rounded-full p-[10vmin] text-center">
-            <p className="text-white font-black text-[2.5vmin] uppercase tracking-widest mb-[4vmin]">A partida iniciou?</p>
-            <div className="flex gap-[2vmin] w-full max-w-[40vmin]">
-              <button
-                onClick={() => acaoVotarInicio('iniciou')}
-                className={`flex-1 py-[2vmin] rounded-xl font-black text-[1.5vmin] uppercase tracking-widest transition-all border ${
-                  meuVotoInicio === 'iniciou' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-white/5 border-white/10 text-white/50'
-                }`}
-              >
-                Sim ({contagemVotosInicio.iniciou})
-              </button>
-              <button
-                onClick={() => acaoVotarInicio('nao_iniciou')}
-                className={`flex-1 py-[2vmin] rounded-xl font-black text-[1.5vmin] uppercase tracking-widest transition-all border ${
-                  meuVotoInicio === 'nao_iniciou' ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/50'
-                }`}
-              >
-                Não ({contagemVotosInicio.nao_iniciou})
-              </button>
-            </div>
-            <p className="text-white/20 text-[1.2vmin] font-bold uppercase mt-[4vmin] tracking-widest">{formatTime(timerAguardando)} restantes</p>
-          </div>
-        )}
-
-        {/* Overlay de Votação de Resultado */}
-        {sala.estado === 'finalizacao' && jogadorAtual && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md z-30 rounded-full p-[10vmin] text-center">
-            <p className="text-white font-black text-[2.5vmin] uppercase tracking-widest mb-[4vmin]">Quem venceu?</p>
-            <div className="grid grid-cols-3 gap-[2vmin] w-full max-w-[50vmin]">
-              <button
-                onClick={() => acaoVotarResultado('time_a')}
-                className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
-                  meuVotoResultado === 'time_a' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-white/5 border-white/10 text-white/40'
-                }`}
-              >
-                Time A ({contagemVotosResultado.time_a})
-              </button>
-              <button
-                onClick={() => acaoVotarResultado('empate')}
-                className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
-                  meuVotoResultado === 'empate' ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400' : 'bg-white/5 border-white/10 text-white/40'
-                }`}
-              >
-                Empate ({contagemVotosResultado.empate})
-              </button>
-              <button
-                onClick={() => acaoVotarResultado('time_b')}
-                className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
-                  meuVotoResultado === 'time_b' ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/40'
-                }`}
-              >
-                Time B ({contagemVotosResultado.time_b})
-              </button>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Overlay de Confirmação — fora do círculo para ficar acima dos slots (z-50) */}
+      {sala.estado === 'confirmacao' && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-50 pointer-events-none">
+          <span className="text-[15vmin] font-black text-white tabular-nums leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">{timerConfirmacao}</span>
+          <span className="text-[2vmin] font-black text-white/40 uppercase tracking-[1em] mt-6">CONFIRME AGORA</span>
+        </div>
+      )}
+
+      {/* Overlay de Aguardando Início — fora do círculo para ficar acima dos slots (z-50) */}
+      {sala.estado === 'aguardando_inicio' && jogadorAtual && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/70 backdrop-blur-md z-50 p-[8vmin] text-center">
+          <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
+            Partida Confirmada!
+          </p>
+          <p className="text-[1.2vmin] text-white/30 uppercase tracking-widest mb-[2vmin]">
+            Entre na sala usando o código abaixo
+          </p>
+          {sala.codigoPartida ? (
+            <div className="flex flex-col items-center gap-[1.5vmin] mb-[3vmin]">
+              <div className="px-[3vmin] py-[1.5vmin] bg-black/40 border border-[#FFB700]/20 rounded-xl">
+                <span className="text-[2.8vmin] font-black text-[#FFB700] tracking-[0.2em] select-all">
+                  {sala.codigoPartida}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(sala.codigoPartida!);
+                  setCopiadoCodigo(true);
+                  setTimeout(() => setCopiadoCodigo(false), 2000);
+                }}
+                className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
+                  copiadoCodigo
+                    ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                    : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
+                }`}
+              >
+                {copiadoCodigo
+                  ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
+                  : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
+                }
+              </button>
+            </div>
+          ) : (
+            <div className="px-[4vmin] py-[2vmin] mb-[3vmin]">
+              <span className="text-[2vmin] text-white/20 italic">Atribuindo código...</span>
+            </div>
+          )}
+          <div className="w-[20vmin] h-px bg-white/10 mb-[3vmin]" />
+          <p className="text-white/60 font-black text-[1.4vmin] uppercase tracking-widest mb-[2vmin]">A partida iniciou?</p>
+          <div className="flex gap-[2vmin] w-full max-w-[36vmin]">
+            <button
+              onClick={() => acaoVotarInicio('iniciou')}
+              className={`flex-1 py-[1.5vmin] rounded-xl font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
+                meuVotoInicio === 'iniciou' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-white/5 border-white/10 text-white/40'
+              }`}
+            >
+              Sim ({contagemVotosInicio.iniciou})
+            </button>
+            <button
+              onClick={() => acaoVotarInicio('nao_iniciou')}
+              className={`flex-1 py-[1.5vmin] rounded-xl font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
+                meuVotoInicio === 'nao_iniciou' ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/40'
+              }`}
+            >
+              Não ({contagemVotosInicio.nao_iniciou})
+            </button>
+          </div>
+          <p className="text-white/20 text-[1vmin] font-bold uppercase mt-[2vmin] tracking-widest">{formatTime(timerAguardando)} restantes</p>
+        </div>
+      )}
+
+      {/* Overlay de Votação de Resultado — fora do círculo para ficar acima dos slots (z-50) */}
+      {sala.estado === 'finalizacao' && jogadorAtual && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/60 backdrop-blur-md z-50 p-[10vmin] text-center">
+          <p className="text-white font-black text-[2.5vmin] uppercase tracking-widest mb-[4vmin]">Quem venceu?</p>
+          <div className="grid grid-cols-3 gap-[2vmin] w-full max-w-[50vmin]">
+            <button
+              onClick={() => acaoVotarResultado('time_a')}
+              className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
+                meuVotoResultado === 'time_a' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-white/5 border-white/10 text-white/40'
+              }`}
+            >
+              Time A ({contagemVotosResultado.time_a})
+            </button>
+            <button
+              onClick={() => acaoVotarResultado('empate')}
+              className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
+                meuVotoResultado === 'empate' ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400' : 'bg-white/5 border-white/10 text-white/40'
+              }`}
+            >
+              Empate ({contagemVotosResultado.empate})
+            </button>
+            <button
+              onClick={() => acaoVotarResultado('time_b')}
+              className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
+                meuVotoResultado === 'time_b' ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/40'
+              }`}
+            >
+              Time B ({contagemVotosResultado.time_b})
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* TOP BAR */}
       <div className="w-full h-[10vmin] flex items-start justify-center pt-[2vmin] z-30">
@@ -702,12 +749,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       )}
 
       {/* MIDDLE SECTION */}
-      <div className="w-full flex-1 flex items-center justify-center gap-[68vmin] z-20 mt-[-12vh]">
+      <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] ${isX1 ? 'gap-[60vmin]' : 'gap-[68vmin]'}`}>
         <div className="flex flex-col gap-[1.5vmin] items-start">
-          {roles.map((role, idx) => renderSlot(role, true, idx))}
+          {roles.map((role) => renderSlot(role, true))}
         </div>
         <div className="flex flex-col gap-[1.5vmin] items-end">
-          {roles.map((role, idx) => renderSlot(role, false, idx))}
+          {roles.map((role) => renderSlot(role, false))}
         </div>
       </div>
 

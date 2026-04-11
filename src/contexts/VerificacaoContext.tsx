@@ -24,7 +24,7 @@ interface VerificacaoContextType {
 
 const VerificacaoContext = createContext<VerificacaoContextType | undefined>(undefined);
 
-const POLLING_INTERVAL_MS = 10000;
+const POLLING_INTERVAL_MS = 15000;
 const TIMEOUT_SEGUNDOS = 240;
 
 export function VerificacaoProvider({ children }: { children: ReactNode }) {

@@ -20,8 +20,8 @@ import {
   Mail
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { getDDRVersion } from '../api/riot';
-import { buscarOuAtualizarStats } from '../api/player';
+import { getDDRVersion, buildProfileIconUrl } from '../api/riot';
+import { sincronizarContaRiot } from '../api/player';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 
@@ -487,6 +487,7 @@ export default function Perfil() {
   const [saldo,         setSaldo]         = useState<number>(0);
   const [isVip,         setIsVip]         = useState(false);
   const [loading,       setLoading]       = useState(true);
+  const [sincronizando, setSincronizando] = useState(false);
 
   // Lane
   const [lane,      setLane]      = useState('Top');
@@ -592,23 +593,45 @@ export default function Perfil() {
         }
       }
 
-      if (riotData?.puuid) {
-        const [cache, version] = await Promise.all([
-          buscarOuAtualizarStats(riotData.puuid),
-          getDDRVersion(),
-        ]);
-        setEloSolo(cache.soloQ);
-        setEloFlex(cache.flexQ);
-        setStatsRecentes({
-          topChampions: cache.topChampions,
-          roles:        cache.roles,
-          totalGames:   cache.totalGames,
-        });
-        setDdrVer(version);
+      // Exibe cache do Supabase imediatamente (sem esperar a Riot API)
+      if (riotData?.elo_cache) {
+        setEloSolo(riotData.elo_cache.soloQ ?? null);
+        setEloFlex(riotData.elo_cache.flexQ ?? null);
       }
+      if (riotData?.champions_cache) {
+        setStatsRecentes({
+          topChampions: riotData.champions_cache.topChampions ?? [],
+          roles:        riotData.champions_cache.roles        ?? [],
+          totalGames:   riotData.champions_cache.totalGames   ?? 0,
+        });
+      }
+      getDDRVersion().then(v => setDdrVer(v));
     }
 
     setLoading(false);
+
+    // Sync em background — atualiza ícone, nível, elo e stats da Riot API
+    if (user && riotData?.puuid) {
+      setSincronizando(true);
+      sincronizarContaRiot(riotData.puuid, user.id)
+        .then(fresh => {
+          if (!fresh) return;
+          setEloSolo(fresh.soloQ);
+          setEloFlex(fresh.flexQ);
+          setStatsRecentes({
+            topChampions: fresh.topChampions,
+            roles:        fresh.roles,
+            totalGames:   fresh.totalGames,
+          });
+          // Atualiza ícone e nível sem recarregar a página
+          setContaRiot((prev: any) => ({
+            ...prev,
+            profile_icon_id: fresh.iconeId,
+            level:           fresh.nivel,
+          }));
+        })
+        .finally(() => setSincronizando(false));
+    }
   };
 
   const salvarCampo = async (campos: Record<string, string>) => {
@@ -749,7 +772,7 @@ export default function Perfil() {
                     >
                       {contaRiot?.profile_icon_id ? (
                         <img
-                          src={`https://ddragon.leagueoflegends.com/cdn/${ddrVer}/img/profileicon/${contaRiot.profile_icon_id}.png`}
+                          src={buildProfileIconUrl(contaRiot.profile_icon_id)}
                           alt="Avatar" className="w-full h-full object-cover scale-110"
                         />
                       ) : (
@@ -758,10 +781,17 @@ export default function Perfil() {
                         </div>
                       )}
                     </div>
-                    
+
+                    {/* Indicador de sincronização em background */}
+                    {sincronizando && (
+                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-black rounded-full border border-white/10 flex items-center justify-center z-20">
+                        <RefreshCw className="w-3.5 h-3.5 text-primary animate-spin" />
+                      </div>
+                    )}
+
                     {/* Level Badge - Estilo LoL */}
                     {contaRiot?.level && (
-                      <div 
+                      <div
                         className="absolute -bottom-1 right-2 px-3 py-1 flex items-center justify-center rounded-full border border-primary/30 text-[10px] font-black z-10 bg-black/90 text-primary shadow-xl uppercase tracking-tighter"
                       >
                         LVL {contaRiot.level}

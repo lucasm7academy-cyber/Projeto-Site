@@ -7,6 +7,7 @@ import {
   UserPlus, UserX, Check, Plus, RefreshCw, X, Search, Upload,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { buildProfileIconUrl, buscarElo } from '../api/riot';
 import { useSound } from '../hooks/useSound';
 import { AnimatePresence as AP } from 'motion/react';
 import {
@@ -263,7 +264,7 @@ const InvitePlayerModal = ({ team, onClose }: { team: TimeData; onClose: () => v
                   ) : (
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                       {searchResults.map(p => {
-                        const iconUrl = p.profile_icon_id ? `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${p.profile_icon_id}.png` : null;
+                        const iconUrl = p.profile_icon_id ? buildProfileIconUrl(p.profile_icon_id) : null;
                         return (
                           <button key={p.user_id} onClick={() => { playSound('click'); setSelectedPlayer(p); }}
                             className="w-full flex items-center justify-between bg-white/5 hover:bg-white/10 rounded-xl p-3 border border-white/5 transition-colors">
@@ -289,7 +290,7 @@ const InvitePlayerModal = ({ team, onClose }: { team: TimeData; onClose: () => v
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full overflow-hidden flex items-center justify-center" style={{ background: `${team.gradientFrom}30` }}>
                       {selectedPlayer.profile_icon_id
-                        ? <img src={`https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${selectedPlayer.profile_icon_id}.png`} alt="" className="w-full h-full object-cover" />
+                        ? <img src={buildProfileIconUrl(selectedPlayer.profile_icon_id)} alt="" className="w-full h-full object-cover" />
                         : <Check className="w-4 h-4" style={{ color: team.gradientFrom }} />}
                     </div>
                     <div>
@@ -900,6 +901,43 @@ export default function TimePage() {
     load();
   }, [id]);
 
+  // Busca elo real dos membros em background após carregar o time
+  useEffect(() => {
+    if (!time || time.membros.length === 0) return;
+    let cancelado = false;
+
+    const fetchElos = async () => {
+      for (const membro of time.membros) {
+        if (cancelado) break;
+        if (!membro.puuid) continue;
+        let ranqueadas: any[] = [];
+        try {
+          ranqueadas = await buscarElo(membro.puuid);
+        } catch {
+          await new Promise(r => setTimeout(r, 3000));
+          if (cancelado) break;
+          try { ranqueadas = await buscarElo(membro.puuid); } catch { ranqueadas = []; }
+        }
+        if (cancelado) break;
+        const solo = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
+        const eloStr = solo ? (TIER_MAP[solo.tier] ?? solo.tier) : '';
+        setTime((prev: TimeData | null) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            membros: prev.membros.map((m: Membro) =>
+              m.userId === membro.userId ? { ...m, elo: eloStr } : m
+            ),
+          };
+        });
+        await new Promise(r => setTimeout(r, 700));
+      }
+    };
+
+    fetchElos();
+    return () => { cancelado = true; };
+  }, [time?.id]);
+
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleUpdateTeam = async (updated: Partial<TimeData>) => {
     if (!time) return;
@@ -1069,7 +1107,7 @@ export default function TimePage() {
           {/* glow de fundo */}
           <div
             className="absolute -top-20 -left-20 w-96 h-96 rounded-full blur-[120px] opacity-30 pointer-events-none"
-            style={{ background: time.gradientFrom }}
+
           />
 
           <div className="relative z-10 p-8 flex flex-col sm:flex-row items-center sm:items-start gap-6">
@@ -1165,7 +1203,7 @@ export default function TimePage() {
                     {/* Avatar */}
                     {m.iconeId ? (
                       <img
-                        src={`https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${m.iconeId}.png`}
+                        src={buildProfileIconUrl(m.iconeId)}
                         alt={m.riotId}
                         className="w-9 h-9 rounded-xl border border-white/10 shrink-0"
                       />
@@ -1221,7 +1259,7 @@ export default function TimePage() {
                 >
                   {lider.iconeId ? (
                     <img
-                      src={`https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${lider.iconeId}.png`}
+                      src={buildProfileIconUrl(lider.iconeId)}
                       alt={lider.riotId}
                       className="w-10 h-10 rounded-xl border"
                       style={{ borderColor: `${time.gradientFrom}60` }}

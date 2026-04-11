@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, CheckCircle, AlertCircle, RefreshCw, ShieldCheck, Timer, Unlink, User, Gamepad2, ArrowLeft} from 'lucide-react';
-import { buscarJogadorCompleto, buscarSugestoes } from '../api/riot';
+import { buscarJogadorCompleto, buscarSugestoes, buildProfileIconUrl } from '../api/riot';
 import { motion, AnimatePresence } from 'motion/react';
 import { useVerificacao } from '../contexts/VerificacaoContext';
 import { supabase } from '../lib/supabase';
@@ -30,9 +30,7 @@ export default function Vincular() {
   const searchRef = useRef<HTMLDivElement>(null);
   const { verificacaoAtiva, iniciarVerificacao, cancelarVerificacao } = useVerificacao();
 
-  const getIconeUrl = (iconeId: number) => {
-    return `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${iconeId}.png`;
-  };
+  const getIconeUrl = buildProfileIconUrl;
 
   // Carregar conta vinculada ao iniciar
   useEffect(() => {
@@ -276,14 +274,15 @@ export default function Vincular() {
       }
     }
 
-    const iconeAtual = resultado.data.iconeId;
-    const iconeAleatorio = iconeAtual;
-    // AS DUAS DE CIMA DEIXA TUDO IGUAL PAR TESTES 
-    
     //const iconeAtual = resultado.data.iconeId;
-    //const iconesFiltrados = ICONES_PADRAO.filter(i => i !== iconeAtual);
-    //const iconeAleatorio = iconesFiltrados[Math.floor(Math.random() * iconesFiltrados.length)];
+    //const iconeAleatorio = iconeAtual;
+    // AS DUAS DE CIMA DEIXA TUDO IGUAL PAR TESTES ///
+    
+    const iconeAtual = resultado.data.iconeId;
+    const iconesFiltrados = ICONES_PADRAO.filter(i => i !== iconeAtual);
+    const iconeAleatorio = iconesFiltrados[Math.floor(Math.random() * iconesFiltrados.length)];
     //AS TRES DE CIMA PARA GARANTIR QUE O ÍCONE REQUERIDO SEJA SEMPRE DIFERENTE DO ATUAL, EVITANDO FALHAS NA VERIFICAÇÃO
+    
     setIconeRequerido(iconeAleatorio);
     setInvocador(resultado.data);
     setPasso('validando');

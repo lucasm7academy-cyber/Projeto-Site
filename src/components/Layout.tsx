@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { buildProfileIconUrl } from '../api/riot';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -132,8 +133,8 @@ export default function Layout() {
 
   const sidebarWidths = "hidden lg:flex lg:w-[220px] xl:w-[240px] 2xl:w-[200px] shrink-0";
 
-  const riotIconUrl = contaRiot?.profile_icon_id 
-    ? `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${contaRiot.profile_icon_id}.png`
+  const riotIconUrl = contaRiot?.profile_icon_id
+    ? buildProfileIconUrl(contaRiot.profile_icon_id)
     : null;
 
   return (

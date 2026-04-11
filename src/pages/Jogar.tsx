@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import SalaAberta from '../components/partidas/SalaAberta';
 import { supabase } from '../lib/supabase';
+import { buildProfileIconUrl } from '../api/riot';
 
 // ============================================
 // TIPOS
@@ -51,8 +52,7 @@ const Jogar = () => {
       // Avatar: ícone do perfil Riot via DDragon
       let avatar: string | undefined;
       if (riotAny?.profile_icon_id) {
-        const ddrVer = '15.8.1'; // fallback estático, boa o suficiente aqui
-        avatar = `https://ddragon.leagueoflegends.com/cdn/${ddrVer}/img/profileicon/${riotAny.profile_icon_id}.png`;
+        avatar = buildProfileIconUrl(riotAny.profile_icon_id);
       }
 
       setUsuarioAtual({

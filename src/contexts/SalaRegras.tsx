@@ -12,6 +12,7 @@ import {
   buscarSalaCompleta, transicionarEstado, entrarNaVaga, sairDaVaga,
   confirmarPresencaDB, resetarVagas, resetarConfirmacoes, vincularJogadores,
   registrarVoto, buscarVotos, deletarSala, encerrarSala,
+  atribuirCodigoPartida, liberarCodigoPartida,
   type Sala, type EstadoSala, type JogadorNaSala,
   type OpcaoVotoInicio, type OpcaoVotoResultado, type Voto,
 } from '../api/salas';
@@ -270,12 +271,37 @@ export function SalaRegrasProvider({
           })
       .subscribe();
 
-    // ── Canal de Presence — conta visualizadores em tempo real ─────────────────
+    // ── Canal de Presence — conta visualizadores + auto-remove quem saiu ────────
     const presenceChannel = supabase.channel(`sala_presenca_${salaId}`);
     presenceChannel
-      .on('presence', { event: 'sync' }, () => {
+      .on('presence', { event: 'sync' }, async () => {
         const state = presenceChannel.presenceState();
         setViewers(Object.keys(state).length);
+
+        // Limpa jogadores fantasmas: estão no slot mas não estão no canal de presence
+        const presentIds = new Set(
+          Object.values(state).flat().map((p: any) => p.user_id as string).filter(Boolean)
+        );
+        const { data: slots } = await supabase
+          .from('sala_jogadores')
+          .select('user_id')
+          .eq('sala_id', salaId)
+          .eq('vinculado', false);
+        if (slots) {
+          for (const slot of slots) {
+            if (!presentIds.has(slot.user_id)) {
+              sairDaVaga(salaId, slot.user_id).catch(() => {});
+            }
+          }
+        }
+      })
+      .on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        // Quando alguém fecha o navegador/aba, remove da vaga automaticamente
+        for (const p of (leftPresences as unknown as Array<{ user_id: string }>)) {
+          if (p.user_id) {
+            sairDaVaga(salaId, p.user_id).catch(() => {});
+          }
+        }
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
@@ -419,13 +445,14 @@ export function SalaRegrasProvider({
       return;
     }
 
-    // confirmacao → travada: todos confirmaram
+    // confirmacao → travada → aguardando_inicio: todos confirmaram
     if (estado === 'confirmacao' && total === max && jogadores.every(j => j.confirmado)) {
       transicionandoRef.current = true;
       const fazer = async () => {
         const ok = await transicionarEstado(salaId, 'travada');
         if (ok) {
           await vincularJogadores(salaId);
+          await atribuirCodigoPartida(salaId, sala!.modo); // atribui código FIFO do modo correto
           await transicionarEstado(salaId, 'aguardando_inicio');
         }
       };
@@ -463,9 +490,9 @@ export function SalaRegrasProvider({
           : resultado.decisao === 'time_b' ? 'B'
           : resultado.decisao === 'empate' ? 'empate'
           : undefined;
-        encerrarSala(salaId, vencedor as any).finally(() => {
-          transicionandoRef.current = false;
-        });
+        encerrarSala(salaId, vencedor as any)
+          .then(() => liberarCodigoPartida(salaId))
+          .finally(() => { transicionandoRef.current = false; });
       }
     }
   }, [sala?.estado, sala?.jogadores, votos]);

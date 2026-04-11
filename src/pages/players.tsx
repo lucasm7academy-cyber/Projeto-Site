@@ -7,7 +7,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users, Crown, Trophy, Search,
@@ -201,14 +201,17 @@ const LANE_MAP: Record<string, Role> = {
 };
 
 // ── Carregador Supabase ────────────────────────────────────────────────────
-async function carregarJogadores(): Promise<Jogador[]> {
-  // Apenas colunas garantidas (elo/tier não são salvas no cadastro)
+const PLAYERS_PAGE = 30;
+
+async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jogadores: Jogador[]; temMais: boolean }> {
   const { data: contas, error } = await supabase
     .from('contas_riot')
-    .select('user_id, riot_id, puuid, profile_icon_id, level');
+    .select('user_id, riot_id, puuid, profile_icon_id, level')
+    .range(offset, offset + limit - 1);
 
-  if (error) { console.error('[players] erro ao buscar contas_riot:', error); return []; }
-  if (!contas || contas.length === 0) { console.warn('[players] nenhuma conta encontrada'); return []; }
+  if (error) { console.error('[players] erro ao buscar contas_riot:', error); return { jogadores: [], temMais: false }; }
+  if (!contas || contas.length === 0) { return { jogadores: [], temMais: false }; }
+  const temMais = contas.length === limit;
 
   const userIds = contas.map((c: any) => c.user_id);
 
@@ -226,20 +229,17 @@ async function carregarJogadores(): Promise<Jogador[]> {
   const membroMap = Object.fromEntries((membros ?? []).map((m: any) => [m.user_id, m]));
   const timeMap   = Object.fromEntries((times  ?? []).map((t: any) => [t.id, t]));
 
-  return contas.map((c: any) => {
+  const jogadores = contas.map((c: any) => {
     const perfil = perfilMap[c.user_id] ?? {};
     const membro = membroMap[c.user_id];
     const time   = membro ? timeMap[membro.time_id] : null;
-
-    // Elo será buscado da Riot API ao abrir o modal; aqui fica Ferro como placeholder
-    const eloType: EloType = 'Ferro';
 
     return {
       id:               c.user_id,
       riotId:           c.riot_id ?? 'Jogador',
       nome:             (c.riot_id ?? 'Jogador').split('#')[0],
       nivel:            c.level ?? 1,
-      elo:              eloType,
+      elo:              'Ferro' as EloType,
       iconeId:          c.profile_icon_id ?? 1,
       partidas:         0,
       winRate:          0,
@@ -256,11 +256,12 @@ async function carregarJogadores(): Promise<Jogador[]> {
       timeColor:        time?.gradient_from ?? undefined,
       timeLogo:         time?.logo_url      ?? undefined,
       timeId:           membro?.time_id     ?? undefined,
-      // guarda puuid para buscar stats na Riot API ao abrir o modal
       _puuid:      c.puuid ?? undefined,
       _carregando: true,
     } as Jogador & { _puuid?: string; _carregando?: boolean };
   });
+
+  return { jogadores, temMais };
 }
 
 
@@ -272,30 +273,59 @@ export default function App() {
   const [jogadores, setJogadores] = useState<Jogador[]>([]);
   const [filtroElo, setFiltroElo] = useState<EloType | 'todos'>('todos');
   const [filtroRole, setFiltroRole] = useState<Role | 'todos'>('todos');
+  const [filtroSemTime, setFiltroSemTime] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [temMais, setTemMais] = useState(true);
+  const [carregandoMais, setCarregandoMais] = useState(false);
   const [selectedJogador, setSelectedJogador] = useState<Jogador | null>(null);
   const [selectedPuuid, setSelectedPuuid] = useState<string | undefined>(undefined);
   const [popup, setPopup] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
-  const [visibleCount, setVisibleCount] = useState(8);
+
+  const offsetRef        = useRef(0);
+  const eloProcessedRef  = useRef(0);
+  const sentinelRef      = useRef<HTMLDivElement>(null);
 
   const PRIMARY_COLOR = '#FFB700';
 
-  // Carrega do Supabase na montagem
+  // Carrega primeira página na montagem
   useEffect(() => {
-    carregarJogadores().then(lista => {
+    carregarJogadores(0, PLAYERS_PAGE).then(({ jogadores: lista, temMais: mais }) => {
       setTodosJogadores(lista);
-      setJogadores(lista);
+      setTemMais(mais);
+      offsetRef.current = lista.length;
       setLoading(false);
     });
   }, []);
 
-  // Após carregar a lista, busca elo + partidas + winrate de cada player em background
+  // IntersectionObserver — carrega próxima página ao chegar no sentinel
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(entries => {
+      if (!entries[0].isIntersecting) return;
+      if (!temMais || carregandoMais) return;
+      setCarregandoMais(true);
+      carregarJogadores(offsetRef.current, PLAYERS_PAGE).then(({ jogadores: mais, temMais: ainda }) => {
+        setTodosJogadores(prev => [...prev, ...mais]);
+        setTemMais(ainda);
+        offsetRef.current += mais.length;
+        setCarregandoMais(false);
+      });
+    }, { threshold: 0.1 });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [temMais, carregandoMais]);
+
+  // Busca elo em background apenas para os jogadores novos (não reprocessa os já feitos)
   useEffect(() => {
     if (todosJogadores.length === 0) return;
-    let cancelado = false;
+    const novos = todosJogadores.slice(eloProcessedRef.current);
+    if (novos.length === 0) return;
+    eloProcessedRef.current = todosJogadores.length;
 
+    let cancelado = false;
     const atualizar = async () => {
-      for (const jogador of todosJogadores) {
+      for (const jogador of novos) {
         if (cancelado) break;
         const puuid = (jogador as any)._puuid;
         if (!puuid) {
@@ -308,7 +338,6 @@ export default function App() {
         try {
           ranqueadas = await buscarElo(puuid);
         } catch {
-          // Rate limit (429): espera 3s e tenta uma vez mais
           await new Promise(r => setTimeout(r, 3000));
           if (cancelado) break;
           try { ranqueadas = await buscarElo(puuid); } catch { ranqueadas = []; }
@@ -328,20 +357,9 @@ export default function App() {
         await new Promise(r => setTimeout(r, 700));
       }
     };
-
     atualizar();
     return () => { cancelado = true; };
   }, [todosJogadores.length]);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.innerHeight + document.documentElement.scrollTop + 100 >= document.documentElement.offsetHeight) {
-        setVisibleCount(prev => Math.min(prev + 4, jogadores.length));
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [jogadores.length]);
 
   useEffect(() => {
     if (popup) {
@@ -361,9 +379,9 @@ export default function App() {
     }
     if (filtroElo !== 'todos') filtrados = filtrados.filter(j => j.elo === filtroElo);
     if (filtroRole !== 'todos') filtrados = filtrados.filter(j => j.rolePrincipal === filtroRole || j.roleSecundaria === filtroRole);
+    if (filtroSemTime) filtrados = filtrados.filter(j => !j.timeTag);
     setJogadores(filtrados);
-    setVisibleCount(8);
-  }, [searchTerm, filtroElo, filtroRole, todosJogadores]);
+  }, [searchTerm, filtroElo, filtroRole, filtroSemTime, todosJogadores]);
 
   const handleVerPerfil = (jogador: Jogador) => {
     playSound('click');
@@ -372,7 +390,7 @@ export default function App() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+    <div className="w-full max-w-7xl mx-auto px-4 py-8">
       {/* Popup */}
       <AnimatePresence>
         {popup && (
@@ -447,7 +465,7 @@ export default function App() {
         style={{ background: 'linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%)' }}
       >
         <div className="relative z-10">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-center">
             {/* Busca */}
             <div className="relative">
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
@@ -495,6 +513,19 @@ export default function App() {
                 ))}
               </select>
             </div>
+
+            {/* Filtro Sem Time */}
+            <button
+              onClick={() => setFiltroSemTime((v: boolean) => !v)}
+              className={`flex items-center justify-center gap-2 py-3 px-4 rounded-2xl border font-bold text-sm transition-all ${
+                filtroSemTime
+                  ? 'bg-[#C89B3C]/20 border-[#C89B3C]/50 text-[#C89B3C]'
+                  : 'bg-black/40 border-white/5 text-white/40 hover:text-white/60 hover:border-white/10'
+              }`}
+            >
+              <Users className="w-4 h-4 shrink-0" />
+              Sem Time
+            </button>
           </div>
         </div>
       </div>
@@ -509,7 +540,7 @@ export default function App() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           <AnimatePresence>
-            {jogadores.slice(0, visibleCount).map((jogador, index) => {
+            {jogadores.map((jogador, index) => {
               const roleConfig = ROLE_CONFIG[jogador.rolePrincipal];
               const roleSecConfig = ROLE_CONFIG[jogador.roleSecundaria];
               const eloStyle = ELO_STYLES[jogador.elo];
@@ -629,14 +660,14 @@ export default function App() {
         </div>
       )}
 
-      {/* Loading indicator for infinite scroll */}
-      {visibleCount < jogadores.length && !loading && (
-        <div className="flex justify-center mt-8">
+      {/* Sentinel + loading indicator para infinite scroll */}
+      <div ref={sentinelRef} className="flex justify-center mt-8 pb-4">
+        {carregandoMais && (
           <div className="w-8 h-8 border-2 rounded-full animate-spin"
             style={{ borderColor: PRIMARY_COLOR, borderTopColor: 'transparent' }}
           />
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Mensagem vazia */}
       {!loading && jogadores.length === 0 && (

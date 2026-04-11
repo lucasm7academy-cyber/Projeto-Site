@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { X, ShieldCheck, Medal, Calendar, Activity, Users, TrendingUp, Trophy, Gamepad2 } from 'lucide-react';
 import { buscarOuAtualizarStats } from '../../api/player';
-import { buildChampionIconUrl } from '../../api/riot';
+import { buildChampionIconUrl, buildProfileIconUrl } from '../../api/riot';
 
 // Tipos que precisam ser exportados
 export type Role = 'TOP' | 'JG' | 'MID' | 'ADC' | 'SUP' | 'RES';
@@ -66,9 +66,7 @@ export const TIER_MAP: Record<string, EloType> = {
   MASTER: 'Mestre', GRANDMASTER: 'Grão-Mestre', CHALLENGER: 'Desafiante',
 };
 
-export const getIconeUrl = (iconeId: number) => {
-  return `https://ddragon.leagueoflegends.com/cdn/14.19.1/img/profileicon/${iconeId}.png`;
-};
+export const getIconeUrl = (iconeId: number) => buildProfileIconUrl(iconeId);
 
 // Componente ModalBase
 const ModalBase = ({ onClose, children, title, gradientFrom = '#FFB700' }: { 

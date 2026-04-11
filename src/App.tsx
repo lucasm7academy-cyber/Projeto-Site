@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { supabase } from "./lib/supabase";
+import { getDDRVersion } from "./api/riot";
+
+// Primes the DDragon version cache at startup so all profile icon URLs use the correct patch
+getDDRVersion();
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Layout from "./components/Layout";

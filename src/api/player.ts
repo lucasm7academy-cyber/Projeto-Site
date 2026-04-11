@@ -10,7 +10,7 @@
  */
 
 import { supabase } from '../lib/supabase';
-import { buscarElo, buscarTopChampions, buscarEstatisticasRecentes } from './riot';
+import { buscarElo, buscarTopChampions, buscarEstatisticasRecentes, buscarInvocadorPorPUUID } from './riot';
 
 // ── Tipos exportados ──────────────────────────────────────────────────────────
 
@@ -216,6 +216,64 @@ export async function buscarOuAtualizarStats(puuid: string): Promise<StatsCache>
     .then();
 
   return { soloQ, flexQ, topChampions, roles, totalGames };
+}
+
+/**
+ * Sincronização completa da conta Riot:
+ * Busca ícone, nível, elo e stats da Riot API e salva tudo no Supabase.
+ * Chamada em background — não bloqueia a UI.
+ * Retorna null em caso de falha (sem lançar exceção).
+ */
+export interface SyncResult {
+  iconeId:      number;
+  nivel:        number;
+  soloQ:        EloInfo | null;
+  flexQ:        EloInfo | null;
+  topChampions: StatsCache['topChampions'];
+  roles:        any[];
+  totalGames:   number;
+}
+
+export async function sincronizarContaRiot(puuid: string, userId: string): Promise<SyncResult | null> {
+  try {
+    const [summoner, { soloQ, flexQ }, statsRaw] = await Promise.all([
+      buscarInvocadorPorPUUID(puuid).catch(() => null),
+      buscarElosJogador(puuid),
+      buscarEstatisticasRecentes(puuid).catch(() => null),
+    ]);
+
+    const iconeId    = (summoner as any)?.profileIconId  ?? null;
+    const nivel      = (summoner as any)?.summonerLevel  ?? null;
+    const topChampions = statsRaw?.topChampions ?? [];
+    const roles        = statsRaw?.roles        ?? [];
+    const totalGames   = statsRaw?.totalGames   ?? 0;
+
+    const update: Record<string, any> = {
+      elo_cache:        { soloQ, flexQ },
+      champions_cache:  { topChampions, roles, totalGames },
+      stats_updated_at: new Date().toISOString(),
+    };
+    if (iconeId !== null) update.profile_icon_id = iconeId;
+    if (nivel   !== null) update.level           = nivel;
+
+    await supabase
+      .from('contas_riot')
+      .update(update)
+      .eq('user_id', userId);
+
+    return {
+      iconeId:      iconeId  ?? 1,
+      nivel:        nivel    ?? 1,
+      soloQ,
+      flexQ,
+      topChampions,
+      roles,
+      totalGames,
+    };
+  } catch (e) {
+    console.error('[sincronizarContaRiot] erro:', e);
+    return null;
+  }
 }
 
 /**

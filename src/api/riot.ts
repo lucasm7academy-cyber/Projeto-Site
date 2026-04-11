@@ -76,18 +76,18 @@ export async function getDDRVersion(): Promise<string> {
     ddrVersion = versions[0];
     return ddrVersion;
   } catch {
-    ddrVersion = '14.24.1'; // fallback seguro
+    ddrVersion = '15.8.1'; // fallback — versão recente conhecida
     return ddrVersion;
   }
 }
 
 export function buildProfileIconUrl(iconId: number, version?: string): string {
-  const v = version ?? ddrVersion ?? '14.24.1';
+  const v = version ?? ddrVersion ?? '15.8.1';
   return `${DDR_BASE}/cdn/${v}/img/profileicon/${iconId}.png`;
 }
 
 export function buildChampionIconUrl(championKey: string, version?: string): string {
-  const v = version ?? ddrVersion ?? '14.24.1';
+  const v = version ?? ddrVersion ?? '15.8.1';
   return `${DDR_BASE}/cdn/${v}/img/champion/${championKey}.png`;
 }
 
