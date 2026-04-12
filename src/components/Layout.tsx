@@ -71,22 +71,12 @@ export default function Layout() {
       setUser(user);
 
       if (user) {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', user.id)
-          .maybeSingle();
+        const [{ data: saldoData }, { data: riotData }] = await Promise.all([
+          supabase.from('saldos').select('saldo').eq('user_id', user.id).maybeSingle(),
+          supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle(),
+        ]);
 
-        if (data && !error) {
-          setBalance(data.balance);
-        }
-
-        const { data: riotData } = await supabase
-          .from('contas_riot')
-          .select('*')
-          .eq('user_id', user.id)
-          .maybeSingle();
-
+        if (saldoData) setBalance(saldoData.saldo ?? 0);
         setContaRiot(riotData);
       }
       setLoadingUser(false);
@@ -99,7 +89,32 @@ export default function Layout() {
       if (event === 'SIGNED_OUT') navigate('/');
     });
 
-    return () => { authListener.subscription.unsubscribe(); };
+    // Realtime: atualiza saldo automaticamente quando admin altera
+    let saldoChannel: ReturnType<typeof supabase.channel> | null = null;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      const uid = session?.user?.id;
+      if (!uid) return;
+      saldoChannel = supabase
+        .channel(`saldo_${uid}`)
+        .on('postgres_changes', {
+          event: 'UPDATE', schema: 'public', table: 'saldos',
+          filter: `user_id=eq.${uid}`,
+        }, (payload) => {
+          setBalance((payload.new as any).saldo ?? 0);
+        })
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'saldos',
+          filter: `user_id=eq.${uid}`,
+        }, (payload) => {
+          setBalance((payload.new as any).saldo ?? 0);
+        })
+        .subscribe();
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+      if (saldoChannel) supabase.removeChannel(saldoChannel);
+    };
   }, [navigate]);
 
   useEffect(() => {
@@ -214,7 +229,7 @@ export default function Layout() {
                 <Wallet className="text-primary w-3 h-3 md:w-3.5 md:h-3.5" />
               </div>
               <span className="text-xs md:text-sm font-bold text-white tracking-tight">
-                R$ {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                MP {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </button>
 
@@ -558,7 +573,7 @@ export default function Layout() {
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-surface-variant/30 to-background/50 z-0" />
-          <div className={`relative z-10 min-h-full flex flex-col ${isSalaPage ? 'p-0' : 'p-3 md:p-5 lg:p-8'}`}>
+          <div className={`relative z-10 min-h-full flex flex-col ${isSalaPage ? 'p-0' : 'p-3'}`}>
             <Outlet />
           </div>
         </main>

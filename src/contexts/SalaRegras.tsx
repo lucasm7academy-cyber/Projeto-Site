@@ -10,11 +10,13 @@ import React, {
 import { supabase } from '../lib/supabase';
 import {
   buscarSalaCompleta, transicionarEstado, entrarNaVaga, sairDaVaga,
-  confirmarPresencaDB, resetarVagas, resetarConfirmacoes, vincularJogadores,
+  confirmarPresencaDB, resetarConfirmacoes, vincularJogadores,
   registrarVoto, buscarVotos, deletarSala, encerrarSala,
   atribuirCodigoPartida, liberarCodigoPartida,
+  resetarSalaCompleta, criarRequisicaoAdmin,
+  desvincularJogadores, desvincularJogador, salvarResultadoPartida,
   type Sala, type EstadoSala, type JogadorNaSala,
-  type OpcaoVotoInicio, type OpcaoVotoResultado, type Voto,
+  type OpcaoVotoResultado, type Voto,
 } from '../api/salas';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,90 +55,51 @@ export function transicaoValida(atual: EstadoSala, proximo: EstadoSala): boolean
 // ─────────────────────────────────────────────────────────────────────────────
 // TIMERS — duração de cada estado com timer
 // ─────────────────────────────────────────────────────────────────────────────
-const TIMER_CONFIRMACAO_S      = 30;
-const TIMER_AGUARDANDO_INICIO_S = 120;
+const TIMER_CONFIRMACAO_S  = 30;
+const TIMER_CANCELAMENTO_S = 180; // aguardando_inicio: 3 min para denunciar → depois vai pra em_partida
+const TIMER_FINALIZACAO_S  = 300; // finalizacao: 5 min para votar
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VALIDAÇÃO DE VOTOS
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface ResultadoVotacaoInicio {
-  decisao: 'iniciou' | 'nao_iniciou' | 'pendente';
-}
-
-interface ResultadoVotacaoFinal {
-  decisao: 'time_a' | 'time_b' | 'empate' | 'disputa' | 'pendente';
-}
+type DecisaoResultado = 'time_a' | 'time_b' | 'disputa' | 'pendente';
 
 /**
- * Para votar "nao_iniciou" ser válido: maioria de cada time votou nao_iniciou.
- * Para "iniciou": ao menos 1 de cada time votou iniciou (ou timeout).
+ * Pluralidade simples: quem tem mais votos vence.
+ * Empate de votos → disputa (admin resolve).
+ * Sem votos → pendente.
  */
-function avaliarVotosInicio(
-  votos: Voto[],
-  jogadores: JogadorNaSala[],
-  timedOut: boolean
-): ResultadoVotacaoInicio {
-  if (timedOut) return { decisao: 'iniciou' };
-
-  const timeA = jogadores.filter(j => j.isTimeA);
-  const timeB = jogadores.filter(j => !j.isTimeA);
-
-  const votosA = votos.filter(v => v.isTimeA);
-  const votosB = votos.filter(v => !v.isTimeA);
-
-  const naoIniciouA = votosA.filter(v => v.opcao === 'nao_iniciou').length;
-  const naoIniciouB = votosB.filter(v => v.opcao === 'nao_iniciou').length;
-
-  const maioriaNaoA = naoIniciouA > timeA.length / 2;
-  const maioriaNaoB = naoIniciouB > timeB.length / 2;
-
-  if (maioriaNaoA && maioriaNaoB) return { decisao: 'nao_iniciou' };
-
-  const iniciouA = votosA.some(v => v.opcao === 'iniciou');
-  const iniciouB = votosB.some(v => v.opcao === 'iniciou');
-
-  if (iniciouA && iniciouB) return { decisao: 'iniciou' };
-
-  return { decisao: 'pendente' };
+function avaliarVotosResultado(finVotos: Voto[]): DecisaoResultado {
+  if (finVotos.length === 0) return 'pendente';
+  const paraA = finVotos.filter(v => v.opcao === 'time_a').length;
+  const paraB = finVotos.filter(v => v.opcao === 'time_b').length;
+  if (paraA > paraB) return 'time_a';
+  if (paraB > paraA) return 'time_b';
+  return 'disputa';
 }
 
-/**
- * Resultado final:
- * - Consenso: ambos os times elegem o mesmo vencedor → válido
- * - Conflito: cada time vota que o próprio time ganhou → disputa
- */
-function avaliarVotosResultado(
-  votos: Voto[],
-  jogadores: JogadorNaSala[]
-): ResultadoVotacaoFinal {
-  const timeA = jogadores.filter(j => j.isTimeA);
-  const timeB = jogadores.filter(j => !j.isTimeA);
-  if (timeA.length === 0 || timeB.length === 0) return { decisao: 'pendente' };
+/** Encerra a sala salvando resultado e desvinculando todos os jogadores. */
+async function encerrarPartidaComResultado(
+  salaId: number,
+  decisao: DecisaoResultado,
+  sala: { timeANome?: string; timeBNome?: string; jogadores: JogadorNaSala[] }
+): Promise<void> {
+  const vencedorLado  = decisao === 'time_a' ? 'time_a' : decisao === 'time_b' ? 'time_b' : 'disputa';
+  const vencedorNome  = decisao === 'time_a' ? (sala.timeANome ?? 'Equipe Azul')
+    : decisao === 'time_b' ? (sala.timeBNome ?? 'Equipe Vermelha')
+    : 'Disputa';
+  const vencedorDB    = decisao === 'time_a' ? 'A' : decisao === 'time_b' ? 'B' : undefined;
 
-  const votosA = votos.filter(v => v.isTimeA);
-  const votosB = votos.filter(v => !v.isTimeA);
-
-  // Só avalia se todos os jogadores com vaga votaram
-  if (votosA.length < timeA.length || votosB.length < timeB.length) {
-    return { decisao: 'pendente' };
-  }
-
-  // Maioria de cada time
-  const majoriaA = (opc: string) =>
-    votosA.filter(v => v.opcao === opc).length > timeA.length / 2;
-  const majoriaB = (opc: string) =>
-    votosB.filter(v => v.opcao === opc).length > timeB.length / 2;
-
-  for (const res of ['time_a', 'time_b', 'empate'] as const) {
-    if (majoriaA(res) && majoriaB(res)) return { decisao: res };
-  }
-
-  // Conflito: A acha que ganhou, B acha que ganhou
-  if (majoriaA('time_a') && majoriaB('time_b')) return { decisao: 'disputa' };
-  if (majoriaA('time_b') && majoriaB('time_a')) return { decisao: 'disputa' };
-
-  return { decisao: 'pendente' };
+  await salvarResultadoPartida(
+    salaId,
+    vencedorLado as 'time_a' | 'time_b' | 'disputa',
+    vencedorNome,
+    sala.jogadores.map((j: JogadorNaSala) => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA, role: j.role })),
+  );
+  await encerrarSala(salaId, vencedorDB as any);
+  await desvincularJogadores(salaId);
+  await liberarCodigoPartida(salaId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,17 +122,16 @@ interface SalaRegrasContextType {
   erro: string | null;
 
   // Timers (segundos restantes)
-  timerConfirmacao: number;
-  timerAguardando: number;
+  timerConfirmacao:  number;
+  timerCancelamento: number; // aguardando_inicio: 3 min → se zerar vai pra em_partida
+  timerFinalizacao:  number; // finalizacao: 5 min → força resultado
 
   // Jogador desta sessão
   jogadorAtual: JogadorNaSala | null;
 
   // Votos
   votos: Voto[];
-  meuVotoInicio: OpcaoVotoInicio | null;
   meuVotoResultado: OpcaoVotoResultado | null;
-  contagemVotosInicio: Record<OpcaoVotoInicio, number>;
   contagemVotosResultado: Record<OpcaoVotoResultado, number>;
 
   // Viewers (presença na página)
@@ -182,14 +144,15 @@ interface SalaRegrasContextType {
   podeExecutar: (acao: string) => boolean;
 
   // Ações
-  acaoEntrarVaga:        (role: string, isTimeA: boolean) => Promise<void>;
-  acaoSairVaga:          () => Promise<void>;
-  acaoConfirmarPresenca: () => Promise<void>;
-  acaoVotarInicio:           (opcao: OpcaoVotoInicio) => Promise<void>;
-  acaoVotarResultado:        (opcao: OpcaoVotoResultado) => Promise<void>;
-  acaoSolicitarFinalizacao:  () => Promise<void>;
-  acaoApagarSala:            () => Promise<void>;
-  acaoSairDaSala:            () => void;
+  acaoEntrarVaga:           (role: string, isTimeA: boolean) => Promise<void>;
+  acaoSairVaga:             () => Promise<void>;
+  acaoConfirmarPresenca:    () => Promise<void>;
+  acaoDenunciarNaoIniciou:  (motivo: string, descricao?: string) => Promise<void>;
+  acaoVotarResultado:       (opcao: OpcaoVotoResultado) => Promise<void>;
+  acaoSolicitarFinalizacao: () => Promise<void>;
+  acaoDraftFinalizado:      () => Promise<void>;
+  acaoApagarSala:           () => Promise<void>;
+  acaoSairDaSala:           () => void;
 }
 
 const SalaRegrasContext = createContext<SalaRegrasContextType | null>(null);
@@ -224,13 +187,17 @@ export function SalaRegrasProvider({
   const [loading, setLoading] = useState(true);
   const [erro]                = useState<string | null>(null);
   const [timerConfirmacao, setTimerConfirmacao] = useState(TIMER_CONFIRMACAO_S);
-  const [timerAguardando, setTimerAguardando]   = useState(TIMER_AGUARDANDO_INICIO_S);
+  const [timerFinalizacao, setTimerFinalizacao] = useState(TIMER_FINALIZACAO_S);
   const [viewers, setViewers] = useState(0);
 
-  const timerConfirmacaoRef = useRef<NodeJS.Timeout>();
-  const timerAguardandoRef  = useRef<NodeJS.Timeout>();
+  const [timerCancelamento, setTimerCancelamento] = useState(TIMER_CANCELAMENTO_S);
+
+  const timerConfirmacaoRef  = useRef<NodeJS.Timeout | undefined>(undefined);
+  const timerCancelamentoRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const timerFinalizacaoRef  = useRef<NodeJS.Timeout | undefined>(undefined);
   const transicionandoRef   = useRef(false); // evita dupla transição concorrente
   const otimisticoRef       = useRef(false); // true = aguardando DB confirmar update local
+  const entrandoVagaRef     = useRef(false); // evita double-click / requisições simultâneas
 
   // ── Carregamento e realtime ────────────────────────────────────────────────
 
@@ -358,12 +325,12 @@ export function SalaRegrasProvider({
     return () => clearInterval(timerConfirmacaoRef.current);
   }, [sala?.estado, sala?.confirmacaoExpiresAt?.getTime()]);
 
-  // ── Timer de aguardando_inicio ─────────────────────────────────────────────
+  // ── Timer de aguardando_inicio (cancelamento — 3 min para denunciar, depois → em_partida) ──
 
   useEffect(() => {
-    clearInterval(timerAguardandoRef.current);
+    clearInterval(timerCancelamentoRef.current);
     if (!sala || sala.estado !== 'aguardando_inicio') {
-      setTimerAguardando(TIMER_AGUARDANDO_INICIO_S);
+      setTimerCancelamento(TIMER_CANCELAMENTO_S);
       return;
     }
 
@@ -371,26 +338,48 @@ export function SalaRegrasProvider({
       if (sala.aguardandoInicioExpiresAt) {
         return Math.max(0, Math.round((sala.aguardandoInicioExpiresAt.getTime() - Date.now()) / 1000));
       }
-      return TIMER_AGUARDANDO_INICIO_S;
+      return TIMER_CANCELAMENTO_S;
     };
 
-    setTimerAguardando(calcRestante());
+    setTimerCancelamento(calcRestante());
 
-    timerAguardandoRef.current = setInterval(async () => {
+    timerCancelamentoRef.current = setInterval(async () => {
       const restante = calcRestante();
-      setTimerAguardando(restante);
+      setTimerCancelamento(restante);
 
       if (restante <= 0 && !transicionandoRef.current) {
-        clearInterval(timerAguardandoRef.current);
-        // Timeout: assume que a partida iniciou
+        clearInterval(timerCancelamentoRef.current);
         transicionandoRef.current = true;
         await transicionarEstado(salaId, 'em_partida');
         transicionandoRef.current = false;
       }
     }, 1000);
 
-    return () => clearInterval(timerAguardandoRef.current);
+    return () => clearInterval(timerCancelamentoRef.current);
   }, [sala?.estado, sala?.aguardandoInicioExpiresAt?.getTime()]);
+
+  // ── Timer de finalizacao (5 min para votar, depois força resultado) ──────
+
+  useEffect(() => {
+    clearInterval(timerFinalizacaoRef.current);
+    if (!sala || sala.estado !== 'finalizacao') {
+      setTimerFinalizacao(TIMER_FINALIZACAO_S);
+      return;
+    }
+
+    setTimerFinalizacao(TIMER_FINALIZACAO_S);
+    timerFinalizacaoRef.current = setInterval(() => {
+      setTimerFinalizacao((prev: number) => {
+        if (prev <= 1) {
+          clearInterval(timerFinalizacaoRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerFinalizacaoRef.current);
+  }, [sala?.estado]);
 
   // ── Auto-transições dirigidas por regras ───────────────────────────────────
 
@@ -445,57 +434,97 @@ export function SalaRegrasProvider({
       return;
     }
 
-    // confirmacao → travada → aguardando_inicio: todos confirmaram
+    // confirmacao → travada: todos confirmaram
+    // Após travada, cria o draft e aguarda o draft finalizar para ir a aguardando_inicio.
+    // A transição para aguardando_inicio é disparada por acaoDraftFinalizado (via DraftRoom).
     if (estado === 'confirmacao' && total === max && jogadores.every(j => j.confirmado)) {
       transicionandoRef.current = true;
       const fazer = async () => {
         const ok = await transicionarEstado(salaId, 'travada');
         if (ok) {
           await vincularJogadores(salaId);
-          await atribuirCodigoPartida(salaId, sala!.modo); // atribui código FIFO do modo correto
-          await transicionarEstado(salaId, 'aguardando_inicio');
+
+          // Verificar se já existe draft antes de criar
+          const { data: draftExistente } = await supabase
+            .from('drafts')
+            .select('id')
+            .eq('sala_id', salaId)
+            .maybeSingle();
+
+          let draftId = draftExistente?.id;
+
+          if (!draftId) {
+            const { data: novoDraft } = await supabase
+              .from('drafts')
+              .insert({
+                sala_id: salaId,
+                blue_bans: [],
+                blue_picks: [],
+                red_bans: [],
+                red_picks: [],
+                current_phase: 'ban',
+                current_team: 'blue',
+                current_turn: 0,
+                timer_end: Date.now() + 30000,
+                status: 'ongoing',
+                fearless_enabled: sala!.modo === 'time_vs_time',
+                fearless_pool: [],
+              })
+              .select('id')
+              .single();
+
+            draftId = novoDraft?.id;
+          }
+
+          if (draftId) {
+            // Vincula o draft_id à sala — a UI detecta isso e mostra o DraftRoom
+            await supabase
+              .from('salas')
+              .update({ draft_id: draftId })
+              .eq('id', salaId);
+            // STOP: não transiciona para aguardando_inicio aqui.
+            // acaoDraftFinalizado fará isso quando o draft terminar.
+          } else {
+            // Draft não pôde ser criado — avança sem draft
+            await atribuirCodigoPartida(salaId, sala!.modo);
+            await transicionarEstado(salaId, 'aguardando_inicio');
+          }
         }
       };
       fazer().finally(() => { transicionandoRef.current = false; });
       return;
     }
 
-    // aguardando_inicio: avalia votos
-    if (estado === 'aguardando_inicio' && votos.length > 0) {
-      const resultado = avaliarVotosInicio(votos, jogadores, false);
-      if (resultado.decisao === 'iniciou') {
-        transicionandoRef.current = true;
-        transicionarEstado(salaId, 'em_partida').finally(() => {
-          transicionandoRef.current = false;
-        });
-        return;
-      }
-      if (resultado.decisao === 'nao_iniciou') {
-        transicionandoRef.current = true;
-        const fazer = async () => {
-          const ok = await transicionarEstado(salaId, 'preenchendo');
-          if (ok) await resetarVagas(salaId);
-        };
-        fazer().finally(() => { transicionandoRef.current = false; });
-        return;
-      }
-    }
+    // aguardando_inicio: nenhuma transição automática aqui.
+    // A transição para em_partida é feita pelo timerCancelamento quando zera.
 
-    // finalizacao: avalia votos de resultado
-    if (estado === 'finalizacao' && votos.length > 0) {
-      const resultado = avaliarVotosResultado(votos, jogadores);
-      if (resultado.decisao !== 'pendente') {
-        transicionandoRef.current = true;
-        const vencedor = resultado.decisao === 'time_a' ? 'A'
-          : resultado.decisao === 'time_b' ? 'B'
-          : resultado.decisao === 'empate' ? 'empate'
-          : undefined;
-        encerrarSala(salaId, vencedor as any)
-          .then(() => liberarCodigoPartida(salaId))
-          .finally(() => { transicionandoRef.current = false; });
+    // finalizacao: avalia quando todos os jogadores votaram
+    if (estado === 'finalizacao') {
+      const finVotos = votos.filter((v: Voto) => v.fase === 'finalizacao');
+      if (finVotos.length >= sala.maxJogadores && finVotos.length > 0) {
+        const decisao = avaliarVotosResultado(finVotos);
+        if (decisao !== 'pendente') {
+          transicionandoRef.current = true;
+          encerrarPartidaComResultado(salaId, decisao, sala).finally(() => {
+            transicionandoRef.current = false;
+          });
+        }
       }
     }
   }, [sala?.estado, sala?.jogadores, votos]);
+
+  // ── Força resultado quando timer de finalizacao zera ──────────────────────
+
+  useEffect(() => {
+    if (timerFinalizacao !== 0) return;
+    if (!sala || sala.estado !== 'finalizacao' || transicionandoRef.current) return;
+    const finVotos = votos.filter((v: Voto) => v.fase === 'finalizacao');
+    const decisao: DecisaoResultado = finVotos.length > 0 ? avaliarVotosResultado(finVotos) : 'disputa';
+    transicionandoRef.current = true;
+    encerrarPartidaComResultado(salaId, decisao, sala).finally(() => {
+      transicionandoRef.current = false;
+    });
+  }, [timerFinalizacao, sala?.estado]);
 
   // ── Derivações ─────────────────────────────────────────────────────────────
 
@@ -509,25 +538,14 @@ export function SalaRegrasProvider({
     return ACOES_POR_ESTADO[sala.estado]?.includes(acao) ?? false;
   }, [sala?.estado]);
 
-  const meuVotoInicio = useMemo(
-    () => (votos.find(v => v.userId === usuarioAtual.id && v.fase === 'aguardando_inicio')?.opcao ?? null) as OpcaoVotoInicio | null,
-    [votos, usuarioAtual.id]
-  );
-
   const meuVotoResultado = useMemo(
     () => (votos.find(v => v.userId === usuarioAtual.id && v.fase === 'finalizacao')?.opcao ?? null) as OpcaoVotoResultado | null,
     [votos, usuarioAtual.id]
   );
 
-  const contagemVotosInicio = useMemo(() => ({
-    iniciou:     votos.filter(v => v.fase === 'aguardando_inicio' && v.opcao === 'iniciou').length,
-    nao_iniciou: votos.filter(v => v.fase === 'aguardando_inicio' && v.opcao === 'nao_iniciou').length,
-  }), [votos]);
-
   const contagemVotosResultado = useMemo(() => ({
-    time_a: votos.filter(v => v.fase === 'finalizacao' && v.opcao === 'time_a').length,
-    time_b: votos.filter(v => v.fase === 'finalizacao' && v.opcao === 'time_b').length,
-    empate: votos.filter(v => v.fase === 'finalizacao' && v.opcao === 'empate').length,
+    time_a: votos.filter((v: Voto) => v.fase === 'finalizacao' && v.opcao === 'time_a').length,
+    time_b: votos.filter((v: Voto) => v.fase === 'finalizacao' && v.opcao === 'time_b').length,
   }), [votos]);
 
   // ── Ações expostas ─────────────────────────────────────────────────────────
@@ -536,10 +554,14 @@ export function SalaRegrasProvider({
     if (!sala || !podeExecutar('entrar_vaga')) return;
     // Conta Riot não vinculada → bloqueia entrada em vaga
     if (!usuarioAtual.contaVinculada) return;
+    // Evita duplo-clique ou requisições simultâneas do mesmo cliente
+    if (entrandoVagaRef.current) return;
+    entrandoVagaRef.current = true;
     otimisticoRef.current = true;
     try {
       await entrarNaVaga(salaId, usuarioAtual, role, isTimeA);
     } finally {
+      entrandoVagaRef.current = false;
       otimisticoRef.current = false;
       recarregar();
     }
@@ -570,26 +592,41 @@ export function SalaRegrasProvider({
     }
   }, [sala, salaId, usuarioAtual.id, jogadorAtual, podeExecutar, recarregar]);
 
-  const acaoVotarInicio = useCallback(async (opcao: OpcaoVotoInicio) => {
-    if (!sala || !podeExecutar('votar_inicio') || !jogadorAtual) return;
-    await registrarVoto(salaId, usuarioAtual.id, 'aguardando_inicio', opcao, jogadorAtual.isTimeA);
-    recarregarVotos('aguardando_inicio');
-  }, [sala, salaId, usuarioAtual.id, jogadorAtual, podeExecutar, recarregarVotos]);
+  const acaoDenunciarNaoIniciou = useCallback(async (motivo: string, descricao?: string) => {
+    if (!sala || !jogadorAtual) return;
+    await criarRequisicaoAdmin({
+      sala_id:       salaId,
+      reportado_por: usuarioAtual.id,
+      motivo,
+      descricao,
+      jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
+    });
+    await resetarSalaCompleta(salaId);
+  }, [sala, salaId, usuarioAtual.id, jogadorAtual]);
 
   const acaoVotarResultado = useCallback(async (opcao: OpcaoVotoResultado) => {
     if (!sala || !podeExecutar('votar_resultado') || !jogadorAtual) return;
     await registrarVoto(salaId, usuarioAtual.id, 'finalizacao', opcao, jogadorAtual.isTimeA);
+    // Libera o jogador imediatamente após votar — pode entrar em nova sala
+    await desvincularJogador(salaId, usuarioAtual.id);
     recarregarVotos('finalizacao');
   }, [sala, salaId, usuarioAtual.id, jogadorAtual, podeExecutar, recarregarVotos]);
 
   const acaoSolicitarFinalizacao = useCallback(async () => {
-    if (!sala || !podeExecutar('solicitar_finalizacao')) return;
+    // Qualquer jogador da sala pode encerrar — não apenas o criador
+    if (!sala || !podeExecutar('solicitar_finalizacao') || !jogadorAtual) return;
     if (!transicionandoRef.current) {
       transicionandoRef.current = true;
       await transicionarEstado(salaId, 'finalizacao');
       transicionandoRef.current = false;
     }
-  }, [sala, salaId, podeExecutar]);
+  }, [sala, salaId, podeExecutar, jogadorAtual]);
+
+  const acaoDraftFinalizado = useCallback(async () => {
+    if (!sala) return;
+    await atribuirCodigoPartida(salaId, sala.modo);
+    await transicionarEstado(salaId, 'aguardando_inicio');
+  }, [sala, salaId]);
 
   const acaoApagarSala = useCallback(async () => {
     if (!sala) return;
@@ -597,15 +634,20 @@ export function SalaRegrasProvider({
   }, [sala, salaId]);
 
   const acaoSairDaSala = useCallback(() => {
-    // Bloqueia saída quando o jogador está vinculado à partida.
-    // O único caminho válido é seguir o fluxo até o estado "encerrada".
+    // Em finalizacao, se já votou, pode sair mesmo que o realtime ainda não atualizou
+    // (desvincularJogador já foi chamado em acaoVotarResultado, mas o estado local pode
+    //  ainda ter jogadorAtual.vinculado = true enquanto o realtime não chega)
+    if (sala?.estado === 'finalizacao' && meuVotoResultado) {
+      onSair();
+      return;
+    }
+    // Bloqueia saída quando vinculado (partida em andamento e não votou ainda)
     if (jogadorAtual?.vinculado) return;
-    // Remove a vaga do banco antes de navegar (fire-and-forget)
     if (jogadorAtual) {
       sairDaVaga(salaId, usuarioAtual.id).catch(console.error);
     }
     onSair();
-  }, [onSair, jogadorAtual, salaId, usuarioAtual.id]);
+  }, [onSair, jogadorAtual, salaId, usuarioAtual.id, sala?.estado, meuVotoResultado]);
 
   // ── Valor do contexto ──────────────────────────────────────────────────────
 
@@ -614,22 +656,22 @@ export function SalaRegrasProvider({
     loading,
     erro,
     timerConfirmacao,
-    timerAguardando,
+    timerCancelamento,
+    timerFinalizacao,
     jogadorAtual,
     semContaRiot: !usuarioAtual.contaVinculada,
     votos,
-    meuVotoInicio,
     meuVotoResultado,
     viewers,
-    contagemVotosInicio,
     contagemVotosResultado,
     podeExecutar,
     acaoEntrarVaga,
     acaoSairVaga,
     acaoConfirmarPresenca,
-    acaoVotarInicio,
+    acaoDenunciarNaoIniciou,
     acaoVotarResultado,
     acaoSolicitarFinalizacao,
+    acaoDraftFinalizado,
     acaoApagarSala,
     acaoSairDaSala,
   };

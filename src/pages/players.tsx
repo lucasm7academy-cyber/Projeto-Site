@@ -7,7 +7,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Users, Crown, Trophy, Search,
@@ -284,37 +284,73 @@ export default function App() {
   const offsetRef        = useRef(0);
   const eloProcessedRef  = useRef(0);
   const sentinelRef      = useRef<HTMLDivElement>(null);
+  const fetchingRef      = useRef(false);
+  const temMaisRef       = useRef(true);
+  // Impede que o observer carregue antes do load inicial terminar
+  const readyRef         = useRef(false);
 
   const PRIMARY_COLOR = '#FFB700';
 
-  // Carrega primeira página na montagem
+  // Função centralizada de "carregar mais" — usada pelo observer e pelo pós-load inicial
+  const carregarMaisRef = useRef<() => void>(() => {});
+  carregarMaisRef.current = () => {
+    if (!readyRef.current || !temMaisRef.current || fetchingRef.current) return;
+    fetchingRef.current = true;
+    setCarregandoMais(true);
+    carregarJogadores(offsetRef.current, PLAYERS_PAGE)
+      .then(({ jogadores: mais, temMais: ainda }) => {
+        setTodosJogadores((prev: Jogador[]) => {
+          // Deduplicação: garante que IDs repetidos não entrem na lista
+          const idsExistentes = new Set(prev.map((j: Jogador) => j.id));
+          const novos = mais.filter((j: Jogador) => !idsExistentes.has(j.id));
+          return [...prev, ...novos];
+        });
+        temMaisRef.current = ainda;
+        setTemMais(ainda);
+        offsetRef.current += mais.length;
+      })
+      .finally(() => {
+        fetchingRef.current = false;
+        setCarregandoMais(false);
+      });
+  };
+
+  // Carrega primeira página
   useEffect(() => {
+    let ignore = false;
+    readyRef.current = false;
     carregarJogadores(0, PLAYERS_PAGE).then(({ jogadores: lista, temMais: mais }) => {
+      if (ignore) return;
       setTodosJogadores(lista);
+      temMaisRef.current = mais;
       setTemMais(mais);
       offsetRef.current = lista.length;
+      readyRef.current = true;
       setLoading(false);
+      // Após o load inicial, verifica se o sentinel ainda está visível
+      // (caso a lista seja pequena e o observer já tenha disparado antes)
+      if (mais && sentinelRef.current) {
+        const rect = sentinelRef.current.getBoundingClientRect();
+        if (rect.top < window.innerHeight) {
+          carregarMaisRef.current();
+        }
+      }
     });
+    return () => { ignore = true; };
   }, []);
 
-  // IntersectionObserver — carrega próxima página ao chegar no sentinel
+  // IntersectionObserver — só busca mais quando readyRef = true
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(entries => {
       if (!entries[0].isIntersecting) return;
-      if (!temMais || carregandoMais) return;
-      setCarregandoMais(true);
-      carregarJogadores(offsetRef.current, PLAYERS_PAGE).then(({ jogadores: mais, temMais: ainda }) => {
-        setTodosJogadores(prev => [...prev, ...mais]);
-        setTemMais(ainda);
-        offsetRef.current += mais.length;
-        setCarregandoMais(false);
-      });
+      if (!readyRef.current) return; // load inicial ainda não terminou
+      carregarMaisRef.current();
     }, { threshold: 0.1 });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [temMais, carregandoMais]);
+  }, []);
 
   // Busca elo em background apenas para os jogadores novos (não reprocessa os já feitos)
   useEffect(() => {
@@ -555,7 +591,7 @@ export default function App() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ delay: (index % 8) * 0.05 }}
                   className="group relative cursor-pointer p-[1.5px] rounded-[28px] transition-all hover:-translate-y-1"
-                  style={{ background: eloStyle.gradient }}
+                  style={{ background: eloStyle.border }}
                   onClick={() => handleVerPerfil(jogador)}
                 >
                   <div className="relative rounded-[26.5px] p-5 overflow-hidden"

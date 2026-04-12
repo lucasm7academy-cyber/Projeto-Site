@@ -120,7 +120,7 @@ function EloBlock({ elo, label, delay = 0 }: { elo: any; label: string; delay?: 
                 </p>
                 <div className="flex items-center gap-2 mt-2">
                   <div className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] font-black text-white/40 uppercase tracking-widest">
-                    {elo.leaguePoints} PDL
+                    {elo.lp} PDL
                   </div>
                   <div className="px-2 py-0.5 bg-white/5 border border-white/10 rounded text-[10px] font-black text-white/40 uppercase tracking-widest">
                     {total} Partidas
@@ -606,32 +606,32 @@ export default function Perfil() {
         });
       }
       getDDRVersion().then(v => setDdrVer(v));
+
+      // Sync em background — atualiza ícone, nível, elo e stats da Riot API
+      if (riotData?.puuid) {
+        setSincronizando(true);
+        sincronizarContaRiot(riotData.puuid, user.id)
+          .then(fresh => {
+            if (!fresh) return;
+            setEloSolo(fresh.soloQ);
+            setEloFlex(fresh.flexQ);
+            setStatsRecentes({
+              topChampions: fresh.topChampions,
+              roles:        fresh.roles,
+              totalGames:   fresh.totalGames,
+            });
+            // Só atualiza ícone/level se a Riot API retornou valores reais
+            setContaRiot((prev: any) => ({
+              ...prev,
+              ...(fresh.iconeId !== null ? { profile_icon_id: fresh.iconeId } : {}),
+              ...(fresh.nivel   !== null ? { level: fresh.nivel }             : {}),
+            }));
+          })
+          .finally(() => setSincronizando(false));
+      }
     }
 
     setLoading(false);
-
-    // Sync em background — atualiza ícone, nível, elo e stats da Riot API
-    if (user && riotData?.puuid) {
-      setSincronizando(true);
-      sincronizarContaRiot(riotData.puuid, user.id)
-        .then(fresh => {
-          if (!fresh) return;
-          setEloSolo(fresh.soloQ);
-          setEloFlex(fresh.flexQ);
-          setStatsRecentes({
-            topChampions: fresh.topChampions,
-            roles:        fresh.roles,
-            totalGames:   fresh.totalGames,
-          });
-          // Atualiza ícone e nível sem recarregar a página
-          setContaRiot((prev: any) => ({
-            ...prev,
-            profile_icon_id: fresh.iconeId,
-            level:           fresh.nivel,
-          }));
-        })
-        .finally(() => setSincronizando(false));
-    }
   };
 
   const salvarCampo = async (campos: Record<string, string>) => {
@@ -772,7 +772,8 @@ export default function Perfil() {
                     >
                       {contaRiot?.profile_icon_id ? (
                         <img
-                          src={buildProfileIconUrl(contaRiot.profile_icon_id)}
+                          key={contaRiot.profile_icon_id}
+                          src={`${buildProfileIconUrl(contaRiot.profile_icon_id)}?v=${contaRiot.profile_icon_id}`}
                           alt="Avatar" className="w-full h-full object-cover scale-110"
                         />
                       ) : (
@@ -782,9 +783,9 @@ export default function Perfil() {
                       )}
                     </div>
 
-                    {/* Indicador de sincronização em background */}
+                    {/* Spinner de sincronização no avatar */}
                     {sincronizando && (
-                      <div className="absolute -top-1 -right-1 w-6 h-6 bg-black rounded-full border border-white/10 flex items-center justify-center z-20">
+                      <div className="absolute -top-1 -right-1 w-7 h-7 bg-black rounded-full border border-white/10 flex items-center justify-center z-20">
                         <RefreshCw className="w-3.5 h-3.5 text-primary animate-spin" />
                       </div>
                     )}
@@ -821,6 +822,32 @@ export default function Perfil() {
                     <p className="font-headline font-black text-sm uppercase tracking-[0.2em] text-primary/80">
                       {eloSolo ? `${eloSolo.tier} ${eloSolo.rank}` : eloFlex ? `${eloFlex.tier} ${eloFlex.rank}` : 'UNRANKED'}
                     </p>
+                    {/* Botão de atualizar conta */}
+                    {contaRiot?.puuid && (
+                      <button
+                        onClick={() => {
+                          if (!user || !contaRiot?.puuid || sincronizando) return;
+                          setSincronizando(true);
+                          sincronizarContaRiot(contaRiot.puuid, user.id)
+                            .then(fresh => {
+                              if (!fresh) return;
+                              setEloSolo(fresh.soloQ);
+                              setEloFlex(fresh.flexQ);
+                              setStatsRecentes({ topChampions: fresh.topChampions, roles: fresh.roles, totalGames: fresh.totalGames });
+                              setContaRiot((prev: any) => ({
+                                ...prev,
+                                ...(fresh.iconeId !== null ? { profile_icon_id: fresh.iconeId } : {}),
+                                ...(fresh.nivel   !== null ? { level: fresh.nivel }             : {}),
+                              }));
+                            })
+                            .finally(() => setSincronizando(false));
+                        }}
+                        title="Atualizar dados da conta"
+                        className="flex items-center justify-center w-6 h-6 rounded-full border border-white/10 hover:border-primary/40 bg-white/5 hover:bg-primary/10 transition-all"
+                      >
+                        <RefreshCw className={`w-3 h-3 text-white/30 hover:text-primary transition-colors ${sincronizando ? 'animate-spin text-primary' : ''}`} />
+                      </button>
+                    )}
                   </div>
 
                   <div className="mt-4">
@@ -1143,7 +1170,7 @@ export default function Perfil() {
                 </div>
                 <div>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-primary text-2xl font-black">R$</span>
+                    <span className="text-primary text-2xl font-black">MP</span>
                     <p className="font-headline font-black text-5xl text-white tracking-tighter">
                       {Number(saldo).toFixed(2).replace('.', ',')}
                     </p>

@@ -336,7 +336,7 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [], flat = fa
                       </motion.div>
                     )}
                     <h3 className="text-white font-black text-4xl tracking-tight leading-none truncate">{team.name}</h3>
-                    <span className="inline-block text-[20px] font-black px-2 py-0.5 rounded-md tracking-widest shrink-0"
+                    <span className="inline-block text-[12px] font-black px-2 py-0.5 rounded-md tracking-widest shrink-0"
                       style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
                       #{team.tag}
                     </span>
@@ -821,15 +821,19 @@ export default function App() {
   const [myTeam, setMyTeam] = useState<Team | null>(null);
   const [arenaTeams, setArenaTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
-  const [temMais, setTemMais] = useState(true);
   const [carregandoMais, setCarregandoMais] = useState(false);
   const [hasRiot, setHasRiot] = useState(false);
-  const uidRef        = useRef<string | null>(null);
+  const uidRef         = useRef<string | null>(null);
   const arenaOffsetRef = useRef(0);
-  const sentinelRef   = useRef<HTMLDivElement>(null);
+  const sentinelRef    = useRef<HTMLDivElement>(null);
+  const fetchingRef    = useRef(false);
+  const temMaisRef     = useRef(true);
 
   useEffect(() => {
+    let ignore = false;
+
     supabase.auth.getUser().then(async ({ data }) => {
+      if (ignore) return;
       const uid = data?.user?.id ?? null;
       uidRef.current = uid;
 
@@ -839,7 +843,7 @@ export default function App() {
           .select('user_id')
           .eq('user_id', uid)
           .maybeSingle();
-        setHasRiot(!!conta);
+        if (!ignore) setHasRiot(!!conta);
       }
 
       const [meuTime, { teams: pagina1, temMais: mais }] = await Promise.all([
@@ -847,9 +851,10 @@ export default function App() {
         carregarTimesDoSupabase(uid, 0, TEAMS_PAGE),
       ]);
 
+      if (ignore) return;
       setMyTeam(meuTime);
       setArenaTeams(pagina1);
-      setTemMais(mais);
+      temMaisRef.current = mais;
       arenaOffsetRef.current = pagina1.length;
       setLoading(false);
     });
@@ -872,27 +877,35 @@ export default function App() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'time_membros' }, recarregarVisivel)
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      ignore = true;
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  // IntersectionObserver para arena de times
+  // IntersectionObserver criado UMA VEZ — usa refs síncronas como lock
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(entries => {
-      if (!entries[0].isIntersecting || !temMais || carregandoMais) return;
+      if (!entries[0].isIntersecting) return;
+      if (!temMaisRef.current || fetchingRef.current) return;
+      fetchingRef.current = true;
       setCarregandoMais(true);
       carregarTimesDoSupabase(uidRef.current, arenaOffsetRef.current, TEAMS_PAGE)
         .then(({ teams: mais, temMais: ainda }) => {
           setArenaTeams(prev => [...prev, ...mais]);
-          setTemMais(ainda);
+          temMaisRef.current = ainda;
           arenaOffsetRef.current += mais.length;
+        })
+        .finally(() => {
+          fetchingRef.current = false;
           setCarregandoMais(false);
         });
     }, { threshold: 0.1 });
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [temMais, carregandoMais]);
+  }, []); // sem deps — criado uma única vez
 
   // Modais do capitão
   const [modalCriar, setModalCriar] = useState(false);
@@ -969,7 +982,7 @@ export default function App() {
     ]);
     setMyTeam(meuTime);
     setArenaTeams(pagina1);
-    setTemMais(mais);
+    temMaisRef.current = mais;
     arenaOffsetRef.current = pagina1.length;
     playSound('success');
   };

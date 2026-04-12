@@ -19,13 +19,14 @@ export type EstadoSala =
   | 'encerrada';        // sala finalizada
 
 export type OpcaoVotoInicio    = 'iniciou' | 'nao_iniciou';
-export type OpcaoVotoResultado = 'time_a' | 'time_b' | 'empate';
+export type OpcaoVotoResultado = 'time_a' | 'time_b';
 
 // ── Tipos compartilhados ──────────────────────────────────────────────────────
 export interface JogadorNaSala {
   id: string;
   nome: string;
   tag: string;
+  
   elo: string;
   role: string;
   avatar?: string;
@@ -54,6 +55,7 @@ export interface Sala {
   timeALogo?: string;
   timeBNome?: string;
   timeBTag?: string;
+  draft_id?: string | null;
   timeBLogo?: string;
   jogadores: JogadorNaSala[];
   maxJogadores: number;
@@ -92,6 +94,7 @@ function mapSala(row: any, jogadoresRows: any[]): Sala {
     modo:         row.modo,
     estado:       (row.estado as EstadoSala) ?? 'aberta',
     eloMinimo:    row.elo_minimo,
+    draft_id:     row.draft_id ?? null,
     codigoPartida: row.codigo_partida,
     confirmacaoExpiresAt:    row.confirmacao_expires_at ? new Date(row.confirmacao_expires_at) : undefined,
     aguardandoInicioExpiresAt: row.aguardando_inicio_expires_at ? new Date(row.aguardando_inicio_expires_at) : undefined,
@@ -192,7 +195,7 @@ export async function transicionarEstado(
     updates.confirmacao_expires_at = new Date(Date.now() + 30_000).toISOString();
   }
   if (novoEstado === 'aguardando_inicio') {
-    updates.aguardando_inicio_expires_at = new Date(Date.now() + 120_000).toISOString();
+    updates.aguardando_inicio_expires_at = new Date(Date.now() + 180_000).toISOString();
   }
   const { error } = await supabase.from('salas').update(updates).eq('id', salaId);
   if (!error) return true;
@@ -271,7 +274,15 @@ export async function entrarNaVaga(
   if (usuario.avatar) row.avatar = usuario.avatar;
 
   const { error } = await supabase.from('sala_jogadores').insert(row);
-  if (error) { console.error('[entrarNaVaga]', error); return false; }
+  if (error) {
+    if (error.code === '23505') {
+      // Unique constraint (sala_id, role, is_time_a) — dois jogadores entraram ao mesmo tempo
+      console.warn('[entrarNaVaga] conflito de vaga — vaga preenchida por outro jogador no mesmo instante');
+    } else {
+      console.error('[entrarNaVaga]', error);
+    }
+    return false;
+  }
   return true;
 }
 
@@ -454,14 +465,112 @@ export async function buscarSalaPorCodigo(codigo: string): Promise<Sala | null> 
 
 // ── Códigos de partida (pool FIFO circular) ───────────────────────────────────
 
-/** Atribui o próximo código disponível à sala para o modo informado (FIFO). */
+/** Atribui código à sala.
+ *  1) Tenta via RPC (pool FIFO, atômico)
+ *  2) Se falhar, busca direto da tabela codigos_partida pelo modo
+ *  3) Se também falhar (RLS), usa código aleatório de emergência
+ */
 export async function atribuirCodigoPartida(salaId: number, modo: string): Promise<string | null> {
-  const { data, error } = await supabase.rpc('atribuir_codigo_partida', { p_sala_id: salaId, p_modo: modo });
-  if (error) { console.error('[atribuirCodigoPartida]', error); return null; }
-  return data as string | null;
+  // Tentativa 1: RPC com pool de códigos
+  const { data: rpcData, error: rpcErr } = await supabase
+    .rpc('atribuir_codigo_partida', { p_sala_id: Number(salaId), p_modo: modo });
+  if (!rpcErr && rpcData) return rpcData as string;
+
+  console.warn('[atribuirCodigoPartida] RPC falhou:', rpcErr?.message);
+
+  // Tentativa 2: query direta à tabela codigos_partida
+  const { data: rows } = await supabase
+    .from('codigos_partida')
+    .select('codigo')
+    .eq('modo', modo)
+    .limit(20);
+
+  if (rows && rows.length > 0) {
+    const escolhido = rows[Math.floor(Math.random() * rows.length)] as { codigo: string };
+    const { error: e2 } = await supabase.from('salas')
+      .update({ codigo_partida: escolhido.codigo }).eq('id', salaId);
+    if (!e2) return escolhido.codigo;
+    console.warn('[atribuirCodigoPartida] update direto falhou:', e2.message);
+  }
+
+  // Tentativa 3: código aleatório de emergência (RLS não permite acesso à tabela)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const codigo = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  await supabase.from('salas').update({ codigo_partida: codigo }).eq('id', salaId);
+  console.error('[atribuirCodigoPartida] usando código de emergência — verifique RLS da tabela codigos_partida');
+  return codigo;
 }
 
 /** Libera o código quando a partida encerra. */
 export async function liberarCodigoPartida(salaId: number): Promise<void> {
-  await supabase.rpc('liberar_codigo_partida', { p_sala_id: salaId });
+  // Tentativa 1: RPC de liberação
+  const { error } = await supabase.rpc('liberar_codigo_partida', { p_sala_id: salaId });
+  if (!error) return;
+  // Tentativa 2: limpa direto no campo
+  await supabase.from('salas').update({ codigo_partida: null }).eq('id', salaId);
+}
+
+// ── Reset completo de sala (cancela partida, desvincula todos) ────────────────
+export async function resetarSalaCompleta(salaId: number): Promise<void> {
+  // Remove todos os jogadores (vinculados e não-vinculados) e votos
+  await supabase.from('sala_jogadores').delete().eq('sala_id', salaId);
+  await supabase.from('sala_votos').delete().eq('sala_id', salaId);
+  // Libera o código se havia um atribuído
+  await liberarCodigoPartida(salaId);
+  // Volta para aberta
+  await supabase.from('salas').update({
+    estado: 'aberta',
+    codigo_partida: null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', salaId);
+}
+
+// ── Criar requisição para administrador ──────────────────────────────────────
+export interface RequisicaoAdmin {
+  sala_id:     number;
+  reportado_por: string;
+  motivo:      string;
+  descricao?:  string;
+  jogadores:   { id: string; nome: string; isTimeA: boolean }[];
+}
+
+export async function criarRequisicaoAdmin(req: RequisicaoAdmin): Promise<void> {
+  await supabase.from('requisicoes_admin').insert({
+    sala_id:       req.sala_id,
+    reportado_por: req.reportado_por,
+    motivo:        req.motivo,
+    descricao:     req.descricao ?? null,
+    jogadores:     req.jogadores,
+    status:        'pendente',
+    created_at:    new Date().toISOString(),
+  });
+}
+
+// ── Desvincula todos os jogadores de uma sala (libera para nova partida) ──────
+export async function desvincularJogadores(salaId: number): Promise<void> {
+  await supabase.from('sala_jogadores').delete().eq('sala_id', salaId);
+}
+
+// ── Desvincula um jogador específico (libera para nova partida imediatamente) ─
+export async function desvincularJogador(salaId: number, userId: string): Promise<void> {
+  await supabase.from('sala_jogadores').delete()
+    .eq('sala_id', salaId).eq('user_id', userId);
+}
+
+// ── Salvar resultado da partida para auditoria ────────────────────────────────
+export async function salvarResultadoPartida(
+  salaId: number,
+  vencedor: 'time_a' | 'time_b' | 'disputa',
+  vencedorNome: string,
+  jogadores: { id: string; nome: string; isTimeA: boolean; role: string }[]
+): Promise<void> {
+  const { error } = await supabase.from('resultados_partidas').insert({
+    sala_id:       salaId,
+    vencedor,
+    vencedor_nome: vencedorNome,
+    jogadores,
+    created_at:    new Date().toISOString(),
+  });
+  // Falha silenciosa — tabela pode ainda não existir
+  if (error) console.warn('[salvarResultadoPartida]', error.message);
 }

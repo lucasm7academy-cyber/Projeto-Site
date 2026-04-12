@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { buscarJogadorCompleto } from '../api/riot';
 import { supabase } from '../lib/supabase';
+import { sincronizarContaRiot } from '../api/player';
 
 interface VerificacaoAtiva {
   id: string;
@@ -84,6 +85,12 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('✅ Conta salva!');
+
+      // Sincronizar elo, campeões e ícone atualizado em background
+      sincronizarContaRiot(verificacao.puuid, user.id).catch(e =>
+        console.warn('[VerificacaoContext] sincronizarContaRiot falhou:', e)
+      );
+
       return true;
 
     } catch (error) {

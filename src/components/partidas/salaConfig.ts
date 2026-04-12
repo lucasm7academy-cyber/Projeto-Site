@@ -1,51 +1,54 @@
 // src/components/partidas/salaConfig.ts
 // Configurações centralizadas para o sistema de salas
 
-// ============================================
-// MODOS DE JOGO
-// ============================================
-
-export type ModoJogo = '5v5' | 'aram' | '1v1' | 'torneio';
+// NOVOS MODOS ATUALIZADOS
+export type ModoJogo = '5v5' | 'aram' | '1v1' | 'time_vs_time';
 
 export const MODOS_JOGO: Record<ModoJogo, {
   nome: string;
   icone: string;
   descricao: string;
   maxJogadores: number;
+  bgImage?: string
   jogadoresPorTime: number;
+  tipo: 'individual' | 'time';  // NOVO
   cor: string;
 }> = {
   '5v5': {
-    nome: '5v5',
+    nome: '5v5 Clássico',
     icone: '🏆',
-    descricao: 'Summoners Rift - Clássico',
+    descricao: 'Summoners Rift - Competitivo',
     maxJogadores: 10,
     jogadoresPorTime: 5,
-    cor: '#4ade80'
+    tipo: 'individual',
+    cor: '#fbbf24'  // 🟡 AMARELO
   },
   'aram': {
     nome: 'ARAM',
     icone: '🌉',
-    descricao: 'Bridge of Progress - Caos total',
+    descricao: 'Howling Abyss - Caos total',
     maxJogadores: 10,
-    jogadoresPorTime: 2,
-    cor: '#fbbf24'
+    jogadoresPorTime: 5,
+    tipo: 'individual',
+    cor: '#3b82f6'  // 🔵 AZUL
   },
   '1v1': {
     nome: '1v1',
     icone: '⚔️',
-    descricao: 'Howling Abyss - Duelo',
+    descricao: 'Howling Abyss - Duelo individual',
     maxJogadores: 2,
     jogadoresPorTime: 1,
-    cor: '#3b82f6'
+    tipo: 'individual',
+    cor: '#ef4444'  // 🔴 VERMELHO
   },
-  'torneio': {
-    nome: 'Torneio',
+  'time_vs_time': {
+    nome: 'Time vs Time',
     icone: '🏅',
-    descricao: 'Modo competitivo organizado',
+    descricao: 'Desafio entre times - Vale ranking do clã',
     maxJogadores: 10,
     jogadoresPorTime: 5,
-    cor: '#a855f7'
+    tipo: 'time',
+    cor: '#a855f7'  // 🟣 ROXO
   }
 };
 

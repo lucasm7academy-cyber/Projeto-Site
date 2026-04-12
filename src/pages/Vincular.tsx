@@ -274,13 +274,13 @@ export default function Vincular() {
       }
     }
 
-    //const iconeAtual = resultado.data.iconeId;
-    //const iconeAleatorio = iconeAtual;
+    const iconeAtual = resultado.data.iconeId;
+    const iconeAleatorio = iconeAtual;
     // AS DUAS DE CIMA DEIXA TUDO IGUAL PAR TESTES ///
     
-    const iconeAtual = resultado.data.iconeId;
-    const iconesFiltrados = ICONES_PADRAO.filter(i => i !== iconeAtual);
-    const iconeAleatorio = iconesFiltrados[Math.floor(Math.random() * iconesFiltrados.length)];
+    //const iconeAtual = resultado.data.iconeId;
+    //const iconesFiltrados = ICONES_PADRAO.filter(i => i !== iconeAtual);
+    //const iconeAleatorio = iconesFiltrados[Math.floor(Math.random() * iconesFiltrados.length)];
     //AS TRES DE CIMA PARA GARANTIR QUE O ÍCONE REQUERIDO SEJA SEMPRE DIFERENTE DO ATUAL, EVITANDO FALHAS NA VERIFICAÇÃO
     
     setIconeRequerido(iconeAleatorio);

@@ -13,6 +13,7 @@ import {
 } from '../api/salas';
 import { SalaRegrasProvider, useSalaRegras } from '../contexts/SalaRegras';
 import { getModoInfo, getMPointsInfo, ROLE_CONFIG, type Role } from '../components/partidas/salaConfig';
+import { DraftRoom } from '../components/draft/DraftRoom';  // ✅ NOVO IMPORT
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPO DO USUÁRIO
@@ -26,6 +27,7 @@ interface UsuarioAtual {
   role: string;
   avatar?: string;
   contaVinculada: boolean;
+draft_id?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,7 +105,7 @@ export default function SalaPage() {
       setLoading(false);
     };
     init();
-  }, [id]);
+  }, [id, navigate]);
 
   if (loading) {
     return (
@@ -364,7 +366,6 @@ function HextechActionBar({
   acaoConfirmarPresenca,
   acaoSairDaSala,
   acaoSolicitarFinalizacao,
-  isCriador
 }: {
   sala: Sala,
   usuarioAtual: { id: string; nome: string },
@@ -372,7 +373,6 @@ function HextechActionBar({
   acaoConfirmarPresenca: () => void,
   acaoSairDaSala: () => void,
   acaoSolicitarFinalizacao: () => void,
-  isCriador: boolean
 }) {
   const estado = sala.estado;
 
@@ -413,7 +413,7 @@ function HextechActionBar({
               >
                 {jogadorAtual.confirmado ? 'Você está Pronto!' : 'Confirmar Presença'}
               </motion.button>
-            ) : estado === 'em_partida' && isCriador ? (
+            ) : estado === 'em_partida' && !!jogadorAtual ? (
               <motion.button
                 whileHover={{ scale: 1.02, letterSpacing: '0.6em' }}
                 whileTap={{ scale: 0.98 }}
@@ -449,25 +449,43 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const navigate = useNavigate();
   const {
     sala, loading, jogadorAtual, viewers, semContaRiot,
-    timerConfirmacao, timerAguardando,
-    meuVotoInicio, meuVotoResultado,
-    contagemVotosInicio, contagemVotosResultado,
+    timerConfirmacao, timerCancelamento, timerFinalizacao,
+    meuVotoResultado,
+    contagemVotosResultado,
     podeExecutar,
     acaoEntrarVaga, acaoSairVaga, acaoConfirmarPresenca,
-    acaoVotarInicio, acaoVotarResultado, acaoSolicitarFinalizacao,
-    acaoApagarSala, acaoSairDaSala,
+    acaoDenunciarNaoIniciou, acaoVotarResultado, acaoSolicitarFinalizacao,
+    acaoDraftFinalizado, acaoApagarSala, acaoSairDaSala,
   } = useSalaRegras();
 
-  const [copiado, setCopiado]           = useState(false);
-  const [copiadoCodigo, setCopiadoCodigo] = useState(false);
-  const [showEncerrar, setShowEncerrar] = useState(false);
-  const vagasEmAndamento                = useRef<Set<string>>(new Set());
-
+  const [copiado, setCopiado]               = useState(false);
+  const [copiadoCodigo, setCopiadoCodigo]   = useState(false);
+  const [showEncerrar, setShowEncerrar]     = useState(false);
+  const [showDenuncia, setShowDenuncia]     = useState(false);
+  const [motivoDenuncia, setMotivoDenuncia] = useState('');
+  const [descricaoDenuncia, setDescricaoDenuncia] = useState('');
+  const [enviandoDenuncia, setEnviandoDenuncia]   = useState(false);
+  const vagasEmAndamento                    = useRef<Set<string>>(new Set());
+  
   if (loading || !sala) {
     return (
       <div className="flex-1 bg-[#050505] flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#FFB700] border-t-transparent" />
       </div>
+    );
+  }
+
+  // Mostra o DraftRoom enquanto a sala está em 'travada' e tem draft associado.
+  // Quando o draft termina, acaoDraftFinalizado atribui o código e avança para aguardando_inicio.
+  if (sala.estado === 'travada' && sala.draft_id) {
+    return (
+      <DraftRoom
+        salaId={sala.id}
+        usuarioId={usuarioAtual.id}
+        modo={sala.modo}
+        onDraftFinalizado={acaoDraftFinalizado}
+        onSair={acaoSairDaSala}
+      />
     );
   }
 
@@ -595,19 +613,19 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </div>
       )}
 
-      {/* Overlay de Aguardando Início — fora do círculo para ficar acima dos slots (z-50) */}
+      {/* Overlay de Aguardando Início — CÓDIGO DO LOL (SÓ APARECE APÓS O DRAFT) */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/70 backdrop-blur-md z-50 p-[8vmin] text-center">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/50 z-50 p-[8vmin] text-center">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
-            Partida Confirmada!
+            Draft Finalizado!
           </p>
           <p className="text-[1.2vmin] text-white/30 uppercase tracking-widest mb-[2vmin]">
             Entre na sala usando o código abaixo
           </p>
           {sala.codigoPartida ? (
-            <div className="flex flex-col items-center gap-[1.5vmin] mb-[3vmin]">
+            <div className="flex flex-col items-center gap-[1.5vmin]">
               <div className="px-[3vmin] py-[1.5vmin] bg-black/40 border border-[#FFB700]/20 rounded-xl">
-                <span className="text-[2.8vmin] font-black text-[#FFB700] tracking-[0.2em] select-all">
+                <span className="text-[2.2vmin] font-black text-[#FFB700] tracking-[0.2em] select-all">
                   {sala.codigoPartida}
                 </span>
               </div>
@@ -630,64 +648,89 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
               </button>
             </div>
           ) : (
-            <div className="px-[4vmin] py-[2vmin] mb-[3vmin]">
+            <div className="px-[4vmin] py-[2vmin]">
               <span className="text-[2vmin] text-white/20 italic">Atribuindo código...</span>
             </div>
           )}
-          <div className="w-[20vmin] h-px bg-white/10 mb-[3vmin]" />
-          <p className="text-white/60 font-black text-[1.4vmin] uppercase tracking-widest mb-[2vmin]">A partida iniciou?</p>
-          <div className="flex gap-[2vmin] w-full max-w-[36vmin]">
-            <button
-              onClick={() => acaoVotarInicio('iniciou')}
-              className={`flex-1 py-[1.5vmin] rounded-xl font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
-                meuVotoInicio === 'iniciou' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-white/5 border-white/10 text-white/40'
-              }`}
-            >
-              Sim ({contagemVotosInicio.iniciou})
-            </button>
-            <button
-              onClick={() => acaoVotarInicio('nao_iniciou')}
-              className={`flex-1 py-[1.5vmin] rounded-xl font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
-                meuVotoInicio === 'nao_iniciou' ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/40'
-              }`}
-            >
-              Não ({contagemVotosInicio.nao_iniciou})
-            </button>
-          </div>
-          <p className="text-white/20 text-[1vmin] font-bold uppercase mt-[2vmin] tracking-widest">{formatTime(timerAguardando)} restantes</p>
+          {/* Separador + botão de denúncia */}
+          <div className="w-[20vmin] h-px bg-white/10 my-[2.5vmin]" />
+          <button
+            onClick={() => setShowDenuncia(true)}
+            className="flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg border border-red-500/20 text-red-400/60 hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/5 font-black text-[1.1vmin] uppercase tracking-widest transition-all"
+          >
+            <AlertTriangle className="w-[1.4vmin] h-[1.4vmin]" />
+            Partida não iniciou
+          </button>
+          <span className="text-[0.9vmin] text-white/20 font-bold uppercase tracking-widest mt-[1vmin]">
+            {formatTime(timerCancelamento)} restantes
+          </span>
         </div>
       )}
 
-      {/* Overlay de Votação de Resultado — fora do círculo para ficar acima dos slots (z-50) */}
-      {sala.estado === 'finalizacao' && jogadorAtual && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/60 backdrop-blur-md z-50 p-[10vmin] text-center">
-          <p className="text-white font-black text-[2.5vmin] uppercase tracking-widest mb-[4vmin]">Quem venceu?</p>
-          <div className="grid grid-cols-3 gap-[2vmin] w-full max-w-[50vmin]">
-            <button
-              onClick={() => acaoVotarResultado('time_a')}
-              className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
-                meuVotoResultado === 'time_a' ? 'bg-blue-500/20 border-blue-500/40 text-blue-400' : 'bg-white/5 border-white/10 text-white/40'
-              }`}
-            >
-              Time A ({contagemVotosResultado.time_a})
-            </button>
-            <button
-              onClick={() => acaoVotarResultado('empate')}
-              className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
-                meuVotoResultado === 'empate' ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-400' : 'bg-white/5 border-white/10 text-white/40'
-              }`}
-            >
-              Empate ({contagemVotosResultado.empate})
-            </button>
-            <button
-              onClick={() => acaoVotarResultado('time_b')}
-              className={`py-[2vmin] rounded-xl font-black text-[1.2vmin] uppercase tracking-widest transition-all border ${
-                meuVotoResultado === 'time_b' ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-white/5 border-white/10 text-white/40'
-              }`}
-            >
-              Time B ({contagemVotosResultado.time_b})
-            </button>
-          </div>
+      {/* Overlay de Votação de Resultado */}
+      {sala.estado === 'finalizacao' && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm z-50 p-[8vmin] text-center">
+          {meuVotoResultado ? (
+            /* Já votou — mostra confirmação e botão de sair */
+            <div className="flex flex-col items-center gap-[2vmin]">
+              <div className="w-[8vmin] h-[8vmin] rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center mb-[1vmin]">
+                <Check className="w-[3.5vmin] h-[3.5vmin] text-green-400" />
+              </div>
+              <p className="text-green-400 font-black text-[1.8vmin] uppercase tracking-widest">Voto registrado!</p>
+              <p className="text-white/30 text-[1.1vmin]">
+                Você votou em <span className={`font-black ${meuVotoResultado === 'time_a' ? 'text-blue-400' : 'text-red-400'}`}>
+                  {meuVotoResultado === 'time_a' ? (sala.timeANome ?? 'Equipe Azul') : (sala.timeBNome ?? 'Equipe Vermelha')}
+                </span>
+              </p>
+              <button
+                onClick={acaoSairDaSala}
+                className="mt-[1vmin] px-[4vmin] py-[1.5vmin] rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/60 font-black text-[1.2vmin] uppercase tracking-widest transition-all"
+              >
+                Sair da Sala
+              </button>
+            </div>
+          ) : (
+            /* Ainda não votou */
+            <div className="flex flex-col items-center gap-[2vmin] w-full">
+              <p className="text-[1.1vmin] font-black text-white/30 uppercase tracking-[0.5em]">
+                Quem venceu a partida?
+              </p>
+              <p className="text-[0.9vmin] text-white/20 uppercase tracking-widest -mt-[1vmin]">
+                {formatTime(timerFinalizacao)} para votar
+              </p>
+              <div className="flex gap-[2.5vmin] w-full mt-[1vmin]">
+                {/* Equipe Azul */}
+                <button
+                  onClick={() => acaoVotarResultado('time_a')}
+                  className="flex-1 flex flex-col items-center gap-[1.2vmin] py-[2.5vmin] px-[2vmin] rounded-xl border-2 border-blue-500/20 bg-blue-500/5 hover:bg-blue-500/15 hover:border-blue-500/50 text-blue-400 transition-all group"
+                >
+                  <div className="w-[6vmin] h-[6vmin] rounded-full bg-blue-600/20 border border-blue-500/30 flex items-center justify-center group-hover:bg-blue-600/30 transition-colors">
+                    {sala.timeALogo
+                      ? <img src={sala.timeALogo} className="w-[4.5vmin] h-[4.5vmin] object-contain rounded-full" />
+                      : <Trophy className="w-[2.5vmin] h-[2.5vmin] text-blue-400" />
+                    }
+                  </div>
+                  <span className="font-black text-[1.3vmin] uppercase tracking-widest">{sala.timeANome ?? 'Equipe Azul'}</span>
+                  <span className="text-[1vmin] text-blue-400/60">{contagemVotosResultado.time_a} voto{contagemVotosResultado.time_a !== 1 ? 's' : ''}</span>
+                </button>
+
+                {/* Equipe Vermelha */}
+                <button
+                  onClick={() => acaoVotarResultado('time_b')}
+                  className="flex-1 flex flex-col items-center gap-[1.2vmin] py-[2.5vmin] px-[2vmin] rounded-xl border-2 border-red-500/20 bg-red-500/5 hover:bg-red-500/15 hover:border-red-500/50 text-red-400 transition-all group"
+                >
+                  <div className="w-[6vmin] h-[6vmin] rounded-full bg-red-600/20 border border-red-500/30 flex items-center justify-center group-hover:bg-red-600/30 transition-colors">
+                    {sala.timeBLogo
+                      ? <img src={sala.timeBLogo} className="w-[4.5vmin] h-[4.5vmin] object-contain rounded-full" />
+                      : <Trophy className="w-[2.5vmin] h-[2.5vmin] text-red-400" />
+                    }
+                  </div>
+                  <span className="font-black text-[1.3vmin] uppercase tracking-widest">{sala.timeBNome ?? 'Equipe Vermelha'}</span>
+                  <span className="text-[1vmin] text-red-400/60">{contagemVotosResultado.time_b} voto{contagemVotosResultado.time_b !== 1 ? 's' : ''}</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -767,9 +810,64 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           acaoConfirmarPresenca={acaoConfirmarPresenca}
           acaoSairDaSala={acaoSairDaSala}
           acaoSolicitarFinalizacao={() => setShowEncerrar(true)}
-          isCriador={isCriador}
         />
       </div>
+
+      {/* Modal de Denúncia — partida não iniciou */}
+      {showDenuncia && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-[2vmin]">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-[#0d0d0d] border border-white/10 rounded-2xl p-[4vmin] max-w-[45vmin] w-full shadow-2xl"
+          >
+            <h3 className="text-[2.5vmin] font-black text-white uppercase tracking-tight mb-[2vmin]">Partida não iniciou?</h3>
+            <p className="text-white/40 text-[1.4vmin] mb-[3vmin] leading-relaxed">
+              Selecione o motivo. Isso cancela a sala e notifica um administrador.
+            </p>
+            <select
+              value={motivoDenuncia}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setMotivoDenuncia(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-[2vmin] py-[1.5vmin] text-white text-[1.3vmin] font-bold mb-[2vmin] outline-none focus:border-white/20"
+            >
+              <option value="" className="bg-[#0d0d0d]">Selecione o motivo...</option>
+              <option value="jogador_trapaceou" className="bg-[#0d0d0d]">Jogador trapaceou</option>
+              <option value="sala_invalida" className="bg-[#0d0d0d]">Sala inválida</option>
+              <option value="codigo_invalido" className="bg-[#0d0d0d]">Código inválido</option>
+              <option value="outros" className="bg-[#0d0d0d]">Outros motivos</option>
+            </select>
+            <textarea
+              value={descricaoDenuncia}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescricaoDenuncia(e.target.value)}
+              placeholder="Descrição adicional (opcional)..."
+              rows={3}
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-[2vmin] py-[1.5vmin] text-white/80 text-[1.2vmin] placeholder:text-white/20 mb-[3vmin] outline-none focus:border-white/20 resize-none"
+            />
+            <div className="flex gap-[2vmin]">
+              <button
+                onClick={() => { setShowDenuncia(false); setMotivoDenuncia(''); setDescricaoDenuncia(''); }}
+                disabled={enviandoDenuncia}
+                className="flex-1 py-[2vmin] rounded-xl bg-white/5 hover:bg-white/10 text-white/60 font-black uppercase tracking-widest text-[1.2vmin] transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={async () => {
+                  if (!motivoDenuncia) return;
+                  setEnviandoDenuncia(true);
+                  await acaoDenunciarNaoIniciou(motivoDenuncia, descricaoDenuncia || undefined);
+                  setEnviandoDenuncia(false);
+                  setShowDenuncia(false);
+                }}
+                disabled={!motivoDenuncia || enviandoDenuncia}
+                className="flex-1 py-[2vmin] rounded-xl bg-red-500 hover:bg-red-600 text-white font-black uppercase tracking-widest text-[1.2vmin] transition-colors shadow-[0_0_20px_rgba(239,68,68,0.3)] disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {enviandoDenuncia ? 'Enviando...' : 'Confirmar'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Modal de Encerramento */}
       {showEncerrar && (

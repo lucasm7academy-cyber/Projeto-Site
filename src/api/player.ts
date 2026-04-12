@@ -225,8 +225,8 @@ export async function buscarOuAtualizarStats(puuid: string): Promise<StatsCache>
  * Retorna null em caso de falha (sem lançar exceção).
  */
 export interface SyncResult {
-  iconeId:      number;
-  nivel:        number;
+  iconeId:      number | null;  // null = falhou buscar da Riot API (não sobrescrever o valor atual)
+  nivel:        number | null;  // null = falhou buscar da Riot API (não sobrescrever o valor atual)
   soloQ:        EloInfo | null;
   flexQ:        EloInfo | null;
   topChampions: StatsCache['topChampions'];
@@ -242,12 +242,25 @@ export async function sincronizarContaRiot(puuid: string, userId: string): Promi
       buscarEstatisticasRecentes(puuid).catch(() => null),
     ]);
 
-    const iconeId    = (summoner as any)?.profileIconId  ?? null;
-    const nivel      = (summoner as any)?.summonerLevel  ?? null;
+    const iconeId      = (summoner as any)?.profileIconId ?? null;
+    const nivel        = (summoner as any)?.summonerLevel ?? null;
     const topChampions = statsRaw?.topChampions ?? [];
     const roles        = statsRaw?.roles        ?? [];
     const totalGames   = statsRaw?.totalGames   ?? 0;
 
+    // Monta o resultado — iconeId/nivel ficam null se a API falhou
+    // O caller decide se sobrescreve o valor atual com null
+    const result: SyncResult = {
+      iconeId,
+      nivel,
+      soloQ,
+      flexQ,
+      topChampions,
+      roles,
+      totalGames,
+    };
+
+    // Salva no banco em background — falha silenciosamente, não bloqueia o retorno
     const update: Record<string, any> = {
       elo_cache:        { soloQ, flexQ },
       champions_cache:  { topChampions, roles, totalGames },
@@ -256,22 +269,17 @@ export async function sincronizarContaRiot(puuid: string, userId: string): Promi
     if (iconeId !== null) update.profile_icon_id = iconeId;
     if (nivel   !== null) update.level           = nivel;
 
-    await supabase
+    supabase
       .from('contas_riot')
       .update(update)
-      .eq('user_id', userId);
+      .eq('user_id', userId)
+      .then(({ error }) => {
+        if (error) console.warn('[sincronizarContaRiot] DB update falhou (verifique colunas elo_cache/champions_cache no Supabase):', error.message);
+      });
 
-    return {
-      iconeId:      iconeId  ?? 1,
-      nivel:        nivel    ?? 1,
-      soloQ,
-      flexQ,
-      topChampions,
-      roles,
-      totalGames,
-    };
+    return result;
   } catch (e) {
-    console.error('[sincronizarContaRiot] erro:', e);
+    console.error('[sincronizarContaRiot] erro ao buscar dados da Riot API:', e);
     return null;
   }
 }
