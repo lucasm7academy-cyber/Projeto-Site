@@ -21,7 +21,8 @@ export const MODOS_JOGO: Record<ModoJogo, {
     maxJogadores: 10,
     jogadoresPorTime: 5,
     tipo: 'individual',
-    cor: '#fbbf24'  // 🟡 AMARELO
+    cor: '#fbbf24',
+    bgImage: '/images/fundoCard5v5.png',
   },
   'aram': {
     nome: 'ARAM',
@@ -30,7 +31,8 @@ export const MODOS_JOGO: Record<ModoJogo, {
     maxJogadores: 10,
     jogadoresPorTime: 5,
     tipo: 'individual',
-    cor: '#3b82f6'  // 🔵 AZUL
+    cor: '#3b82f6',
+    bgImage: '/images/fundoCardAram.png',
   },
   '1v1': {
     nome: '1v1',
@@ -39,7 +41,8 @@ export const MODOS_JOGO: Record<ModoJogo, {
     maxJogadores: 2,
     jogadoresPorTime: 1,
     tipo: 'individual',
-    cor: '#ef4444'  // 🔴 VERMELHO
+    cor: '#ef4444',
+    bgImage: '/images/fundoCard1v1.png',
   },
   'time_vs_time': {
     nome: 'Time vs Time',
@@ -48,7 +51,8 @@ export const MODOS_JOGO: Record<ModoJogo, {
     maxJogadores: 10,
     jogadoresPorTime: 5,
     tipo: 'time',
-    cor: '#a855f7'  // 🟣 ROXO
+    cor: '#a855f7',
+    bgImage: '/images/fundoCardTime.png',
   }
 };
 

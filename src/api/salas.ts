@@ -478,26 +478,36 @@ export async function atribuirCodigoPartida(salaId: number, modo: string): Promi
 
   console.warn('[atribuirCodigoPartida] RPC falhou:', rpcErr?.message);
 
-  // Tentativa 2: query direta à tabela codigos_partida
-  const { data: rows } = await supabase
+  // Tentativa 2: query direta à tabela codigos_partida (sem colunas opcionais)
+  const { data: rows, error: rowsErr } = await supabase
     .from('codigos_partida')
-    .select('codigo')
+    .select('id, codigo')
     .eq('modo', modo)
-    .limit(20);
+    .order('id', { ascending: true })
+    .limit(1);
+
+  console.warn('[atribuirCodigoPartida] busca direta — modo:', modo, '| rows:', rows, '| erro:', rowsErr?.message);
 
   if (rows && rows.length > 0) {
-    const escolhido = rows[Math.floor(Math.random() * rows.length)] as { codigo: string };
+    const escolhido = rows[0] as { id: number; codigo: string };
+
+    // Tenta marcar como em uso (coluna pode não existir — ignora erro)
+    await supabase.from('codigos_partida')
+      .update({ em_uso: true, sala_id: salaId })
+      .eq('id', escolhido.id);
+
+    // Salva o código na sala
     const { error: e2 } = await supabase.from('salas')
       .update({ codigo_partida: escolhido.codigo }).eq('id', salaId);
     if (!e2) return escolhido.codigo;
-    console.warn('[atribuirCodigoPartida] update direto falhou:', e2.message);
+    console.warn('[atribuirCodigoPartida] update sala falhou:', e2.message);
   }
 
   // Tentativa 3: código aleatório de emergência (RLS não permite acesso à tabela)
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const codigo = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   await supabase.from('salas').update({ codigo_partida: codigo }).eq('id', salaId);
-  console.error('[atribuirCodigoPartida] usando código de emergência — verifique RLS da tabela codigos_partida');
+  console.error('[atribuirCodigoPartida] EMERGÊNCIA — RLS bloqueia codigos_partida ou tabela vazia para modo:', modo);
   return codigo;
 }
 

@@ -75,6 +75,7 @@ const heroSlides: HeroSlide[] = [
     icon: Crown,
     color: '#fbbf24',
     bgGradient: 'from-yellow-500/20 via-yellow-500/5 to-transparent',
+    bgImage: '/images/heroSlide2.png',
     actionText: 'Seja VIP',
     actionLink: '/vip'
   },
@@ -86,6 +87,7 @@ const heroSlides: HeroSlide[] = [
     icon: Shield,
     color: '#3b82f6',
     bgGradient: 'from-blue-500/20 via-blue-500/5 to-transparent',
+    bgImage: '/images/heroSlide3.png',
     actionText: 'Código de Conduta',
     actionLink: '/conduta'
   }
@@ -246,7 +248,18 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between sticky top-0 bg-black/50 backdrop-blur-sm">
+        {/* Modal Background Image */}
+        {modoInfo.bgImage && (
+          <div 
+            className="absolute inset-0 z-0 bg-cover bg-center opacity-10 pointer-events-none transition-all duration-500"
+            style={{ backgroundImage: `url(${modoInfo.bgImage})` }}
+          />
+        )}
+        <div className="absolute inset-0 z-0 opacity-50 pointer-events-none transition-all duration-500"
+          style={{ background: `linear-gradient(to bottom, transparent, ${modoInfo.cor}20)` }}
+        />
+
+        <div className="relative z-10 px-6 py-4 border-b border-white/8 flex items-center justify-between sticky top-0 bg-black/50 backdrop-blur-sm">
           <div className="flex items-center gap-3">
             <Plus className="w-5 h-5" style={{ color: modoInfo.cor }} />
             <h2 className="text-white font-black text-lg uppercase">Criar Sala • {modoInfo.nome}</h2>
@@ -256,7 +269,7 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
           </button>
         </div>
 
-        <div className="p-6 space-y-5">
+        <div className="relative z-10 p-6 space-y-5">
           {/* Nome */}
           <div className="space-y-2">
             <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Nome da Sala</label>
@@ -298,18 +311,25 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
                 <button
                   key={key}
                   onClick={() => setModo(key)}
-                  className="p-3 rounded-xl text-left transition-all border"
+                  className="p-3 rounded-xl text-left transition-all border relative overflow-hidden group"
                   style={
                     modo === key
                       ? { borderColor: value.cor, background: `${value.cor}15`, color: 'white' }
                       : { borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.4)' }
                   }
                 >
-                  <div className="flex items-center gap-2 mb-1">
+                  {/* Button Background Image */}
+                  {value.bgImage && (
+                    <div 
+                      className={`absolute inset-0 z-0 bg-cover bg-center transition-opacity duration-300 ${modo === key ? 'opacity-30' : 'opacity-5 group-hover:opacity-15'}`}
+                      style={{ backgroundImage: `url(${value.bgImage})` }}
+                    />
+                  )}
+                  <div className="relative z-10 flex items-center gap-2 mb-1">
                     <span className="text-lg">{value.icone}</span>
                     <span className="text-xs font-black uppercase tracking-tighter">{value.nome}</span>
                   </div>
-                  <p className="text-[9px] font-medium opacity-60 leading-tight uppercase tracking-widest">{value.descricao}</p>
+                  <p className="relative z-10 text-[9px] font-medium opacity-60 leading-tight uppercase tracking-widest">{value.descricao}</p>
                 </button>
               ))}
             </div>
@@ -358,7 +378,7 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
           )}
         </div>
 
-        <div className="p-6 border-t border-white/8 sticky bottom-0 bg-black/50 backdrop-blur-sm">
+        <div className="relative z-10 p-6 border-t border-white/8 sticky bottom-0 bg-black/50 backdrop-blur-sm">
           <button
             onClick={handleSubmit} disabled={loading}
             className="w-full py-4 rounded-xl font-black text-sm uppercase text-white transition-all hover:scale-[1.02] disabled:opacity-50"
@@ -391,6 +411,7 @@ const Jogar = () => {
   const [loadingSalas, setLoadingSalas] = useState(true);
   const [busca, setBusca] = useState('');
   const [filtroModo, setFiltroModo] = useState<ModoJogo | 'todos'>('todos');
+  const [viewerCounts, setViewerCounts] = useState<Record<number, number>>({});
   
   // Modais
   const [showCriarModal, setShowCriarModal] = useState(false);
@@ -482,6 +503,20 @@ const Jogar = () => {
 
     return () => { supabase.removeChannel(channel); };
   }, [usuarioAtual, navigate, recarregarSalas]);
+
+  // Viewer counts via Presence
+  useEffect(() => {
+    if (salas.length === 0) return;
+    const channels = salas.map(sala => {
+      const ch = supabase.channel(`sala_presenca_${sala.id}`);
+      ch.on('presence', { event: 'sync' }, () => {
+        const count = Object.keys(ch.presenceState()).length;
+        setViewerCounts(prev => ({ ...prev, [sala.id]: count }));
+      }).subscribe();
+      return ch;
+    });
+    return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
+  }, [salas]);
 
   // Hero navigation
   const nextHero = () => setActiveHero((prev) => (prev + 1) % heroSlides.length);
@@ -794,7 +829,7 @@ const Jogar = () => {
                           {/* Visualizações */}
                           <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm text-white/60 text-[10px] font-black px-2.5 py-1.5 rounded border border-white/10">
                             <Eye className="w-3 h-3 text-[#FFB700]" />
-                            {(sala as any).viewers || 0}
+                            {viewerCounts[sala.id] || 0}
                           </div>
                           {/* Vagas */}
                           <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm text-white/60 text-[10px] font-black px-2.5 py-1.5 rounded border border-white/10">
