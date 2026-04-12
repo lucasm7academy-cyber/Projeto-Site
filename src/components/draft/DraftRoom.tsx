@@ -1,7 +1,12 @@
-// src/components/draft/DraftRoom.tsx
-import React, { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, Check, Clock } from 'lucide-react';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { motion } from 'motion/react';
+import { Search, Ban } from 'lucide-react';
+import { FiShieldOff } from 'react-icons/fi';
 import { supabase } from '../../lib/supabase';
 import { getDDRVersion, buildChampionIconUrl } from '../../api/riot';
 import {
@@ -14,9 +19,6 @@ import {
 } from '../../api/draft';
 import { getTurnOrder, type DraftState, type Champion } from './draftTypes';
 
-// ============================================================
-// TIPOS
-// ============================================================
 interface DraftRoomProps {
   salaId: number;
   usuarioId: string;
@@ -25,10 +27,6 @@ interface DraftRoomProps {
   onSair?: () => void;
 }
 
-
-// ============================================================
-// COMPONENTE PRINCIPAL
-// ============================================================
 export const DraftRoom: React.FC<DraftRoomProps> = ({
   salaId,
   usuarioId,
@@ -38,75 +36,82 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
 }) => {
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [champions, setChampions] = useState<Record<string, Champion>>({});
+  const [version, setVersion] = useState('14.7.1');
   const [loading, setLoading] = useState(true);
   const [selectedChamp, setSelectedChamp] = useState<Champion | null>(null);
   const [meuTime, setMeuTime] = useState<'blue' | 'red' | null>(null);
   const [possoJogar, setPossoJogar] = useState(false);
   const [timer, setTimer] = useState(30);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState<string>('');
+  const [nomeJogador, setNomeJogador] = useState<string>('');
+  const [jogadorAtual, setJogadorAtual] = useState<{ blue: string; red: string }>({ blue: 'Jogador Azul', red: 'Jogador Vermelho' });
 
   // ============================================================
-  // CARREGAR DADOS INICIAIS
+  // INITIALIZATION
   // ============================================================
   useEffect(() => {
     const inicializar = async () => {
       setLoading(true);
-
-      // 1. Verificar se usuário pode controlar o draft
-      const permissao = await podeControlarDraft(salaId, usuarioId, modo);
+      const permissao = await podeControlarDraft(salaId, usuarioId, modo) as any;
       setMeuTime(permissao.team);
       setPossoJogar(permissao.pode);
+      setNomeJogador(permissao.nome || 'Jogador');
 
-      // 2. Buscar campeões da Riot
+      // Buscar nomes dos jogadores de cada time
       try {
-        const version = await getDDRVersion();
-        const res = await fetch(
-          `https://ddragon.leagueoflegends.com/cdn/${version}/data/pt_BR/champion.json`
-        );
+        const { data: jogadores } = await (supabase as any)
+          .from('sala_jogadores')
+          .select('user_id, nome, is_time_a, role')
+          .eq('sala_id', salaId)
+          .eq('role', modo === '1v1' ? 'MID' : 'JG');
+        
+        if (jogadores) {
+          const blue = jogadores.find(j => j.is_time_a);
+          const red = jogadores.find(j => !j.is_time_a);
+          setJogadorAtual({
+            blue: blue?.nome || 'Time Azul',
+            red: red?.nome || 'Time Vermelho'
+          });
+        }
+      } catch (error) {
+        console.error('Erro ao buscar jogadores:', error);
+      }
+
+      try {
+        const v = await getDDRVersion();
+        setVersion(v);
+        const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${v}/data/pt_BR/champion.json`);
         const data = await res.json();
         setChampions(data.data);
       } catch (error) {
-        console.error('Erro ao buscar campeões:', error);
+        console.error('Error fetching champions:', error);
       }
 
-      // 3. Buscar ou criar draft
       let draftAtual = await buscarDraftDaSala(salaId);
       if (!draftAtual) {
-        draftAtual = await criarDraft(salaId, false);
+        draftAtual = await criarDraft(salaId, modo === 'time_vs_time');
       }
       setDraft(draftAtual);
 
-      // Se o draft já estava finalizado ao carregar (ex: reload após término), avança imediatamente
       if (draftAtual?.status === 'finished') {
         onDraftFinalizado?.(draftAtual);
         return;
       }
-
       setLoading(false);
     };
-
     inicializar();
-  }, [salaId, usuarioId]);
+  }, [salaId, usuarioId, modo, onDraftFinalizado]);
 
   // ============================================================
-  // REALTIME - ATUALIZAR EM TEMPO REAL
+  // REALTIME
   // ============================================================
   useEffect(() => {
     if (!draft) return;
-
     const channel = inscreverDraftRealtime(salaId, (novoDraft) => {
       setDraft(novoDraft);
-      
-      // Verificar se finalizou
-      if (novoDraft.status === 'finished') {
-        onDraftFinalizado?.(novoDraft);
-      }
+      if (novoDraft.status === 'finished') onDraftFinalizado?.(novoDraft);
     });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { if (channel) supabase.removeChannel(channel); };
   }, [salaId, draft?.id, onDraftFinalizado]);
 
   // ============================================================
@@ -114,62 +119,40 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   // ============================================================
   useEffect(() => {
     if (!draft || draft.status !== 'ongoing') return;
-
     const interval = setInterval(() => {
       const agora = Date.now();
       const restante = Math.max(0, Math.floor(((draft.timer_end || agora) - agora) / 1000));
       setTimer(restante);
-
-      if (restante <= 0) {
-        // Timer expirou - auto-banir campeão aleatório?
-        console.log('Timer expirou!');
-      }
     }, 1000);
-
     return () => clearInterval(interval);
   }, [draft]);
 
   // ============================================================
-  // VERIFICAR SE É MEU TURNO
+  // ACTIONS
   // ============================================================
   const isMeuTurno = useCallback((): boolean => {
     if (!draft || !possoJogar || !meuTime) return false;
     if (draft.status !== 'ongoing') return false;
-    const turnoAtual = getTurnOrder(modo)[draft.current_turn];
-    return turnoAtual?.team === meuTime;
+    const turnOrder = getTurnOrder(modo);
+    return turnOrder[draft.current_turn]?.team === meuTime;
   }, [draft, possoJogar, meuTime, modo]);
 
-  // ============================================================
-  // AÇÕES DO DRAFT
-  // ============================================================
   const handleBanir = async (champion: Champion) => {
     if (!draft || !meuTime || !isMeuTurno()) return;
     if (draft.current_phase !== 'ban') return;
-
     const sucesso = await banirCampeao(draft, champion.id, meuTime, modo);
-    if (sucesso) {
-      setSelectedChamp(null);
-    }
+    if (sucesso) setSelectedChamp(null);
   };
 
   const handlePickar = async (champion: Champion) => {
     if (!draft || !meuTime || !isMeuTurno()) return;
     if (draft.current_phase !== 'pick') return;
-
     const sucesso = await pickarCampeao(draft, champion.id, meuTime, modo);
-    if (sucesso) {
-      setSelectedChamp(null);
-    }
-  };
-
-  const handleChampionClick = (champion: Champion) => {
-    if (!isMeuTurno()) return;
-    setSelectedChamp(champion);
+    if (sucesso) setSelectedChamp(null);
   };
 
   const confirmarAcao = () => {
     if (!selectedChamp || !draft) return;
-
     if (draft.current_phase === 'ban') {
       handleBanir(selectedChamp);
     } else {
@@ -177,300 +160,429 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
     }
   };
 
-  // ============================================================
-  // FILTRAR CAMPEÕES
-  // ============================================================
-  const filteredChampions = Object.values(champions).filter((champ) => {
-    const matchSearch = champ.name.toLowerCase().includes(searchTerm.toLowerCase());
-    // Aqui poderia filtrar por role também
-    return matchSearch;
-  });
+  const handleChampionClick = (champion: Champion) => {
+    if (!isMeuTurno()) return;
+    const isBanned = draft?.blue_bans.includes(champion.id) || draft?.red_bans.includes(champion.id);
+    const isPicked = draft?.blue_picks.includes(champion.id) || draft?.red_picks.includes(champion.id);
+    if (isBanned || isPicked) return;
+    setSelectedChamp(champion);
+  };
+
+  const filteredChampions = useMemo(() => {
+    return (Object.values(champions) as Champion[]).filter(c => 
+      c.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ).sort((a, b) => a.name.localeCompare(b.name));
+  }, [champions, searchTerm]);
 
   // ============================================================
-  // RENDERIZAR SLOT DE BAN/PICK
+  // RENDER HELPERS
   // ============================================================
-  const renderSlot = (championId: string | null, index: number, type: 'ban' | 'pick') => {
+  const renderBanSlot = (championId: string | null, team: 'blue' | 'red', index: number) => {
     const champion = championId ? champions[championId] : null;
-    const isActive = draft?.current_turn === index &&
-                     getTurnOrder(modo)[index]?.phase === type;
+    const turnOrder = getTurnOrder(modo);
+    const isActive = draft?.current_turn !== undefined && 
+                     turnOrder[draft.current_turn]?.team === team && 
+                     turnOrder[draft.current_turn]?.phase === 'ban' &&
+                     draft.current_phase === 'ban';
+    
+    const isThisSlotActive = isActive && (
+      team === 'blue' ? draft?.blue_bans.filter(b => b === null).length - 1 === index : 
+                        draft?.red_bans.filter(b => b === null).length - 1 === index
+    );
 
     return (
-      <div
-        key={index}
-        className={`
-          w-[6vmin] h-[6vmin] rounded border-2 transition-all duration-300
-          ${isActive ? 'border-[#FFB700] shadow-[0_0_20px_rgba(255,183,0,0.5)]' : 'border-white/10'}
-          ${champion ? 'bg-black/60' : 'bg-black/20'}
-        `}
-      >
-        {champion ? (
-          <img
-            src={buildChampionIconUrl(champion.image.full.split('.')[0])}
-            alt={champion.name}
-            className="w-full h-full object-cover rounded"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/20 text-[2vmin] font-black">
-            {type === 'ban' ? '🚫' : '?'}
-          </div>
-        )}
+      <div key={index} className="flex flex-col items-center gap-[0.3vmin]">
+        <div className={`
+          relative w-[5vmin] h-[5vmin] border bg-black/60 flex items-center justify-center overflow-hidden transition-all duration-300
+          ${champion ? 'border-red-600/80 shadow-[0_0_8px_rgba(220,38,38,0.3)]' : 'border-white/15'}
+          ${isThisSlotActive ? 'border-[#c89b3c] shadow-[0_0_12px_rgba(200,155,60,0.5)] scale-110' : ''}
+        `}>
+          {champion ? (
+            <>
+              <img 
+                src={buildChampionIconUrl(champion.id, version)} 
+                alt={champion.name} 
+                className="w-full h-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute inset-0 border-t-2 border-red-600/80 -rotate-45 origin-center scale-150" />
+            </>
+          ) : (
+            <div className="opacity-20">
+              <Ban className="w-[3vmin] h-[3vmin] text-white" />
+            </div>
+          )}
+        </div>
       </div>
     );
   };
 
-  // ============================================================
-  // LOADING
-  // ============================================================
+  const renderPickSlot = (championId: string | null, team: 'blue' | 'red', index: number) => {
+    const champion = championId ? champions[championId] : null;
+    const turnOrder = getTurnOrder(modo);
+    const isActive = draft?.current_turn !== undefined && 
+                     turnOrder[draft.current_turn]?.team === team && 
+                     turnOrder[draft.current_turn]?.phase === 'pick' &&
+                     draft.current_phase === 'pick';
+    
+    const isThisSlotActive = isActive && (
+      team === 'blue' ? draft?.blue_picks.filter(p => p === null).length - 1 === index : 
+                        draft?.red_picks.filter(p => p === null).length - 1 === index
+    );
+
+    return (
+      <div key={index} className="flex flex-col items-center gap-[0.3vmin]">
+        <div className={`
+          w-[10vmin] h-[11vmin] border bg-black/50 overflow-hidden shadow-inner relative group transition-all duration-300
+          ${champion ? 'border-white/20' : 'border-white/10'}
+          ${isThisSlotActive ? 'border-[#c89b3c] shadow-[0_0_12px_rgba(200,155,60,0.5)]' : ''}
+        `}>
+          {champion ? (
+            <>
+              <img 
+                src={buildChampionIconUrl(champion.id, version)} 
+                alt={champion.name} 
+                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                referrerPolicy="no-referrer"
+              />
+              <div className="absolute bottom-0 left-0 right-0 h-[3vmin] bg-gradient-to-t from-black/90 to-transparent flex items-end justify-center pb-[0.3vmin]">
+                <span className="text-[0.9vmin] font-bold text-[#f0e6d2] uppercase tracking-wider drop-shadow-md">
+                  {champion.name}
+                </span>
+              </div>
+            </>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center opacity-15">
+              <FiShieldOff size="5vmin" />
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
-      <div className="flex-1 bg-[#050505] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#FFB700] border-t-transparent" />
+      <div className="w-full h-full bg-[#010a13] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#c89b3c] border-t-transparent" />
       </div>
     );
   }
 
-  // ============================================================
-  // RENDER
-  // ============================================================
   return (
-    <div className="flex-1 w-full bg-[#050505] flex flex-col h-screen overflow-hidden">
+    <div className="relative w-full h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] bg-black text-[#f0e6d2] font-sans overflow-hidden select-none">
       
-      {/* TOP BAR - TIMER E STATUS */}
-      <div className="h-[10vmin] bg-black/50 border-b border-white/10 flex items-center justify-between px-[4vmin]">
-        <div className="flex items-center gap-[2vmin]">
-          <span className="text-white/40 text-[1.5vmin] font-black uppercase tracking-widest">
-            {draft?.current_phase === 'ban' ? 'FASE DE BANS' : 'FASE DE PICKS'}
-          </span>
-          <div className={`px-[2vmin] py-[0.5vmin] rounded border ${
-            draft?.current_team === 'blue' 
-              ? 'border-blue-500/40 bg-blue-500/10 text-blue-400' 
-              : 'border-red-500/40 bg-red-500/10 text-red-400'
-          }`}>
-            <span className="text-[1.5vmin] font-black uppercase">
-              VEZ DO TIME {draft?.current_team === 'blue' ? 'AZUL' : 'VERMELHO'}
-            </span>
-          </div>
-        </div>
+      {/* DYNAMIC BACKGROUND */}
+      <div className={`absolute inset-0 ${
+        draft?.current_phase === 'ban' 
+          ? 'bg-gradient-radial from-red-900/40 via-black to-black' 
+          : 'bg-gradient-radial from-blue-900/40 via-black to-black'
+      }`} />
 
-        <div className="flex items-center gap-[1vmin]">
-          <Clock className="w-[2vmin] h-[2vmin] text-[#FFB700]" />
-          <span className={`text-[2.5vmin] font-black tabular-nums ${
-            timer <= 10 ? 'text-red-500' : 'text-white'
-          }`}>
-            {timer}s
-          </span>
-        </div>
-
+      {/* TOP DECORATION & CONTROLS */}
+      <div className="absolute top-0 left-0 right-0 h-[5vmin] flex items-center justify-end px-[2vmin] gap-[2vmin] z-50">
         {onSair && (
-          <button
+          <button 
             onClick={onSair}
-            className="px-[3vmin] py-[1vmin] rounded bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500/20 transition-all"
+            className="px-[2vmin] py-[0.5vmin] border border-[#c89b3c]/40 bg-black/40 text-[#c89b3c] text-[1.2vmin] font-bold tracking-widest uppercase hover:bg-[#c89b3c]/10 hover:border-[#c89b3c] transition-all"
           >
             Sair
           </button>
         )}
       </div>
 
-      {/* MAIN CONTENT */}
-      <div className="flex-1 flex">
+      {/* HEADER SECTION - TIMER + FASE */}
+      <div className="relative pt-[2vmin] flex flex-col items-center z-40">
+        <h1 className="text-[3.5vmin] font-bold tracking-[0.2em] text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] uppercase">
+          {draft?.current_phase === 'ban' ? 'FASE DE BANS' : 'FASE DE PICKS'}
+        </h1>
         
-        {/* TIME AZUL (ESQUERDA) */}
-        <div className="w-[20vmin] bg-gradient-to-r from-blue-500/5 to-transparent border-r border-white/5 p-[2vmin]">
-          <h3 className="text-blue-400 text-[2vmin] font-black uppercase tracking-widest mb-[2vmin]">
-            TIME AZUL
-          </h3>
-          
-          {/* BANS */}
-          <div className="mb-[3vmin]">
-            <p className="text-white/30 text-[1vmin] font-bold mb-[1vmin]">BANS</p>
-            <div className="flex flex-wrap gap-[0.5vmin]">
-              {draft?.blue_bans.map((ban, i) => renderSlot(ban, i, 'ban'))}
-            </div>
-          </div>
-
-          {/* PICKS */}
-          <div>
-            <p className="text-white/30 text-[1vmin] font-bold mb-[1vmin]">PICKS</p>
-            <div className="flex flex-col gap-[1vmin]">
-              {draft?.blue_picks.map((pick, i) => (
-                <div key={i} className="flex items-center gap-[1vmin]">
-                  {renderSlot(pick, i + 6, 'pick')}
-                  <span className="text-white/40 text-[1.2vmin]">
-                    {pick ? champions[pick]?.name : 'Vazio'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* TIMER BAR */}
+        <div className="relative w-[60vmin] h-[0.5vmin] bg-white/10 mt-[1vmin] overflow-hidden">
+          <motion.div 
+            className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c89b3c] to-transparent"
+            initial={{ scaleX: 1 }}
+            animate={{ scaleX: timer / 30 }}
+            transition={{ duration: 1, ease: "linear" }}
+            style={{ originX: 0.5 }}
+          />
         </div>
 
-        {/* GRID DE CAMPEÕES (CENTRO) */}
-        <div className="flex-1 p-[2vmin] overflow-y-auto">
-          {/* BARRA DE PESQUISA */}
-          <div className="mb-[2vmin]">
-            <input
-              type="text"
-              placeholder="Buscar campeão..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full max-w-[40vmin] px-[2vmin] py-[1vmin] bg-black/50 border border-white/10 rounded text-white text-[1.5vmin] outline-none focus:border-[#FFB700]/50"
-            />
-          </div>
+        {/* TIMER NUMBER */}
+        <div className={`text-[6vmin] font-black mt-[0.5vmin] tabular-nums drop-shadow-lg ${timer <= 10 ? 'text-red-500' : 'text-white'}`}>
+          {timer}
+        </div>
+      </div>
 
-          {/* CAMPEÕES */}
-          <div className="grid grid-cols-8 gap-[0.5vmin]">
-            {filteredChampions.map((champion) => {
-              const isBanned = draft?.blue_bans.includes(champion.id) || 
-                              draft?.red_bans.includes(champion.id);
-              const isPicked = draft?.blue_picks.includes(champion.id) || 
-                              draft?.red_picks.includes(champion.id);
-              const isDisabled = isBanned || isPicked;
-              const isSelected = selectedChamp?.id === champion.id;
-
-              return (
-                <motion.div
-                  key={champion.id}
-                  whileHover={{ scale: isDisabled ? 1 : 1.05 }}
-                  whileTap={{ scale: isDisabled ? 1 : 0.95 }}
-                  onClick={() => !isDisabled && handleChampionClick(champion)}
-                  className={`
-                    relative cursor-pointer rounded overflow-hidden border-2 transition-all
-                    ${isDisabled ? 'opacity-30 grayscale cursor-not-allowed border-white/5' : ''}
-                    ${isSelected ? 'border-[#FFB700] shadow-[0_0_20px_rgba(255,183,0,0.5)]' : 'border-transparent'}
-                    ${!isDisabled && !isSelected ? 'hover:border-white/30' : ''}
-                  `}
-                >
-                  <img
-                    src={buildChampionIconUrl(champion.image.full.split('.')[0])}
-                    alt={champion.name}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/70 p-[0.5vmin]">
-                    <p className="text-white text-[1vmin] font-bold truncate">
-                      {champion.name}
-                    </p>
-                  </div>
-                  {isBanned && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-red-500/20">
-                      <X className="w-[3vmin] h-[3vmin] text-red-500" />
-                    </div>
-                  )}
-                </motion.div>
-              );
-            })}
+      {/* BANS SECTION */}
+      <div className="absolute top-[5vmin] left-0 right-0 flex justify-between px-[4vmin] z-40">
+        {/* Blue Bans (Left side, starts from lateral/left) */}
+        <div className="flex flex-col gap-[0.5vmin] items-start">
+          <span className="text-[1vmin] font-bold text-white/20 uppercase tracking-[0.3em] ml-[0.5vmin]">Bans</span>
+          <div className="flex flex-row gap-[1vmin]">
+            {[...Array(5)].map((_, i) => renderBanSlot(draft?.blue_bans[i] || null, 'blue', i))}
           </div>
         </div>
-
-        {/* TIME VERMELHO (DIREITA) */}
-        <div className="w-[20vmin] bg-gradient-to-l from-red-500/5 to-transparent border-l border-white/5 p-[2vmin]">
-          <h3 className="text-red-400 text-[2vmin] font-black uppercase tracking-widest mb-[2vmin]">
-            TIME VERMELHO
-          </h3>
-          
-          {/* BANS */}
-          <div className="mb-[3vmin]">
-            <p className="text-white/30 text-[1vmin] font-bold mb-[1vmin]">BANS</p>
-            <div className="flex flex-wrap gap-[0.5vmin]">
-              {draft?.red_bans.map((ban, i) => renderSlot(ban, i + 1, 'ban'))}
-            </div>
-          </div>
-
-          {/* PICKS */}
-          <div>
-            <p className="text-white/30 text-[1vmin] font-bold mb-[1vmin]">PICKS</p>
-            <div className="flex flex-col gap-[1vmin]">
-              {draft?.red_picks.map((pick, i) => (
-                <div key={i} className="flex items-center justify-end gap-[1vmin]">
-                  <span className="text-white/40 text-[1.2vmin]">
-                    {pick ? champions[pick]?.name : 'Vazio'}
-                  </span>
-                  {renderSlot(pick, i + 7, 'pick')}
-                </div>
-              ))}
-            </div>
+        {/* Red Bans (Right side, starts from middle/left) */}
+        <div className="flex flex-col gap-[0.5vmin] items-start">
+          <span className="text-[1vmin] font-bold text-white/20 uppercase tracking-[0.3em] ml-[0.5vmin]">Bans</span>
+          <div className="flex flex-row gap-[1vmin]">
+            {[...Array(5)].map((_, i) => renderBanSlot(draft?.red_bans[i] || null, 'red', i))}
           </div>
         </div>
       </div>
 
-      {/* MODAL DE CONFIRMAÇÃO */}
-      <AnimatePresence>
-        {selectedChamp && isMeuTurno() && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50"
-            onClick={() => setSelectedChamp(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="bg-[#0d0d0d] border border-white/10 rounded-2xl p-[4vmin] max-w-[50vmin]"
-              onClick={(e) => e.stopPropagation()}
+      {/* MAIN CONTENT AREA */}
+      <div className="absolute inset-0 flex items-center justify-between px-[4vmin] pointer-events-none z-30">
+        
+        {/* LEFT PANEL - BLUE TEAM */}
+        <div className="w-[25vmin] flex flex-col items-center gap-[1.5vmin] pointer-events-auto">
+          <div className="relative">
+            <motion.div 
+              initial={false}
+              animate={draft?.current_team === 'blue' ? { 
+                boxShadow: ["0 0 20px rgba(8,8,255,0.3)", "0 0 60px rgba(8,8,255,0.9)", "0 0 20px rgba(8,8,255,0.3)"],
+                borderColor: ["#0000FF", "#4d4dFF", "#0000FF"]
+              } : { 
+                boxShadow: "0 0 0px rgba(0,0,0,0)",
+                borderColor: "rgba(255,255,255,0.1)"
+              }}
+              transition={draft?.current_team === 'blue' ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
+              className={`w-[18vmin] h-[18vmin] rounded-full border-[0.6vmin] overflow-hidden bg-black transition-all duration-300 ${draft?.current_team === 'blue' ? 'border-[#0000FF]' : 'border-white/10'}`}
             >
-              <div className="flex items-center gap-[3vmin]">
-                <img
-                  src={buildChampionIconUrl(selectedChamp.image.full.split('.')[0])}
-                  alt={selectedChamp.name}
-                  className="w-[10vmin] h-[10vmin] rounded border-2 border-[#FFB700]"
+              {selectedChamp && draft?.current_team === 'blue' ? (
+                <img 
+                  src={buildChampionIconUrl(selectedChamp.id, version)} 
+                  alt={selectedChamp.name} 
+                  className="w-full h-full object-cover scale-125"
+                  referrerPolicy="no-referrer"
                 />
-                <div>
-                  <h3 className="text-[2.5vmin] font-black text-white">
-                    {selectedChamp.name}
-                  </h3>
-                  <p className="text-white/40 text-[1.5vmin]">
-                    {selectedChamp.title}
-                  </p>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center opacity-10">
+                   <Ban className="w-[10vmin] h-[10vmin] text-white" />
                 </div>
-              </div>
-
-              <p className="text-white/60 text-[1.5vmin] text-center my-[3vmin]">
-                Confirmar {draft?.current_phase === 'ban' ? 'BAN' : 'PICK'}?
-              </p>
-
-              <div className="flex gap-[2vmin]">
-                <button
-                  onClick={() => setSelectedChamp(null)}
-                  className="flex-1 py-[1.5vmin] rounded-xl bg-white/5 border border-white/10 text-white/60 font-black uppercase tracking-widest hover:bg-white/10"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={confirmarAcao}
-                  className={`
-                    flex-1 py-[1.5vmin] rounded-xl font-black uppercase tracking-widest
-                    ${draft?.current_phase === 'ban'
-                      ? 'bg-red-500 hover:bg-red-600 text-white shadow-[0_0_20px_rgba(239,68,68,0.3)]'
-                      : 'bg-green-500 hover:bg-green-600 text-white shadow-[0_0_20px_rgba(34,197,94,0.3)]'
-                    }
-                  `}
-                >
-                  <Check className="inline w-[2vmin] h-[2vmin] mr-[1vmin]" />
-                  Confirmar
-                </button>
-              </div>
+              )}
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
 
-      {/* AVISO DE NÃO É SEU TURNO */}
+          <div className="text-center">
+            <p className={`text-[1.5vmin] font-semibold uppercase tracking-widest transition-colors duration-300 mb-[0.5vmin] ${draft?.current_team === 'blue' ? 'text-[#0000FF]' : 'text-white/20'}`}>
+              {draft?.current_phase === 'ban' ? 'Banindo' : 'Escolhendo'}
+            </p>
+            <h2 className="text-[2.5vmin] font-bold text-white uppercase tracking-tighter">
+              {selectedChamp && draft?.current_team === 'blue' ? selectedChamp.name : jogadorAtual.blue}
+            </h2>
+            
+            {/* NOTIFICAÇÃO DE AGUARDE TURNO */}
+            {possoJogar && meuTime === 'blue' && !isMeuTurno() && draft?.status === 'ongoing' && (
+              <div className="mt-[1vmin] px-[2vmin] py-[0.5vmin] bg-blue-500/10 border border-blue-500/20 rounded-full">
+                <p className="text-blue-400 text-[1.2vmin] font-bold">⏳ Aguarde seu turno...</p>
+              </div>
+            )}
+            
+            {/* NOTIFICAÇÃO DE VEZ DO TIME */}
+            {draft?.current_team === 'blue' && draft?.status === 'ongoing' && (
+              <div className={`mt-[1vmin] px-[2vmin] py-[0.5vmin] rounded-full border ${
+                draft.current_phase === 'ban' 
+                  ? 'bg-red-500/10 border-red-500/20 text-red-400' 
+                  : 'bg-green-500/10 border-green-500/20 text-green-400'
+              }`}>
+                <p className="text-[1.2vmin] font-bold uppercase">
+                  VEZ DO TIME AZUL
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT PANEL - RED TEAM */}
+        <div className="w-[25vmin] flex flex-col items-center gap-[1.5vmin] pointer-events-auto">
+          <div className="relative">
+            <motion.div 
+              initial={false}
+              animate={draft?.current_team === 'red' ? { 
+                boxShadow: ["0 0 20px rgba(255,0,0,0.3)", "0 0 60px rgba(255,0,0,0.9)", "0 0 20px rgba(255,0,0,0.3)"],
+                borderColor: ["#FF0000", "#FF4d4d", "#FF0000"]
+              } : { 
+                boxShadow: "0 0 0px rgba(0,0,0,0)",
+                borderColor: "rgba(255,255,255,0.1)"
+              }}
+              transition={draft?.current_team === 'red' ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
+              className={`w-[18vmin] h-[18vmin] rounded-full border-[0.6vmin] overflow-hidden bg-black transition-all duration-300 ${draft?.current_team === 'red' ? 'border-[#FF0000]' : 'border-white/10'}`}
+            >
+               {selectedChamp && draft?.current_team === 'red' ? (
+                <img 
+                  src={buildChampionIconUrl(selectedChamp.id, version)} 
+                  alt={selectedChamp.name} 
+                  className="w-full h-full object-cover scale-125"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center opacity-10">
+                  <Ban className="w-[10vmin] h-[10vmin] text-white" />
+                </div>
+              )}
+            </motion.div>
+          </div>
+
+          <div className="text-center">
+            <p className={`text-[1.5vmin] font-semibold uppercase tracking-widest transition-colors duration-300 mb-[0.5vmin] ${draft?.current_team === 'red' ? 'text-[#FF0000]' : 'text-white/20'}`}>
+              {draft?.current_phase === 'ban' ? 'Banindo' : 'Escolhendo'}
+            </p>
+            <h2 className="text-[2.5vmin] font-black text-white uppercase tracking-tighter">
+              {selectedChamp && draft?.current_team === 'red' ? selectedChamp.name : jogadorAtual.red}
+            </h2>
+            
+            {/* NOTIFICAÇÃO DE AGUARDE TURNO */}
+            {possoJogar && meuTime === 'red' && !isMeuTurno() && draft?.status === 'ongoing' && (
+              <div className="mt-[1vmin] px-[2vmin] py-[0.5vmin] bg-blue-500/10 border border-blue-500/20 rounded-full">
+                <p className="text-blue-400 text-[1.2vmin] font-bold">⏳ Aguarde seu turno...</p>
+              </div>
+            )}
+            
+            {/* NOTIFICAÇÃO DE VEZ DO TIME */}
+            {draft?.current_team === 'red' && draft?.status === 'ongoing' && (
+              <div className={`mt-[1vmin] px-[2vmin] py-[0.5vmin] rounded-full border ${
+                draft.current_phase === 'ban' 
+                  ? 'bg-red-500/10 border-red-500/20 text-red-400' 
+                  : 'bg-green-500/10 border-green-500/20 text-green-400'
+              }`}>
+                <p className="text-[1.2vmin] font-bold uppercase">
+                  VEZ DO TIME VERMELHO
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* CENTER - CHAMPION GRID */}
+      <div className="absolute top-[12vmin] left-1/2 -translate-x-1/2 w-full max-w-[85vmin] flex flex-col gap-[1vmin] z-40">
+        {/* SEARCH BAR */}
+        <div className="flex justify-end mb-[0.5vmin]">
+          <div className="relative w-[30vmin]">
+            <Search className="absolute left-[1vmin] top-1/2 -translate-y-1/2 w-[1.8vmin] h-[1.8vmin] text-[#c89b3c]" />
+            <input 
+              type="text" 
+              placeholder="Buscar campeão..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-black/80 border border-[#c89b3c]/40 rounded-sm py-[0.8vmin] pl-[3.5vmin] pr-[1.5vmin] text-[1.6vmin] outline-none focus:border-[#c89b3c] transition-colors placeholder:text-[#c89b3c]/30 text-white"
+            />
+          </div>
+        </div>
+
+        {/* GRID (6x4 layout) */}
+        <div className="grid grid-cols-6 gap-x-[0.8vmin] gap-y-[1.2vmin] max-h-[58vmin] overflow-y-auto custom-scrollbar pr-[1vmin]">
+          {filteredChampions.map(champ => {
+            const isBanned = draft?.blue_bans.includes(champ.id) || draft?.red_bans.includes(champ.id);
+            const isPicked = draft?.blue_picks.includes(champ.id) || draft?.red_picks.includes(champ.id);
+            const isSelected = selectedChamp?.id === champ.id;
+            const isDisabled = isBanned || isPicked;
+
+            return (
+              <div 
+                key={champ.id}
+                onClick={() => handleChampionClick(champ)}
+                className="flex flex-col items-center gap-[0.3vmin] cursor-pointer group"
+              >
+                <div className={`
+                  relative w-[11.5vmin] h-[11.5vmin] border-2 transition-all duration-200
+                  ${isSelected ? 'border-[#c89b3c] scale-110 shadow-[0_0_15px_rgba(200,155,60,0.5)]' : 'border-white/10 group-hover:border-white/40'}
+                  ${isDisabled ? 'opacity-30 grayscale cursor-not-allowed' : ''}
+                `}>
+                  <img 
+                    src={buildChampionIconUrl(champ.id, version)} 
+                    alt={champ.name} 
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  {isBanned && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-grayscale overflow-hidden">
+                      <div className="absolute inset-0 border-t-4 border-red-600/80 -rotate-45 origin-center scale-150" />
+                    </div>
+                  )}
+                </div>
+                <span className={`text-[1.2vmin] font-bold truncate w-full text-center ${isSelected ? 'text-[#c89b3c]' : 'text-white/60'}`}>
+                  {champ.name}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* FOOTER PICKS & ACTION BUTTON */}
+      <div className="absolute bottom-[2vmin] left-0 right-0 flex items-end justify-between px-[4vmin] z-50">
+         {/* Blue Picks */}
+         <div className="flex flex-col gap-[1vmin]">
+            <span className="text-[1.2vmin] font-bold text-[#0000FF]/60 uppercase tracking-[0.3em] ml-[0.5vmin]">PICKS AZUL</span>
+            <div className="flex gap-[0.8vmin]">
+              {[...Array(5)].map((_, i) => renderPickSlot(draft?.blue_picks[i] || null, 'blue', i))}
+            </div>
+         </div>
+
+          {/* Action Button (Centered) */}
+          <div className="mb-[2vmin] relative">
+            <button 
+              disabled={!selectedChamp || !isMeuTurno()}
+              onClick={confirmarAcao}
+              className={`
+                relative px-[12vmin] py-[2.5vmin] font-bold text-[2.2vmin] tracking-[0.15em] uppercase transition-all duration-300 group
+                ${selectedChamp && isMeuTurno() 
+                  ? 'text-[#f0e6d2] hover:text-white cursor-pointer' 
+                  : 'text-white/20 cursor-not-allowed'}
+              `}
+            >
+              <div className="absolute inset-0 z-0">
+                <svg 
+                  viewBox="0 0 300 80" 
+                  preserveAspectRatio="none" 
+                  className="w-full h-full drop-shadow-[0_0_15px_rgba(200,155,60,0.1)]"
+                >
+                  <path 
+                    d="M40,5 L260,5 L295,60 Q150,85 5,60 Z" 
+                    fill="none" 
+                    stroke={selectedChamp && isMeuTurno() ? "#c89b3c" : "rgba(255,255,255,0.1)"} 
+                    strokeWidth="2"
+                  />
+                  <path 
+                    d="M42,7 L258,7 L292,59 Q150,83 8,59 Z" 
+                    fill={selectedChamp && isMeuTurno() ? "#1e2328" : "#0a0a0a"} 
+                    className="transition-colors duration-300 group-hover:fill-[#252a30]"
+                  />
+                </svg>
+              </div>
+              
+              <span className="relative z-10 drop-shadow-md">
+                {draft?.current_phase === 'ban' ? 'BANIR' : 'CONFIRMAR'}
+              </span>
+            </button>
+          </div>
+
+          {/* Red Picks */}
+          <div className="flex flex-col gap-[1vmin] items-end">
+            <span className="text-[1.2vmin] font-bold text-[#FF0000]/60 uppercase tracking-[0.3em] mr-[0.5vmin]">PICKS VERMELHO</span>
+            <div className="flex gap-[0.8vmin]">
+              {[...Array(5)].map((_, i) => renderPickSlot(draft?.red_picks[i] || null, 'red', i))}
+            </div>
+          </div>
+      </div>
+
+      {/* AVISO DE ESPECTADOR (GLOBAL) */}
       {!possoJogar && (
-        <div className="absolute bottom-[2vmin] left-1/2 -translate-x-1/2 px-[4vmin] py-[1.5vmin] bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-          <p className="text-yellow-400 text-[1.5vmin] font-bold">
-            👀 Você está como espectador. Apenas os {modo === '1v1' || modo === 'aram' ? 'Midlaners' : 'Junglers'} podem banir/pickar.
+        <div className="absolute bottom-[12vmin] left-1/2 -translate-x-1/2 px-[3vmin] py-[0.8vmin] bg-yellow-500/10 border border-yellow-500/20 rounded-full z-50">
+          <p className="text-yellow-400 text-[1.2vmin] font-bold">
+            👀 Você está como espectador
           </p>
         </div>
       )}
 
-      {possoJogar && !isMeuTurno() && draft?.status === 'ongoing' && (
-        <div className="absolute bottom-[2vmin] left-1/2 -translate-x-1/2 px-[4vmin] py-[1.5vmin] bg-blue-500/10 border border-blue-500/20 rounded-xl">
-          <p className="text-blue-400 text-[1.5vmin] font-bold">
-            ⏳ Aguarde seu turno...
-          </p>
-        </div>
-      )}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(200, 155, 60, 0.05); }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c89b3c; border-radius: 2px; }
+      `}</style>
     </div>
   );
 };

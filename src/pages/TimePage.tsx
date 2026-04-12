@@ -79,15 +79,16 @@ function eloDisplay(elo: string): string {
 }
 
 // ── ModalBase ──────────────────────────────────────────────────────────────
-const ModalBase = ({ onClose, children, gradientFrom, title }: {
+const ModalBase = ({ onClose, children, gradientFrom, title, transparent = false }: {
   onClose: () => void;
   children: React.ReactNode;
   gradientFrom?: string;
   title?: string;
+  transparent?: boolean;
 }) => (
   <motion.div
     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-    className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+    className={`fixed inset-0 z-[999] flex items-center justify-center p-4 ${!transparent ? 'bg-black/80 backdrop-blur-sm' : ''}`}
     onClick={onClose}
   >
     <motion.div
@@ -98,11 +99,9 @@ const ModalBase = ({ onClose, children, gradientFrom, title }: {
       className="relative w-full max-w-lg rounded-2xl overflow-hidden"
       style={gradientFrom ? {
         border: `3px solid ${gradientFrom}`,
-        background: 'rgba(13, 13, 13, 0.6)',
         boxShadow: `0 0 45px -10px ${gradientFrom}60`,
         backdropFilter: 'blur(16px)'
       } : {
-        background: 'rgba(13, 13, 13, 0.6)',
         border: '1px solid rgba(255,255,255,0.1)',
         backdropFilter: 'blur(16px)'
       }}
@@ -116,7 +115,8 @@ const ModalBase = ({ onClose, children, gradientFrom, title }: {
           </button>
         </div>
       )}
-      <div className="p-6">{children}</div>
+      {/* ✅ TROQUE p-6 por p-0 ou remova completamente */}
+      <div className="p-0">{children}</div>
     </motion.div>
   </motion.div>
 );
@@ -225,7 +225,6 @@ const InvitePlayerModal = ({ team, onClose }: { team: TimeData; onClose: () => v
   return (
     <ModalBase onClose={onClose}>
       <div className="rounded-2xl overflow-hidden relative" style={{
-        background: 'rgba(13, 13, 13, 0.6)',
         border: `3px solid ${team.gradientFrom}`,
         boxShadow: `0 0 35px -10px ${team.gradientFrom}70`,
         backdropFilter: 'blur(16px)'
@@ -392,7 +391,6 @@ const RequestEntryModal = ({ team, onClose }: { team: TimeData; onClose: () => v
   return (
     <ModalBase onClose={onClose}>
       <div className="rounded-2xl overflow-hidden relative" style={{
-        background: 'rgba(13, 13, 13, 0.6)',
         border: `3px solid ${team.gradientFrom}`,
         boxShadow: `0 0 35px -10px ${team.gradientFrom}70`,
         backdropFilter: 'blur(16px)'
@@ -499,7 +497,6 @@ const EditTeamModal = ({
       <div
         className="rounded-2xl overflow-hidden relative"
         style={{ 
-          background: 'rgba(13, 13, 13, 0.6)',
           border: `3px solid ${theme.from}`,
           boxShadow: `0 0 35px -10px ${theme.from}70`,
           backdropFilter: 'blur(16px)'
@@ -696,7 +693,6 @@ const ManageLineupModal = ({
       <div
         className="rounded-2xl overflow-hidden relative"
         style={{ 
-          background: 'rgba(13, 13, 13, 0.6)',
           border: '3px solid transparent',
           backgroundImage: `linear-gradient(rgba(13, 13, 13, 0.6), rgba(13, 13, 13, 0.6)) padding-box, linear-gradient(135deg, ${team.gradientFrom}, ${team.gradientTo || team.gradientFrom}) border-box`,
           boxShadow: `0 0 35px -10px ${team.gradientFrom}70`,

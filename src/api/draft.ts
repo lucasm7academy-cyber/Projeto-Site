@@ -10,14 +10,16 @@ export async function buscarDraftDaSala(salaId: number): Promise<DraftState | nu
     .from('drafts')
     .select('*')
     .eq('sala_id', salaId)
-    .maybeSingle();
+    .order('created_at', { ascending: false })  // ✅ Pega o mais recente
+    .limit(1)  // ✅ Limita a 1 resultado
+    .maybeSingle();  // ✅ Não quebra se não encontrar
 
   if (error) {
     console.error('Erro ao buscar draft:', error);
     return null;
   }
 
-  return data as DraftState;
+  return data as DraftState | null;
 }
 
 // ============================================================
@@ -144,27 +146,20 @@ export async function pickarCampeao(
 // VERIFICAR SE USUÁRIO PODE CONTROLAR DRAFT
 // ============================================================
 // Role que controla o draft conforme o modo
-function roleDoDraft(modo: string): string {
-  return modo === '1v1' || modo === 'aram' ? 'MID' : 'JG';
-}
-
 export async function podeControlarDraft(
   salaId: number,
   userId: string,
   modo: string
-): Promise<{ pode: boolean; team: 'blue' | 'red' | null }> {
-  const role = roleDoDraft(modo);
-
-  const { data, error } = await supabase
+): Promise<{ pode: boolean; team: 'blue' | 'red' | null; nome: string }> {
+  
+  const { data: jogadorSala, error } = await supabase
     .from('sala_jogadores')
     .select('role, is_time_a')
     .eq('sala_id', salaId)
     .eq('user_id', userId)
-    .eq('role', role)
-    .maybeSingle();
+    .eq('role', modo === '1v1' ? 'MID' : 'JG');
 
-  if (error || !data) {
-    // Verifica se é o criador da sala
+  if (error || !jogadorSala || jogadorSala.length === 0) {
     const { data: sala } = await supabase
       .from('salas')
       .select('criador_id')
@@ -172,16 +167,55 @@ export async function podeControlarDraft(
       .single();
 
     if (sala?.criador_id === userId) {
-      return { pode: true, team: null }; // Criador pode controlar qualquer time
+      const nome = await buscarNomeJogador(userId);
+      return { pode: true, team: null, nome };
     }
 
-    return { pode: false, team: null };
+    return { pode: false, team: null, nome: 'Espectador' };
   }
+
+  const nome = await buscarNomeJogador(userId);
 
   return {
     pode: true,
-    team: data.is_time_a ? 'blue' : 'red',
+    team: jogadorSala[0].is_time_a ? 'blue' : 'red',  // ✅ CORRIGIDO
+    nome
   };
+}
+
+// ============================================================
+// FUNÇÃO AUXILIAR: BUSCAR NOME DO JOGADOR
+// ============================================================
+async function buscarNomeJogador(userId: string): Promise<string> {
+  try {
+    // Buscar na tabela contas_riot
+    const { data: contaRiot } = await supabase
+      .from('contas_riot')
+      .select('riot_id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (contaRiot?.riot_id) {
+      // Extrai só o nome antes do #
+      return contaRiot.riot_id.split('#')[0];
+    }
+
+    // Fallback: buscar no profiles
+    const { data: perfil } = await supabase
+      .from('profiles')
+      .select('username, full_name')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (perfil) {
+      return perfil.username || perfil.full_name || 'Jogador';
+    }
+
+    return 'Jogador';
+  } catch (error) {
+    console.error('Erro ao buscar nome do jogador:', error);
+    return 'Jogador';
+  }
 }
 
 // ============================================================
