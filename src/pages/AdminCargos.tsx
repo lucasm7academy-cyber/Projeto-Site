@@ -28,15 +28,9 @@ export default function AdminCargos() {
 
   const carregarUsuarios = async () => {
     try {
-      // 1. Buscar todos os usuários com cargos
+      // Chamar função RPC que já faz o join com profiles
       const { data, error } = await supabase
-        .from('admin_usuarios')
-        .select(`
-          id,
-          user_id,
-          cargo
-        `)
-        .order('cargo', { ascending: false });
+        .rpc('get_usuarios_com_cargos');
 
       if (error) {
         console.error('Erro ao carregar usuários:', error);
@@ -51,32 +45,13 @@ export default function AdminCargos() {
         return;
       }
 
-      // 2. Extrair user_ids e buscar emails da tabela profiles
-      const userIds = data.map(d => d.user_id);
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', userIds);
-
-      if (profilesError) {
-        console.error('Erro ao carregar profiles:', profilesError);
-      }
-
-      // 3. Criar mapa user_id -> email
-      const emailMap: Record<string, string> = {};
-      if (profiles) {
-        profiles.forEach(profile => {
-          emailMap[profile.id] = profile.email || 'Sem email';
-        });
-      }
-
-      // 4. Converter dados para formato esperado
-      const usuariosComDados = (data ?? []).map(admin => {
+      // Converter dados para formato esperado
+      const usuariosComDados = (data ?? []).map((item: any) => {
         return {
-          id: admin.id,
-          user_id: admin.user_id,
-          email: emailMap[admin.user_id] || 'Sem email',
-          cargo: admin.cargo as CargoAdmin,
+          id: item.id,
+          user_id: item.user_id,
+          email: item.email || 'Sem email',
+          cargo: item.cargo as CargoAdmin,
         };
       });
 
