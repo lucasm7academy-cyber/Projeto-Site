@@ -6,14 +6,17 @@ import {
   Crown, UserPlus, Check, ArrowLeft, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Trash2, Zap, RefreshCw, Clock, CheckCircle, Send
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { buildProfileIconUrl } from '../api/riot';
+import { buildProfileIconUrl, buildChampionIconUrl, getDDRVersion } from '../api/riot';
 import {
   buscarSalaCompleta, buscarSalaVinculadaDoUsuario, deletarSala,
   type Sala, type JogadorNaSala, type OpcaoVotoResultado,
 } from '../api/salas';
+import { buscarDraftDaSala } from '../api/draft';
+import { buscarCargoUsuario } from '../api/users';
 import { SalaRegrasProvider, useSalaRegras } from '../contexts/SalaRegras';
 import { getModoInfo, getMPointsInfo, ROLE_CONFIG, type Role } from '../components/partidas/salaConfig';
 import { DraftRoom } from '../components/draft/DraftRoom';  // ✅ NOVO IMPORT
+import { type DraftState, type Champion } from '../components/draft/draftTypes';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPO DO USUÁRIO
@@ -95,8 +98,8 @@ export default function SalaPage() {
       }
 
       const sala = await buscarSalaCompleta(salaId);
-      if (!sala || sala.estado === 'encerrada') {
-        setErro('Sala não encontrada ou já encerrada.');
+      if (!sala) {
+        setErro('Sala não encontrada.');
         setLoading(false);
         return;
       }
@@ -465,8 +468,49 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const [motivoDenuncia, setMotivoDenuncia] = useState('');
   const [descricaoDenuncia, setDescricaoDenuncia] = useState('');
   const [enviandoDenuncia, setEnviandoDenuncia]   = useState(false);
+  const [draftFinalizado, setDraftFinalizado] = useState<DraftState | null>(null);
+  const [champions, setChampions] = useState<Record<string, Champion>>({});
+  const [versionDDR, setVersionDDR] = useState('15.8.1');
+  const [visualizandoPartida, setVisualizandoPartida] = useState(false);
+  const [cargoUsuario, setCargoUsuario] = useState<'proprietario' | 'admin' | 'streamer' | 'coach' | 'jogador'>('jogador');
   const vagasEmAndamento                    = useRef<Set<string>>(new Set());
-  
+
+  // Carregar cargo do usuário
+  useEffect(() => {
+    if (usuarioAtual) {
+      const carregarCargo = async () => {
+        const cargo = await buscarCargoUsuario(usuarioAtual.id);
+        setCargoUsuario(cargo ?? 'jogador');
+      };
+      carregarCargo();
+    }
+  }, [usuarioAtual?.id]);
+
+  // Carregar draft quando estiver em aguardando_inicio, em_partida ou encerrada
+  useEffect(() => {
+    if (sala && (sala.estado === 'aguardando_inicio' || sala.estado === 'em_partida' || sala.estado === 'encerrada') && sala.draft_id) {
+      const carregarDraft = async () => {
+        const draft = await buscarDraftDaSala(sala.id);
+        if (draft) {
+          setDraftFinalizado(draft);
+          // Carregar champions
+          try {
+            const version = await getDDRVersion();
+            setVersionDDR(version);
+            const response = await fetch(
+              `https://ddragon.leagueoflegends.com/cdn/${version}/data/pt_BR/champion.json`
+            );
+            const data = await response.json();
+            setChampions(data.data);
+          } catch (error) {
+            console.error('Erro ao carregar champions:', error);
+          }
+        }
+      };
+      carregarDraft();
+    }
+  }, [sala?.id, sala?.draft_id, sala?.estado]);
+
   if (loading || !sala) {
     return (
       <div className="flex-1 bg-[#050505] flex items-center justify-center">
@@ -486,6 +530,40 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         onDraftFinalizado={acaoDraftFinalizado}
         onSair={acaoSairDaSala}
       />
+    );
+  }
+
+  // Mostrar visualização de partida encerrada
+  if (sala.estado === 'encerrada' && !visualizandoPartida) {
+    const nomeVencedor = sala.vencedor === 'A'
+      ? (sala.timeANome ?? 'Equipe Azul')
+      : sala.vencedor === 'B'
+      ? (sala.timeBNome ?? 'Equipe Vermelha')
+      : 'Empate';
+
+    return (
+      <div className="flex-1 bg-[#050505] flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-[4vmin] text-center">
+          <div className="flex flex-col items-center gap-[1vmin]">
+            <p className="text-[2vmin] font-black text-white/80 uppercase tracking-widest">Partida Finalizada</p>
+            <p className="text-[1.2vmin] text-white/40">
+              {sala.vencedor ? `Vencedor: ${nomeVencedor}` : 'Resultado pendente'}
+            </p>
+          </div>
+          <button
+            onClick={() => setVisualizandoPartida(true)}
+            className="px-[4vmin] py-[2vmin] bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:bg-blue-600/30 hover:border-blue-500/60 rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all"
+          >
+            Visualizar Partida
+          </button>
+          <button
+            onClick={acaoSairDaSala}
+            className="px-[4vmin] py-[2vmin] bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 hover:border-white/20 rounded-lg font-black text-[1.2vmin] uppercase tracking-widest transition-all"
+          >
+            Voltar
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -613,6 +691,58 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </div>
       )}
 
+      {/* Picks em AGUARDANDO_INICIO — acima do overlay */}
+      {sala.estado === 'aguardando_inicio' && jogadorAtual && draftFinalizado && (
+        <div className="absolute top-[14vmin] left-1/2 -translate-x-1/2 w-[85vmin] z-50 text-center">
+          <div className="grid grid-cols-2 gap-[4vmin]">
+            {/* Time Azul */}
+            <div className="flex flex-col items-center">
+              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
+              <div className="flex flex-wrap gap-[1vmin] justify-center">
+                {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
+                  const champ = champions[champId];
+                  return champ ? (
+                    <div
+                      key={idx}
+                      className="w-[6vmin] h-[6vmin] rounded-lg border border-blue-500/50 bg-blue-500/15 flex items-center justify-center overflow-hidden hover:border-blue-500/80 transition-colors"
+                      title={champ.name}
+                    >
+                      <img
+                        src={buildChampionIconUrl(champId, versionDDR)}
+                        alt={champ.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+            {/* Time Vermelho */}
+            <div className="flex flex-col items-center">
+              <span className="text-[1.2vmin] font-black text-red-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
+              <div className="flex flex-wrap gap-[1vmin] justify-center">
+                {draftFinalizado.red_picks.map((champId: string, idx: number) => {
+                  const champ = champions[champId];
+                  return champ ? (
+                    <div
+                      key={idx}
+                      className="w-[6vmin] h-[6vmin] rounded-lg border border-red-500/50 bg-red-500/15 flex items-center justify-center overflow-hidden hover:border-red-500/80 transition-colors"
+                      title={champ.name}
+                    >
+                      <img
+                        src={buildChampionIconUrl(champId, versionDDR)}
+                        alt={champ.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Overlay de Aguardando Início — CÓDIGO DO LOL (SÓ APARECE APÓS O DRAFT) */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
         <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/50 z-50 p-[8vmin] text-center">
@@ -620,38 +750,45 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             Draft Finalizado!
           </p>
           <p className="text-[1.2vmin] text-white/30 uppercase tracking-widest mb-[2vmin]">
-            Entre na sala usando o código abaixo
+            {cargoUsuario === 'jogador' ? 'Aguardando partida...' : 'Entre na sala usando o código abaixo'}
           </p>
-          {sala.codigoPartida ? (
-            <div className="flex flex-col items-center gap-[1.5vmin]">
-              <div className="px-[3vmin] py-[1.5vmin] bg-black/40 border border-[#FFB700]/20 rounded-xl">
-                <span className="text-[2.2vmin] font-black text-[#FFB700] tracking-[0.2em] select-all">
-                  {sala.codigoPartida}
-                </span>
+          {cargoUsuario !== 'jogador' ? (
+            sala.codigoPartida ? (
+              <div className="flex flex-col items-center gap-[1.5vmin]">
+                <div className="px-[3vmin] py-[1.5vmin] bg-black/40 border border-[#FFB700]/20 rounded-xl">
+                  <span className="text-[2.2vmin] font-black text-[#FFB700] tracking-[0.2em] select-all">
+                    {sala.codigoPartida}
+                  </span>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(sala.codigoPartida!);
+                    setCopiadoCodigo(true);
+                    setTimeout(() => setCopiadoCodigo(false), 2000);
+                  }}
+                  className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
+                    copiadoCodigo
+                      ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                      : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
+                  }`}
+                >
+                  {copiadoCodigo
+                    ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
+                    : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
+                  }
+                </button>
               </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(sala.codigoPartida!);
-                  setCopiadoCodigo(true);
-                  setTimeout(() => setCopiadoCodigo(false), 2000);
-                }}
-                className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
-                  copiadoCodigo
-                    ? 'bg-green-500/20 border-green-500/40 text-green-400'
-                    : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
-                }`}
-              >
-                {copiadoCodigo
-                  ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
-                  : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
-                }
-              </button>
-            </div>
+            ) : (
+              <div className="px-[4vmin] py-[2vmin]">
+                <span className="text-[2vmin] text-white/20 italic">Atribuindo código...</span>
+              </div>
+            )
           ) : (
-            <div className="px-[4vmin] py-[2vmin]">
-              <span className="text-[2vmin] text-white/20 italic">Atribuindo código...</span>
+            <div className="px-[4vmin] py-[2vmin] rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <span className="text-[1.3vmin] text-blue-300 italic">Código visível apenas para Proprietário, Admin, Streamer e Coach</span>
             </div>
           )}
+
           {/* Separador + botão de denúncia */}
           <div className="w-[20vmin] h-px bg-white/10 my-[2.5vmin]" />
           <button
@@ -664,6 +801,59 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           <span className="text-[0.9vmin] text-white/20 font-bold uppercase tracking-widest mt-[1vmin]">
             {formatTime(timerCancelamento)} restantes
           </span>
+        </div>
+      )}
+
+      {/* Picks em EM_PARTIDA — mostra os picks selecionados durante o draft */}
+      {sala.estado === 'em_partida' && draftFinalizado && (
+        <div className="absolute top-[14vmin] right-[4vmin] w-[35vmin] z-40 text-center bg-black/40 border border-white/10 rounded-lg p-[2vmin]">
+          <p className="text-[1vmin] font-black text-white/60 uppercase tracking-widest mb-[1.5vmin]">Picks do Draft</p>
+          <div className="grid grid-cols-2 gap-[2vmin]">
+            {/* Time Azul */}
+            <div className="flex flex-col items-center">
+              <span className="text-[0.9vmin] font-black text-blue-300 uppercase mb-[0.8vmin]">Azul</span>
+              <div className="flex flex-wrap gap-[0.6vmin] justify-center">
+                {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
+                  const champ = champions[champId];
+                  return champ ? (
+                    <div
+                      key={idx}
+                      className="w-[4vmin] h-[4vmin] rounded border border-blue-500/40 bg-blue-500/10 flex items-center justify-center overflow-hidden"
+                      title={champ.name}
+                    >
+                      <img
+                        src={buildChampionIconUrl(champId, versionDDR)}
+                        alt={champ.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+            {/* Time Vermelho */}
+            <div className="flex flex-col items-center">
+              <span className="text-[0.9vmin] font-black text-red-300 uppercase mb-[0.8vmin]">Vermelho</span>
+              <div className="flex flex-wrap gap-[0.6vmin] justify-center">
+                {draftFinalizado.red_picks.map((champId: string, idx: number) => {
+                  const champ = champions[champId];
+                  return champ ? (
+                    <div
+                      key={idx}
+                      className="w-[4vmin] h-[4vmin] rounded border border-red-500/40 bg-red-500/10 flex items-center justify-center overflow-hidden"
+                      title={champ.name}
+                    >
+                      <img
+                        src={buildChampionIconUrl(champId, versionDDR)}
+                        alt={champ.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  ) : null;
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -806,7 +996,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         <HextechActionBar
           sala={sala}
           usuarioAtual={usuarioAtual}
-          jogadorAtual={jogadorAtual}
+          jogadorAtual={jogadorAtual || undefined}
           acaoConfirmarPresenca={acaoConfirmarPresenca}
           acaoSairDaSala={acaoSairDaSala}
           acaoSolicitarFinalizacao={() => setShowEncerrar(true)}
@@ -893,6 +1083,112 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                 className="flex-1 py-[2vmin] rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-black uppercase tracking-widest text-[1.2vmin] transition-colors shadow-[0_0_20px_rgba(249,115,22,0.3)]"
               >
                 Confirmar
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Modal de Visualização de Partida Encerrada */}
+      {visualizandoPartida && sala.estado === 'encerrada' && draftFinalizado && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-[2vmin] overflow-auto">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            className="bg-[#0d0d0d] border border-white/10 rounded-2xl p-[4vmin] max-w-[85vmin] w-full shadow-2xl"
+          >
+            <div className="flex items-center justify-between mb-[3vmin]">
+              <h3 className="text-[2.5vmin] font-black text-white uppercase tracking-tight">Resultado da Partida</h3>
+              <button
+                onClick={() => setVisualizandoPartida(false)}
+                className="p-[1vmin] hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <X className="w-[2vmin] h-[2vmin] text-white/60" />
+              </button>
+            </div>
+
+            {/* Resultado */}
+            {sala.vencedor && (
+              <div className="mb-[3vmin] p-[2vmin] rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                <p className="text-[1.3vmin] font-black text-yellow-400 uppercase tracking-widest">
+                  🏆 Vencedor: {sala.vencedor === 'A' ? (sala.timeANome ?? 'Equipe Azul') : sala.vencedor === 'B' ? (sala.timeBNome ?? 'Equipe Vermelha') : 'Empate'}
+                </p>
+              </div>
+            )}
+
+            {/* Jogadores e Picks */}
+            <div className="grid grid-cols-2 gap-[3vmin]">
+              {/* Time Azul */}
+              <div className="flex flex-col gap-[1.5vmin]">
+                <h4 className="text-[1.5vmin] font-black text-blue-400 uppercase tracking-widest">Time Azul</h4>
+                {timeA.map((jogador, idx) => (
+                  <div key={idx} className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-[1.5vmin]">
+                    <p className="text-[1.1vmin] font-black text-blue-300 mb-[0.8vmin]">
+                      {jogador.nome} - {ROLE_CONFIG[jogador.role as Role]?.label}
+                    </p>
+                    {draftFinalizado.blue_picks && draftFinalizado.blue_picks.length > 0 && (
+                      <div className="flex gap-[0.8vmin] flex-wrap">
+                        {draftFinalizado.blue_picks.map((champId: string, pickIdx: number) => {
+                          const champ = champions[champId];
+                          return champ ? (
+                            <div
+                              key={pickIdx}
+                              className="w-[4vmin] h-[4vmin] rounded border border-blue-500/40 bg-blue-500/10 flex items-center justify-center overflow-hidden"
+                              title={champ.name}
+                            >
+                              <img
+                                src={buildChampionIconUrl(champId, versionDDR)}
+                                alt={champ.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Time Vermelho */}
+              <div className="flex flex-col gap-[1.5vmin]">
+                <h4 className="text-[1.5vmin] font-black text-red-400 uppercase tracking-widest">Time Vermelho</h4>
+                {timeB.map((jogador, idx) => (
+                  <div key={idx} className="bg-red-500/10 border border-red-500/30 rounded-lg p-[1.5vmin]">
+                    <p className="text-[1.1vmin] font-black text-red-300 mb-[0.8vmin]">
+                      {jogador.nome} - {ROLE_CONFIG[jogador.role as Role]?.label}
+                    </p>
+                    {draftFinalizado.red_picks && draftFinalizado.red_picks.length > 0 && (
+                      <div className="flex gap-[0.8vmin] flex-wrap">
+                        {draftFinalizado.red_picks.map((champId: string, pickIdx: number) => {
+                          const champ = champions[champId];
+                          return champ ? (
+                            <div
+                              key={pickIdx}
+                              className="w-[4vmin] h-[4vmin] rounded border border-red-500/40 bg-red-500/10 flex items-center justify-center overflow-hidden"
+                              title={champ.name}
+                            >
+                              <img
+                                src={buildChampionIconUrl(champId, versionDDR)}
+                                alt={champ.name}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-[2vmin] mt-[3vmin]">
+              <button
+                onClick={() => setVisualizandoPartida(false)}
+                className="flex-1 py-[2vmin] rounded-xl bg-white/5 hover:bg-white/10 text-white/60 font-black uppercase tracking-widest text-[1.2vmin] transition-colors"
+              >
+                Fechar
               </button>
             </div>
           </motion.div>

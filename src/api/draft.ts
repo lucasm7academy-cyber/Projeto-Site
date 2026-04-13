@@ -219,6 +219,23 @@ async function buscarNomeJogador(userId: string): Promise<string> {
 }
 
 // ============================================================
+// DELETAR DRAFT
+// ============================================================
+export async function deletarDraft(draftId: string): Promise<boolean> {
+  const { error } = await supabase
+    .from('drafts')
+    .delete()
+    .eq('id', draftId);
+
+  if (error) {
+    console.error('Erro ao deletar draft:', error);
+    return false;
+  }
+
+  return true;
+}
+
+// ============================================================
 // INSCREVER NO REALTIME DO DRAFT
 // ============================================================
 export function inscreverDraftRealtime(
