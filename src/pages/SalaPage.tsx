@@ -699,7 +699,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           <div className="grid grid-cols-2 gap-[4vmin]">
             {/* Time Azul */}
             <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
+              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[0.8vmin]">Picks</span>
               <div className="flex flex-wrap gap-[1vmin] justify-center">
                 {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
                   const champ = champions[champId];
@@ -854,11 +854,11 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Picks em AGUARDANDO_INICIO para cargos especiais */}
       {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && draftFinalizado && (
-        <div className="absolute top-[14vmin] left-[5vmin] right-[5vmin] z-40 text-center">
+        <div className="absolute top-[11vmin] left-[5vmin] right-[5vmin] z-40 text-center">
           <div className="grid grid-cols-2 gap-[4vmin]">
             {/* Time Azul */}
             <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
+              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[0.8vmin]">Picks</span>
               <div className="flex flex-wrap gap-[1vmin] justify-center">
                 {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
                   const champ = champions[champId];
@@ -906,11 +906,11 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Picks em EM_PARTIDA — mostra os picks selecionados durante o draft */}
       {sala.estado === 'em_partida' && draftFinalizado && (
-        <div className="absolute top-[14vmin] left-[5vmin] right-[5vmin] z-40 text-center">
+        <div className="absolute top-[11vmin] left-[5vmin] right-[5vmin] z-40 text-center">
           <div className="grid grid-cols-2 gap-[4vmin]">
             {/* Time Azul */}
             <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
+              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[0.8vmin]">Picks</span>
               <div className="flex flex-wrap gap-[1vmin] justify-center">
                 {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
                   const champ = champions[champId];
