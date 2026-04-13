@@ -479,7 +479,9 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   useEffect(() => {
     if (usuarioAtual) {
       const carregarCargo = async () => {
+        console.log('[SalaPage] Buscando cargo para usuário:', usuarioAtual.id);
         const cargo = await buscarCargoUsuario(usuarioAtual.id);
+        console.log('[SalaPage] Cargo obtido:', cargo);
         setCargoUsuario(cargo ?? 'jogador');
       };
       carregarCargo();
@@ -752,7 +754,11 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           <p className="text-[1.2vmin] text-white/30 uppercase tracking-widest mb-[2vmin]">
             {cargoUsuario === 'jogador' ? 'Aguardando partida...' : 'Entre na sala usando o código abaixo'}
           </p>
-          {(cargoUsuario !== 'jogador' || !!jogadorAtual) ? (
+          {(() => {
+            const canSeeCode = cargoUsuario !== 'jogador' || !!jogadorAtual;
+            console.log('[SalaPage] Verificando visibilidade do código:', {cargoUsuario, jogadorAtual: !!jogadorAtual, canSeeCode});
+            return canSeeCode;
+          })() ? (
             sala.codigoPartida ? (
               <div className="flex flex-col items-center gap-[1.5vmin]">
                 <div className="px-[3vmin] py-[1.5vmin] bg-black/40 border border-[#FFB700]/20 rounded-xl">
@@ -801,6 +807,48 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           <span className="text-[0.9vmin] text-white/20 font-bold uppercase tracking-widest mt-[1vmin]">
             {formatTime(timerCancelamento)} restantes
           </span>
+        </div>
+      )}
+
+      {/* Overlay para cargos especiais que não estão na partida */}
+      {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/50 z-50 p-[8vmin] text-center">
+          <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
+            Draft Finalizado!
+          </p>
+          <p className="text-[1.2vmin] text-white/30 uppercase tracking-widest mb-[2vmin]">
+            Entre na sala usando o código abaixo
+          </p>
+          {sala.codigoPartida ? (
+            <div className="flex flex-col items-center gap-[1.5vmin]">
+              <div className="px-[3vmin] py-[1.5vmin] bg-black/40 border border-[#FFB700]/20 rounded-xl">
+                <span className="text-[2.2vmin] font-black text-[#FFB700] tracking-[0.2em] select-all">
+                  {sala.codigoPartida}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(sala.codigoPartida!);
+                  setCopiadoCodigo(true);
+                  setTimeout(() => setCopiadoCodigo(false), 2000);
+                }}
+                className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
+                  copiadoCodigo
+                    ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                    : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
+                }`}
+              >
+                {copiadoCodigo
+                  ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
+                  : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
+                }
+              </button>
+            </div>
+          ) : (
+            <div className="px-[4vmin] py-[2vmin]">
+              <span className="text-[2vmin] text-white/20 italic">Atribuindo código...</span>
+            </div>
+          )}
         </div>
       )}
 

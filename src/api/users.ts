@@ -15,12 +15,17 @@ export async function buscarCargoUsuario(userId: string): Promise<CargoAdmin | n
       .eq('user_id', userId)
       .maybeSingle();
 
+    console.log(`[buscarCargoUsuario] userId: ${userId}, data:`, data, 'error:', error);
+
     if (error || !data) {
       // Usuário não é admin — retorna 'jogador' como padrão
+      console.log(`[buscarCargoUsuario] Retornando 'jogador' por padrão`);
       return 'jogador';
     }
 
-    return (data.cargo as CargoAdmin) ?? 'jogador';
+    const cargo = (data.cargo as CargoAdmin) ?? 'jogador';
+    console.log(`[buscarCargoUsuario] Cargo encontrado: ${cargo}`);
+    return cargo;
   } catch (error) {
     console.error('Erro ao buscar cargo do usuário:', error);
     return 'jogador';
