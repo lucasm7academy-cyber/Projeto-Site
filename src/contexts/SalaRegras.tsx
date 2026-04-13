@@ -144,15 +144,16 @@ interface SalaRegrasContextType {
   podeExecutar: (acao: string) => boolean;
 
   // Ações
-  acaoEntrarVaga:           (role: string, isTimeA: boolean) => Promise<void>;
-  acaoSairVaga:             () => Promise<void>;
-  acaoConfirmarPresenca:    () => Promise<void>;
-  acaoDenunciarNaoIniciou:  (motivo: string, descricao?: string) => Promise<void>;
-  acaoVotarResultado:       (opcao: OpcaoVotoResultado) => Promise<void>;
-  acaoSolicitarFinalizacao: () => Promise<void>;
-  acaoDraftFinalizado:      () => Promise<void>;
-  acaoApagarSala:           () => Promise<void>;
-  acaoSairDaSala:           () => void;
+  acaoEntrarVaga:               (role: string, isTimeA: boolean) => Promise<void>;
+  acaoSairVaga:                 () => Promise<void>;
+  acaoConfirmarPresenca:        () => Promise<void>;
+  acaoDenunciarNaoIniciou:      (motivo: string, descricao?: string) => Promise<void>;
+  acaoVotarResultado:           (opcao: OpcaoVotoResultado) => Promise<void>;
+  acaoSolicitarFinalizacao:     () => Promise<void>;
+  acaoDraftFinalizado:          () => Promise<void>;
+  acaoCancelarDraftPorTimeout:  (userIdQueFalhou: string) => Promise<void>;
+  acaoApagarSala:               () => Promise<void>;
+  acaoSairDaSala:               () => void;
 }
 
 const SalaRegrasContext = createContext<SalaRegrasContextType | null>(null);
@@ -628,6 +629,71 @@ export function SalaRegrasProvider({
     await transicionarEstado(salaId, 'aguardando_inicio');
   }, [sala, salaId]);
 
+  const acaoCancelarDraftPorTimeout = useCallback(async (userIdQueFalhou: string) => {
+    if (!sala || !sala.draft_id) return;
+
+    try {
+      console.log(`[SalaRegras] Cancelando draft por timeout. Usuário que falhou: ${userIdQueFalhou}`);
+
+      // 1. Deletar o draft
+      const { error: erroDraft } = await supabase
+        .from('drafts')
+        .delete()
+        .eq('id', sala.draft_id);
+
+      if (erroDraft) {
+        console.error('[SalaRegras] Erro ao deletar draft:', erroDraft);
+      } else {
+        console.log('[SalaRegras] Draft deletado com sucesso');
+      }
+
+      // 2. Limpar draft_id na sala e voltar para 'preenchendo'
+      const { error: erroSala } = await supabase
+        .from('salas')
+        .update({
+          draft_id: null,
+          estado: 'preenchendo'
+        })
+        .eq('id', salaId);
+
+      if (erroSala) {
+        console.error('[SalaRegras] Erro ao atualizar sala:', erroSala);
+      } else {
+        console.log('[SalaRegras] Sala resetada para preenchendo');
+      }
+
+      // 3. Expulsar o jogador da vaga (manter na sala)
+      const { error: erroExpulsao } = await supabase
+        .from('sala_jogadores')
+        .delete()
+        .eq('sala_id', salaId)
+        .eq('user_id', userIdQueFalhou);
+
+      if (erroExpulsao) {
+        console.error('[SalaRegras] Erro ao expulsar jogador:', erroExpulsao);
+      } else {
+        console.log('[SalaRegras] Jogador expulso da vaga:', userIdQueFalhou);
+      }
+
+      // 4. Desconfirmar TODOS os jogadores (inclusive os restantes)
+      const { error: erroDesconfirma, data: dataDesconfirma } = await supabase
+        .from('sala_jogadores')
+        .update({ confirmado: false })
+        .eq('sala_id', salaId)
+        .select();
+
+      if (erroDesconfirma) {
+        console.error('[SalaRegras] Erro ao desconfirmar jogadores:', erroDesconfirma);
+      } else {
+        console.log('[SalaRegras] Jogadores desconfirmados:', dataDesconfirma?.length || 0);
+      }
+
+      console.log('[SalaRegras] Draft cancelado e sala resetada com sucesso');
+    } catch (error) {
+      console.error('[SalaRegras] Erro geral ao cancelar draft por timeout:', error);
+    }
+  }, [sala, salaId]);
+
   const acaoApagarSala = useCallback(async () => {
     if (!sala) return;
     await deletarSala(salaId);
@@ -672,6 +738,7 @@ export function SalaRegrasProvider({
     acaoVotarResultado,
     acaoSolicitarFinalizacao,
     acaoDraftFinalizado,
+    acaoCancelarDraftPorTimeout,
     acaoApagarSala,
     acaoSairDaSala,
   };

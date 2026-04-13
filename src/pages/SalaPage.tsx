@@ -458,7 +458,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     podeExecutar,
     acaoEntrarVaga, acaoSairVaga, acaoConfirmarPresenca,
     acaoDenunciarNaoIniciou, acaoVotarResultado, acaoSolicitarFinalizacao,
-    acaoDraftFinalizado, acaoApagarSala, acaoSairDaSala,
+    acaoDraftFinalizado, acaoCancelarDraftPorTimeout, acaoApagarSala, acaoSairDaSala,
   } = useSalaRegras();
 
   const [copiado, setCopiado]               = useState(false);
@@ -530,6 +530,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         usuarioId={usuarioAtual.id}
         modo={sala.modo}
         onDraftFinalizado={acaoDraftFinalizado}
+        onPickTimeout={acaoCancelarDraftPorTimeout}
         onSair={acaoSairDaSala}
       />
     );
@@ -685,9 +686,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         <CentralDisplay />
       </div>
 
-      {/* Overlay de Confirmação — fora do círculo para ficar acima dos slots (z-50) */}
+      {/* Blur overlay de Confirmação (atrás) — z-20 */}
       {sala.estado === 'confirmacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm z-50 pointer-events-none">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+      )}
+
+      {/* Overlay de Confirmação (conteúdo, frente) — z-50 */}
+      {sala.estado === 'confirmacao' && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 pointer-events-none">
           <span className="text-[15vmin] font-black text-white tabular-nums leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">{timerConfirmacao}</span>
           <span className="text-[2vmin] font-black text-white/40 uppercase tracking-[1em] mt-6">CONFIRME AGORA</span>
         </div>
@@ -745,9 +751,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </div>
       )}
 
-      {/* Overlay de Aguardando Início — CÓDIGO DO LOL (SÓ APARECE APÓS O DRAFT) */}
+      {/* Blur overlay (atrás) — z-20 */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/50 z-50 p-[8vmin] text-center">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+      )}
+
+      {/* Conteúdo e botões (frente) — z-50 */}
+      {sala.estado === 'aguardando_inicio' && jogadorAtual && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
             Draft Finalizado!
           </p>
@@ -810,9 +821,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </div>
       )}
 
-      {/* Overlay para cargos especiais que não estão na partida */}
+      {/* Blur overlay para cargos especiais (atrás) — z-20 */}
       {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/50 z-50 p-[8vmin] text-center">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+      )}
+
+      {/* Conteúdo e botões para cargos especiais (frente) — z-50 */}
+      {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
             Draft Finalizado!
           </p>
@@ -957,8 +973,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       )}
 
       {/* Overlay de Votação de Resultado */}
+      {/* Blur overlay de Finalização (atrás) — z-20 */}
       {sala.estado === 'finalizacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm z-50 p-[8vmin] text-center">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+      )}
+
+      {/* Overlay de Finalização (conteúdo, frente) — z-50 */}
+      {sala.estado === 'finalizacao' && (
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
           {meuVotoResultado ? (
             /* Já votou — mostra confirmação e botão de sair */
             <div className="flex flex-col items-center gap-[2vmin]">

@@ -29,6 +29,18 @@ export async function criarDraft(
   salaId: number,
   fearlessEnabled: boolean = false
 ): Promise<DraftState | null> {
+  // ✅ LIMPAR QUALQUER DRAFT ANTIGO PRIMEIRO (garante reset completo)
+  const { error: erroDeleteAntigos } = await supabase
+    .from('drafts')
+    .delete()
+    .eq('sala_id', salaId);
+
+  if (erroDeleteAntigos) {
+    console.error('Erro ao deletar drafts antigos:', erroDeleteAntigos);
+  } else {
+    console.log('[criarDraft] Drafts antigos deletados para sala:', salaId);
+  }
+
   const novoDraft = {
     sala_id: salaId,
     blue_bans: [],
@@ -56,10 +68,16 @@ export async function criarDraft(
   }
 
   // Atualizar sala com o draft_id
-  await supabase
+  const { error: erroUpdate } = await supabase
     .from('salas')
     .update({ draft_id: data.id })
     .eq('id', salaId);
+
+  if (erroUpdate) {
+    console.error('Erro ao atualizar sala com draft_id:', erroUpdate);
+  } else {
+    console.log('[criarDraft] Novo draft criado com sucesso:', data.id);
+  }
 
   return data as DraftState;
 }
@@ -95,7 +113,11 @@ export async function banirCampeao(
 ): Promise<boolean> {
   const turnOrder = getTurnOrder(modo);
   const bansKey   = team === 'blue' ? 'blue_bans' : 'red_bans';
-  const novosBans = [...(team === 'blue' ? draft.blue_bans : draft.red_bans), championId];
+
+  // ✅ Se championId for "", é um ban em branco (timeout)
+  // Adiciona NULL ao array para registrar que o ban foi feito (mas sem campeão)
+  const valorBan = championId || null;
+  const novosBans = [...(team === 'blue' ? draft.blue_bans : draft.red_bans), valorBan];
 
   const nextTurn = draft.current_turn + 1;
   const nextInfo = turnOrder[nextTurn];

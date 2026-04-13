@@ -87,7 +87,9 @@ export default function AdminCargos() {
         u.user_id === userId ? { ...u, cargo: novoCargo } : u
       ));
       setEditando(null);
-      setNovosCargos({ ...novosCargos, [userId]: undefined });
+      // Remove a chave ao invés de setar para undefined
+      const { [userId]: _, ...restante } = novosCargos;
+      setNovosCargos(restante);
     } catch (error) {
       console.error('Erro:', error);
     }
@@ -186,7 +188,8 @@ export default function AdminCargos() {
                         <button
                           onClick={() => {
                             setEditando(null);
-                            setNovosCargos({ ...novosCargos, [usuario.user_id]: undefined });
+                            const { [usuario.user_id]: _, ...restante } = novosCargos;
+                            setNovosCargos(restante);
                           }}
                           className="p-2 rounded bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors"
                         >

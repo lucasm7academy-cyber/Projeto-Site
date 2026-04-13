@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
 import { Search, Ban } from 'lucide-react';
 import { FiShieldOff } from 'react-icons/fi';
@@ -25,6 +25,7 @@ interface DraftRoomProps {
   modo: string;
   onDraftFinalizado?: (draft: DraftState) => void;
   onSair?: () => void;
+  onPickTimeout?: (usuarioId: string) => void;
 }
 
 export const DraftRoom: React.FC<DraftRoomProps> = ({
@@ -33,6 +34,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   modo,
   onDraftFinalizado,
   onSair,
+  onPickTimeout,
 }) => {
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [champions, setChampions] = useState<Record<string, Champion>>({});
@@ -45,6 +47,8 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [nomeJogador, setNomeJogador] = useState<string>('');
   const [jogadorAtual, setJogadorAtual] = useState<{ blue: string; red: string }>({ blue: 'Jogador Azul', red: 'Jogador Vermelho' });
+  const [timerFrozen, setTimerFrozen] = useState(false);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ============================================================
   // INITIALIZATION
@@ -88,9 +92,13 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
       }
 
       let draftAtual = await buscarDraftDaSala(salaId);
+      console.log('[DraftRoom] Draft buscado:', draftAtual?.id, 'turn:', draftAtual?.current_turn, 'status:', draftAtual?.status);
+
       if (!draftAtual) {
+        console.log('[DraftRoom] Nenhum draft encontrado, criando novo...');
         draftAtual = await criarDraft(salaId, modo === 'time_vs_time');
       }
+
       setDraft(draftAtual);
 
       if (draftAtual?.status === 'finished') {
@@ -123,9 +131,41 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
       const agora = Date.now();
       const restante = Math.max(0, Math.floor(((draft.timer_end || agora) - agora) / 1000));
       setTimer(restante);
+
+      // ✅ VERIFICAR TIMEOUT A CADA SEGUNDO (aqui dentro!)
+      if (restante === 0 && !timerFrozen && possoJogar && meuTime) {
+        const turnOrder = getTurnOrder(modo);
+        const ehMeuTurno = turnOrder[draft.current_turn]?.team === meuTime;
+        if (ehMeuTurno) {
+          console.log('[DraftRoom] Timer chegou a 0 - iniciando buffer de 2s');
+          setTimerFrozen(true);
+          timeoutRef.current = setTimeout(async () => {
+            if (draft.current_phase === 'ban') {
+              console.log('[DraftRoom] Timeout: Ban automático em branco');
+              await banirCampeao(draft, '', draft.current_team, modo);
+            } else {
+              console.log('[DraftRoom] Timeout: Pick não foi feito, cancelando draft');
+              onPickTimeout?.(usuarioId);
+            }
+            setTimerFrozen(false);
+          }, 2000);
+        }
+      }
     }, 1000);
     return () => clearInterval(interval);
-  }, [draft]);
+  }, [draft, timerFrozen, possoJogar, meuTime, onPickTimeout, usuarioId, modo]);
+
+  // ============================================================
+  // LIMPAR TIMEOUT QUANDO TURNO AVANÇA
+  // ============================================================
+  useEffect(() => {
+    // Quando o turno muda (novo draft chega), resetar timerFrozen
+    setTimerFrozen(false);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  }, [draft?.current_turn]);
 
   // ============================================================
   // ACTIONS
@@ -180,35 +220,39 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const renderBanSlot = (championId: string | null, team: 'blue' | 'red', index: number) => {
     const champion = championId ? champions[championId] : null;
     const turnOrder = getTurnOrder(modo);
-    const isActive = draft?.current_turn !== undefined && 
-                     turnOrder[draft.current_turn]?.team === team && 
+    const isActive = draft?.current_turn !== undefined &&
+                     turnOrder[draft.current_turn]?.team === team &&
                      turnOrder[draft.current_turn]?.phase === 'ban' &&
                      draft.current_phase === 'ban';
-    
+
     const isThisSlotActive = isActive && (
-      team === 'blue' ? draft?.blue_bans.filter(b => b === null).length - 1 === index : 
+      team === 'blue' ? draft?.blue_bans.filter(b => b === null).length - 1 === index :
                         draft?.red_bans.filter(b => b === null).length - 1 === index
     );
+
+    // ✅ Determina se este slot já foi baniado (compara índice com tamanho do array)
+    const bansFeitos = team === 'blue' ? draft?.blue_bans.length || 0 : draft?.red_bans.length || 0;
+    const jaBaniuEsteSlot = index < bansFeitos;
 
     return (
       <div key={index} className="flex flex-col items-center gap-[0.3vmin]">
         <div className={`
           relative w-[5vmin] h-[5vmin] border bg-black/60 flex items-center justify-center overflow-hidden transition-all duration-300
-          ${champion ? 'border-red-600/80 shadow-[0_0_8px_rgba(220,38,38,0.3)]' : 'border-white/15'}
+          ${jaBaniuEsteSlot ? 'border-red-600/80 shadow-[0_0_8px_rgba(220,38,38,0.3)]' : 'border-white/15'}
           ${isThisSlotActive ? 'border-[#c89b3c] shadow-[0_0_12px_rgba(200,155,60,0.5)] scale-110' : ''}
         `}>
           {champion ? (
             <>
-              <img 
-                src={buildChampionIconUrl(champion.id, version)} 
-                alt={champion.name} 
+              <img
+                src={buildChampionIconUrl(champion.id, version)}
+                alt={champion.name}
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 border-t-2 border-red-600/80 -rotate-45 origin-center scale-150" />
             </>
           ) : (
-            <div className="opacity-20">
+            <div className={jaBaniuEsteSlot ? 'opacity-40' : 'opacity-15'}>
               <Ban className="w-[3vmin] h-[3vmin] text-white" />
             </div>
           )}
