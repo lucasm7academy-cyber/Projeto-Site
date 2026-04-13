@@ -906,19 +906,18 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Picks em EM_PARTIDA — mostra os picks selecionados durante o draft */}
       {sala.estado === 'em_partida' && draftFinalizado && (
-        <div className="absolute top-[14vmin] right-[4vmin] w-[35vmin] z-40 text-center bg-black/40 border border-white/10 rounded-lg p-[2vmin]">
-          <p className="text-[1vmin] font-black text-white/60 uppercase tracking-widest mb-[1.5vmin]">Picks do Draft</p>
-          <div className="grid grid-cols-2 gap-[2vmin]">
+        <div className="absolute top-[14vmin] left-1/2 -translate-x-1/2 w-[85vmin] z-40 text-center">
+          <div className="grid grid-cols-2 gap-[4vmin]">
             {/* Time Azul */}
             <div className="flex flex-col items-center">
-              <span className="text-[0.9vmin] font-black text-blue-300 uppercase mb-[0.8vmin]">Azul</span>
-              <div className="flex flex-wrap gap-[0.6vmin] justify-center">
+              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
+              <div className="flex flex-wrap gap-[1vmin] justify-center">
                 {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
                   const champ = champions[champId];
                   return champ ? (
                     <div
                       key={idx}
-                      className="w-[4vmin] h-[4vmin] rounded border border-blue-500/40 bg-blue-500/10 flex items-center justify-center overflow-hidden"
+                      className="w-[6vmin] h-[6vmin] rounded-lg border border-blue-500/50 bg-blue-500/15 flex items-center justify-center overflow-hidden hover:border-blue-500/80 transition-colors"
                       title={champ.name}
                     >
                       <img
@@ -933,14 +932,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             </div>
             {/* Time Vermelho */}
             <div className="flex flex-col items-center">
-              <span className="text-[0.9vmin] font-black text-red-300 uppercase mb-[0.8vmin]">Vermelho</span>
-              <div className="flex flex-wrap gap-[0.6vmin] justify-center">
+              <span className="text-[1.2vmin] font-black text-red-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
+              <div className="flex flex-wrap gap-[1vmin] justify-center">
                 {draftFinalizado.red_picks.map((champId: string, idx: number) => {
                   const champ = champions[champId];
                   return champ ? (
                     <div
                       key={idx}
-                      className="w-[4vmin] h-[4vmin] rounded border border-red-500/40 bg-red-500/10 flex items-center justify-center overflow-hidden"
+                      className="w-[6vmin] h-[6vmin] rounded-lg border border-red-500/50 bg-red-500/15 flex items-center justify-center overflow-hidden hover:border-red-500/80 transition-colors"
                       title={champ.name}
                     >
                       <img
