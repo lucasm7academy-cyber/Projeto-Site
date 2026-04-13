@@ -20,6 +20,7 @@ import Jogar from "./pages/Jogar";
 import TimePage from "./pages/TimePage";
 import SalaPage from "./pages/SalaPage";
 import Admin from "./pages/Admin";
+import AdminCargos from "./pages/AdminCargos";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -80,6 +81,7 @@ export default function App() {
             <Route path="/times/:id" element={<PrivateRoute><TimePage /></PrivateRoute>} />
             <Route path="/sala/:id"  element={<PrivateRoute><SalaPage /></PrivateRoute>} />
             <Route path="/admin"    element={<PrivateRoute><Admin /></PrivateRoute>} />
+            <Route path="/admin/cargos"    element={<PrivateRoute><AdminCargos /></PrivateRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>
