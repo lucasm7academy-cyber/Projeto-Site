@@ -854,7 +854,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Picks em AGUARDANDO_INICIO para cargos especiais */}
       {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && draftFinalizado && (
-        <div className="absolute top-[14vmin] left-1/2 -translate-x-1/2 w-[85vmin] z-40 text-center">
+        <div className="absolute top-[14vmin] left-[5vmin] right-[5vmin] z-40 text-center">
           <div className="grid grid-cols-2 gap-[4vmin]">
             {/* Time Azul */}
             <div className="flex flex-col items-center">
@@ -906,7 +906,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Picks em EM_PARTIDA — mostra os picks selecionados durante o draft */}
       {sala.estado === 'em_partida' && draftFinalizado && (
-        <div className="absolute top-[14vmin] left-1/2 -translate-x-1/2 w-[85vmin] z-40 text-center">
+        <div className="absolute top-[14vmin] left-[5vmin] right-[5vmin] z-40 text-center">
           <div className="grid grid-cols-2 gap-[4vmin]">
             {/* Time Azul */}
             <div className="flex flex-col items-center">
