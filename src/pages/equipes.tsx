@@ -86,28 +86,10 @@ const ModalBase = ({ onClose, children, gradientFrom, title }: {
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92, y: 20 }}
       transition={{ type: 'spring', stiffness: 340, damping: 28 }}
-      className="relative w-full max-w-lg rounded-2xl overflow-hidden"
-      style={gradientFrom ? {
-        border: `3px solid ${gradientFrom}`,
-        background: 'rgba(13, 13, 13, 1)',
-        boxShadow: `0 0 45px -10px ${gradientFrom}60`,
-        backdropFilter: 'blur(16px)'
-      } : {
-        background: 'rgba(13, 13, 13, 1)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(16px)'
-      }}
+      className="relative w-full max-w-lg"
       onClick={(e: React.MouseEvent) => e.stopPropagation()}
     >
-      {title && (
-        <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-          <h2 className="text-white font-black text-lg tracking-tight uppercase">{title}</h2>
-          <button onClick={onClose} className="text-white/20 hover:text-white transition-colors">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      )}
-      <div className="p-6">{children}</div>
+      {children}
     </motion.div>
   </motion.div>
 );
@@ -612,8 +594,7 @@ const CreateTeamModal = ({
     <ModalBase onClose={onClose}>
       <div
         className="rounded-2xl overflow-hidden relative"
-        style={{ 
-          background: 'rgba(13, 13, 13, 1)',
+        style={{
           border: '3px solid transparent',
           backgroundImage: `linear-gradient(rgba(13, 13, 13, 1), rgba(13, 13, 13, 1)) padding-box, linear-gradient(135deg, ${theme.from}, ${theme.to}) border-box`,
           boxShadow: `0 0 35px -10px ${theme.from}70`,
@@ -663,20 +644,19 @@ const CreateTeamModal = ({
               <label className="text-white/40 text-xs uppercase tracking-widest">Logo do Time</label>
               <div className="flex items-center gap-3">
                 <div
-                  className="w-16 h-16 rounded-xl flex items-center justify-center relative overflow-hidden bg-white/5 shrink-0"
-                  style={{
-                    border: `2px solid ${theme.from}`,
-                    background: 'rgba(13, 13, 13, 1)',
-                    boxShadow: `0 0 12px -4px ${theme.from}80`,
-                    backdropFilter: 'blur(8px)'
-                  }}
-                >
+                className="w-16 h-16 rounded-xl flex items-center justify-center relative overflow-hidden shrink-0"
+                style={{
+                  border: `2px solid ${theme.from}`,
+                  boxShadow: `0 0 12px -4px ${theme.from}80`,
+                  backdropFilter: 'blur(8px)'
+                }}
+              >
                 {logoPreview ? (
-                    <img src={logoPreview} alt="Logo" className="w-full h-full object-cover relative z-10" />
-                  ) : (
-                    <Upload className="w-6 h-6 text-white/30 relative z-10" />
-                  )}
-                </div>
+                  <img src={logoPreview} alt="Logo" className="w-full h-full object-cover relative z-10" />
+                ) : (
+                  <Upload className="w-6 h-6 text-white/30 relative z-10" />
+                )}
+              </div>
                 
                 <label className="flex-1 cursor-pointer">
                   <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={handleLogoUpload} />

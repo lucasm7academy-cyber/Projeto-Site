@@ -5,7 +5,13 @@
       "Bash(python3 -:*)",
       "Bash(grep -l \"drafts\\\\|draft\" \"c:/Users/78787/Documents/PROJETO SITE\"/*.sql)",
       "Bash(ls \"c:/Users/78787/Documents/PROJETO SITE\"/*.sql)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "WebFetch(domain:abacatepay.com)",
+      "WebSearch",
+      "WebFetch(domain:docs.cakto.com.br)",
+      "WebFetch(domain:www.mercadopago.com.br)",
+      "Bash(rm -rf supabase/functions/create-payment)",
+      "Bash(rm -rf supabase/functions/cakto-webhook)"
     ]
   }
 }

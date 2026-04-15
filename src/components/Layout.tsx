@@ -25,6 +25,7 @@ import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSound } from '../hooks/useSound';
 import NotificationBell from './NotificationBell';
+import DepositModal from './DepositModal';
 
 const getImageUrl = (fileName: string) => {
   const { data } = supabase.storage
@@ -47,6 +48,7 @@ export default function Layout() {
   const [contaRiot, setContaRiot] = useState<any>(null);
   const [balance, setBalance] = useState(0);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [hideLinkPrompt, setHideLinkPrompt] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const navigateWithSound = (path: string) => {
@@ -153,9 +155,7 @@ export default function Layout() {
     : null;
 
   return (
-    <div 
-      className="min-h-screen bg-[#0a0b0f]"
-    >
+    <div className="min-h-screen bg-[#050506]">
       {/* Header Responsivo */}
       <header className="bg-black/60 backdrop-blur-sm fixed top-0 z-50 w-full h-14 md:h-16 border-b border-primary shadow-lg">
         {/* Linha amarela na base */}
@@ -246,8 +246,8 @@ export default function Layout() {
               <span className="sm:hidden">Carteira</span>
             </button>
 
-            {/* Notification Bell - apenas desktop */}
-            <div className="hidden sm:block">
+            {/* Notification Bell */}
+            <div>
               <NotificationBell />
             </div>
 
@@ -360,89 +360,157 @@ export default function Layout() {
       {/* Layout Principal */}
       <div className="flex h-full pt-14 md:pt-16">
         {/* Sidebar Desktop */}
-        <aside className={`${sidebarWidths} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex flex-col py-4 md:py-6 z-40 overflow-y-auto h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 hidden lg:flex`}>
-          {contaRiot ? (
-            <Link 
-              to="/perfil"
-              onClick={() => playSound('click')}
-              className="px-3 mb-6 md:mb-8 flex flex-col items-center group/profile cursor-pointer"
-            >
-              <div className="relative mb-3 md:mb-4">
-                <div className="absolute inset-0 rounded-full bg-primary/10 blur-lg transition-all"></div>
-                <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-primary shadow-[0_0_15px_rgba(255,255,0,0.2)] transition-all">
-                  <img 
-                    alt="User Profile Avatar" 
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover/profile:scale-110" 
-                    src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
-                    onError={(e) => {
-                      e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
-                    }}
-                  />
-                </div>
-                <div className="absolute bottom-1 right-1 w-3.5 h-3.5 md:w-4 md:h-4 bg-green-500 border-2 border-[#050505] rounded-full z-10 shadow-[0_0_8px_rgba(34,197,94,0.3)]"></div>
-              </div>
-              <h3 className="text-white font-headline font-bold text-xs text-center transition-colors truncate max-w-full px-2">
-                {contaRiot.riot_id}
-              </h3>
-            </Link>
-          ) : (
-            <div className="px-3 mb-6 md:mb-8">
+        <aside className={`${sidebarWidths} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex flex-col z-[50] h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 hidden lg:flex overflow-visible`}>
+          {/* Top Section - Profile/Link (Non-scrolling to allow balloon overflow) */}
+          <div className="py-6 px-3 overflow-visible relative z-[60]">
+            {contaRiot ? (
               <Link
-                to="/vincular"
+                to="/perfil"
                 onClick={() => playSound('click')}
-                className="block w-full"
+                className="flex flex-col items-center group/profile cursor-pointer"
               >
-                <motion.div
-                  animate={{ 
-                    scale: [1, 1.02, 1],
-                    boxShadow: [
-                      "0 0 0px rgba(255, 255, 0, 0)",
-                      "0 0 12px rgba(255, 255, 0, 0.3)",
-                      "0 0 0px rgba(255, 255, 0, 0)"
-                    ]
-                  }}
-                  transition={{ 
-                    duration: 2,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                  className="bg-primary/100 text-black text-[10px] font-black uppercase tracking-[0.15em] py-3 px-3 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2"
-                >
-                  <Zap className="w-4 h-4" />
-                  <span className="leading-tight text-[10px]">Vincular Conta Riot</span>
-                </motion.div>
-              </Link>
-            </div>
-          )}
-
-          <nav className="flex-1 px-2 space-y-1">
-            {navItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              return (
-                <button 
-                  key={item.label}
-                  onClick={() => navigateWithSound(item.path)}
-                  className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-r-sm font-headline font-bold text-sm uppercase tracking-wider transition-all duration-100 w-full ${
-                    isActive 
-                      ? 'text-primary bg-primary/20 shadow-lg shadow-primary/5' 
-                      : 'text-white/50 hover:text-white hover:bg-white/5'
-                  }`}
-                >
-                  {isActive && (
-                    <motion.div 
-                      layoutId="activeTab"
-                      className="absolute left-0 w-1 h-8 bg-primary rounded"
-                      transition={{ type: "spring", duration: 0.3, bounce: 0.2 }}
+                <div className="relative mb-3 md:mb-4">
+                  <div className="absolute inset-0 rounded-full bg-primary/10 blur-lg transition-all"></div>
+                  <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-primary shadow-[0_0_15px_rgba(255,255,0,0.2)] transition-all">
+                    <img 
+                      alt="User Profile Avatar" 
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover/profile:scale-110" 
+                      src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
+                      onError={(e) => {
+                        e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
+                      }}
                     />
-                  )}
-                  <item.icon className={`w-4 h-4 transition-all ${isActive ? 'text-primary' : 'group-hover:text-primary'}`} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+                  </div>
+                  <div className="absolute bottom-1 right-1 w-3.5 h-3.5 md:w-4 md:h-4 bg-green-500 border-2 border-[#050505] rounded-full z-10 shadow-[0_0_8px_rgba(34,197,94,0.3)]"></div>
+                </div>
+                <h3 className="text-white font-headline font-bold text-xs text-center transition-colors truncate max-w-full px-2">
+                  {contaRiot.riot_id}
+                </h3>
+              </Link>
+            ) : (!hideLinkPrompt && location.pathname !== '/vincular') ? (
+              <div className="relative">
+                {/* Poro Prompt Balloon */}
+                <AnimatePresence>
+                  {user && !contaRiot && !loadingUser && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -20, scale: 0.9 }}
+                      animate={{ 
+                        opacity: 1, 
+                        x: [0, -6, 0],
+                        scale: 1 
+                      }}
+                      transition={{
+                        x: {
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        },
+                        opacity: { duration: 0.3 },
+                        scale: { duration: 0.3 }
+                      }}
+                      exit={{ opacity: 0, x: -20, scale: 0.9 }}
+                      className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 w-52 z-[70]"
+                    >
+                      <div className="bg-[#1a1b23] border-2 border-primary/50 rounded-2xl p-3 shadow-[0_0_30px_rgba(255,255,0,0.25)] relative flex items-center gap-3">
+                        {/* Poro Image */}
+                        <motion.img
+                          src="/images/poro1.png"
+                          alt="Poro"
+                          className="w-14 h-14 object-contain shrink-0"
+                          animate={{
+                            scale: [1, 1.15, 1, 1.15, 1, 1],
+                          }}
+                          transition={{
+                            duration: 2.5,
+                            times: [0, 0.1, 0.2, 0.3, 0.4, 1],
+                            repeat: Infinity,
+                            ease: "easeInOut"
+                          }}
+                        />
 
-          <div className="px-3 mt-auto space-y-3 pt-6">
+                        {/* Text with border */}
+                        <div className="text-left">
+                          <p
+                            className="text-[10px] font-black uppercase tracking-tighter text-white leading-tight"
+                            style={{
+                              textShadow: '1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000'
+                            }}
+                          >
+                            Ei, você ainda não<br/>
+                            vinculou sua conta.
+                          </p>
+                        </div>
+
+                        {/* Arrow pointing left */}
+                        <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-[#1a1b23] border-l-2 border-b-2 border-primary/50 rotate-45 z-0"></div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <Link
+                  to="/vincular"
+                  onClick={() => {
+                    playSound('click');
+                    setHideLinkPrompt(true);
+                  }}
+                  className="block w-full relative z-10"
+                >
+                  <motion.div
+                    animate={{
+                      y: [0, 3, 0],
+                      boxShadow: [
+                        "0 4px 0 0 rgba(0,0,0,0.3)",
+                        "0 1px 0 0 rgba(0,0,0,0.3)",
+                        "0 4px 0 0 rgba(0,0,0,0.3)"
+                      ]
+                    }}
+                    transition={{
+                      duration: 1.5,
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                    className="bg-primary text-black text-[10px] font-black uppercase tracking-[0.15em] py-4 px-3 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2 border-b-4 border-black/20"
+                  >
+                    <span className="leading-tight text-[10px]">Vincular Conta Riot</span>
+                  </motion.div>
+                </Link>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Middle Section - Navigation (Scrollable) */}
+          <div className="flex-1 overflow-y-auto px-2 custom-scrollbar">
+            <nav className="space-y-1">
+              {navItems.map((item) => {
+                const isActive = location.pathname === item.path;
+                return (
+                  <button 
+                    key={item.label}
+                    onClick={() => navigateWithSound(item.path)}
+                    className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-r-sm font-headline font-bold text-sm uppercase tracking-wider transition-all duration-100 w-full ${
+                      isActive 
+                        ? 'text-primary bg-primary/20 shadow-lg shadow-primary/5' 
+                        : 'text-white/50 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div 
+                        layoutId="activeTab"
+                        className="absolute left-0 w-1 h-8 bg-primary rounded"
+                        transition={{ type: "spring", duration: 0.3, bounce: 0.2 }}
+                      />
+                    )}
+                    <item.icon className={`w-4 h-4 transition-all ${isActive ? 'text-primary' : 'group-hover:text-primary'}`} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+
+          {/* Bottom Section - Actions (Non-scrolling) */}
+          <div className="px-3 py-6 space-y-3 border-t border-white/5">
             <button 
               onClick={() => playSound('click')}
               className="w-full py-2.5 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-headline text-[10px] uppercase tracking-[0.2em] font-black hover:brightness-110 transition-all shadow-lg shadow-primary/20"
@@ -510,15 +578,90 @@ export default function Layout() {
                       </div>
                     </div>
                   </div>
-                ) : (
+                ) : (!hideLinkPrompt && location.pathname !== '/vincular') ? (
                   <div className="px-5 mb-6">
-                    <Link to="/vincular" onClick={() => setIsMobileMenuOpen(false)}>
-                      <div className="bg-primary/20 border border-primary/40 text-primary text-xs font-bold py-3 rounded-xl text-center">
+                    {/* Poro Prompt Balloon Mobile */}
+                    <AnimatePresence>
+                      {user && !contaRiot && !loadingUser && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10, scale: 0.9 }}
+                          animate={{ 
+                            opacity: 1, 
+                            y: [0, 6, 0],
+                            scale: 1 
+                          }}
+                          transition={{
+                            y: {
+                              duration: 1.5,
+                              repeat: Infinity,
+                              ease: "easeInOut"
+                            },
+                            opacity: { duration: 0.3 },
+                            scale: { duration: 0.3 }
+                          }}
+                          className="mb-4 relative"
+                        >
+                          <div className="bg-[#1a1b23] border-2 border-primary/50 rounded-2xl p-3 shadow-[0_0_20px_rgba(255,255,0,0.15)] relative">
+                            <div className="flex flex-col items-center gap-2">
+                              <motion.img 
+                                src="/images/poro1.png"
+                                alt="Poro"
+                                className="w-14 h-14 object-contain"
+                                animate={{ 
+                                  scale: [1, 1.15, 1, 1.15, 1, 1],
+                                }}
+                                transition={{ 
+                                  duration: 2.5,
+                                  times: [0, 0.1, 0.2, 0.3, 0.4, 1],
+                                  repeat: Infinity,
+                                  ease: "easeInOut"
+                                }}
+                              />
+                              <div className="text-center">
+                                <p 
+                                  className="text-[10px] font-black uppercase tracking-tighter text-white leading-tight"
+                                  style={{ 
+                                    textShadow: '1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000' 
+                                  }}
+                                >
+                                  Ei, você ainda não<br/>
+                                  vinculou sua conta.
+                                </p>
+                              </div>
+                            </div>
+                            {/* Arrow pointing down */}
+                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1b23] border-r-2 border-b-2 border-primary/50 rotate-45 z-0"></div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <Link to="/vincular" onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setHideLinkPrompt(true);
+                      playSound('click');
+                    }}>
+                      <motion.div 
+                        animate={{
+                          y: [0, 2, 0],
+                          boxShadow: [
+                            "0 4px 0 0 rgba(0,0,0,0.3)",
+                            "0 1px 0 0 rgba(0,0,0,0.3)",
+                            "0 4px 0 0 rgba(0,0,0,0.3)"
+                          ]
+                        }}
+                        transition={{
+                          duration: 1.5,
+                          repeat: Infinity,
+                          ease: "easeInOut"
+                        }}
+                        className="bg-primary text-black text-xs font-bold py-3 rounded-xl text-center relative z-10 border-b-4 border-black/20"
+                      >
                         Vincular Conta Riot
-                      </div>
+                      </motion.div>
                     </Link>
                   </div>
-                )}
+                ) : null}
                 
                 <nav className="flex-1 px-3 space-y-1">
                   {navItems.map((item) => (
@@ -573,71 +716,17 @@ export default function Layout() {
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-surface-variant/30 to-background/50 z-0" />
-          <div className={`relative z-10 min-h-full flex flex-col ${isSalaPage ? 'p-0' : 'p-3'}`}>
+          <div className="relative z-10 min-h-full flex flex-col p-0">
             <Outlet />
           </div>
         </main>
       </div>
 
-      {/* Modal de Depósito */}
-      <AnimatePresence>
-        {isDepositModalOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsDepositModalOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-md bg-[#0a0b0f] border border-white/10 rounded-3xl overflow-hidden shadow-2xl mx-4"
-            >
-              <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-b from-primary/10 to-transparent"></div>
-              
-              <div className="relative p-5 md:p-8">
-                <div className="flex justify-between items-center mb-6 md:mb-8">
-                  <div>
-                    <h2 className="text-xl md:text-2xl font-black text-white font-headline italic uppercase tracking-tight">Depositar</h2>
-                    <p className="text-white/40 text-[10px] md:text-xs uppercase tracking-widest mt-1">Adicione saldo à sua conta</p>
-                  </div>
-                  <button 
-                    onClick={() => setIsDepositModalOpen(false)}
-                    className="p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-colors"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                <div className="py-8 md:py-12 flex flex-col items-center justify-center text-center">
-                  <div className="relative mb-4 md:mb-6">
-                    <div className="absolute inset-0 bg-primary/20 blur-xl rounded-full animate-pulse"></div>
-                    <div className="relative w-16 h-16 md:w-20 md:h-20 bg-black/40 border border-primary/30 rounded-2xl flex items-center justify-center shadow-2xl">
-                      <Zap className="text-primary w-8 h-8 md:w-10 md:h-10" />
-                    </div>
-                  </div>
-                  
-                  <h3 className="text-xl md:text-2xl font-black text-white font-headline italic uppercase tracking-tighter mb-2">
-                    EM BREVE
-                  </h3>
-                  <p className="text-white/40 text-[10px] md:text-xs uppercase tracking-[0.2em] font-medium max-w-[200px] md:max-w-[240px] leading-relaxed">
-                    Esta funcionalidade será lançada na próxima atualização.
-                  </p>
-                  
-                  <div className="mt-6 md:mt-8 flex gap-1.5">
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0.2s]"></div>
-                    <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:0.4s]"></div>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Modal de Depósito PIX */}
+      <DepositModal
+        isOpen={isDepositModalOpen}
+        onClose={() => setIsDepositModalOpen(false)}
+      />
     </div>
   );
 }
