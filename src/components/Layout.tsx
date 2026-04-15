@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useSound } from '../hooks/useSound';
 import NotificationBell from './NotificationBell';
 import DepositModal from './DepositModal';
+import VipModal from './VipModal';
 
 const getImageUrl = (fileName: string) => {
   const { data } = supabase.storage
@@ -44,6 +45,7 @@ export default function Layout() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [isVipModalOpen, setIsVipModalOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [contaRiot, setContaRiot] = useState<any>(null);
   const [balance, setBalance] = useState(0);
@@ -511,8 +513,11 @@ export default function Layout() {
 
           {/* Bottom Section - Actions (Non-scrolling) */}
           <div className="px-3 py-6 space-y-3 border-t border-white/5">
-            <button 
-              onClick={() => playSound('click')}
+            <button
+              onClick={() => {
+                playSound('click');
+                setIsVipModalOpen(true);
+              }}
               className="w-full py-2.5 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-headline text-[10px] uppercase tracking-[0.2em] font-black hover:brightness-110 transition-all shadow-lg shadow-primary/20"
             >
               TORNE-SE VIP
@@ -685,8 +690,12 @@ export default function Layout() {
                 </nav>
                 
                 <div className="px-4 mt-auto pt-6 border-t border-white/10">
-                  <button 
-                    onClick={() => playSound('click')}
+                  <button
+                    onClick={() => {
+                      playSound('click');
+                      setIsVipModalOpen(true);
+                      setIsMobileMenuOpen(false);
+                    }}
                     className="w-full py-3 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-headline text-xs uppercase tracking-wider font-black"
                   >
                     TORNE-SE VIP
@@ -726,6 +735,12 @@ export default function Layout() {
       <DepositModal
         isOpen={isDepositModalOpen}
         onClose={() => setIsDepositModalOpen(false)}
+      />
+
+      {/* Modal de Assinatura VIP */}
+      <VipModal
+        isOpen={isVipModalOpen}
+        onClose={() => setIsVipModalOpen(false)}
       />
     </div>
   );

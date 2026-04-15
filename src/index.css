@@ -104,6 +104,16 @@
   }
 }
 
+/* VIP Border Animation */
+@keyframes vip-border-rotate {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
+  }
+}
+
 /* Global scrollbar defaults */
 ::-webkit-scrollbar {
   width: 4px;

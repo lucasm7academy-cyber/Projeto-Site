@@ -28,6 +28,7 @@ import {
   TIER_MAP,
   getIconeUrl,
 } from '../components/players/PlayerDetailModal';
+import { VipCrown } from '../components/VipBadge';
 
 
 // ── Dados Mockados (com times e VIP) ───────────────────────────────────────
@@ -216,7 +217,7 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
   const userIds = contas.map((c: any) => c.user_id);
 
   const [{ data: perfis }, { data: membros }] = await Promise.all([
-    supabase.from('profiles').select('id, lane, lane2').in('id', userIds),
+    supabase.from('profiles').select('id, lane, lane2, is_vip').in('id', userIds),
     supabase.from('time_membros').select('user_id, time_id').in('user_id', userIds),
   ]);
 
@@ -246,7 +247,7 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
       titulos:          0,
       rolePrincipal:    (LANE_MAP[perfil.lane]  ?? 'MID') as Role,
       roleSecundaria:   (LANE_MAP[perfil.lane2] ?? 'RES') as Role,
-      isVIP:            false,
+      isVIP:            perfil.is_vip ?? false,
       isVerified:       true,
       kda:              0,
       csPorMinuto:      0,
@@ -590,23 +591,33 @@ export default function App() {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ delay: (index % 8) * 0.05 }}
-                  className="group relative cursor-pointer p-[1.5px] rounded-[28px] transition-all hover:-translate-y-1"
-                  style={{ background: eloStyle.border }}
+                  className={`group relative cursor-pointer rounded-[28px] transition-all hover:-translate-y-1 ${
+                    jogador.isVIP ? 'p-0.5' : 'p-[1.5px]'
+                  }`}
+                  style={jogador.isVIP ? {} : { background: eloStyle.border }}
                   onClick={() => handleVerPerfil(jogador)}
                 >
-                  <div className="relative rounded-[26.5px] p-5 overflow-hidden"
-                    style={{ 
+                  {/* VIP Border Animation */}
+                  {jogador.isVIP && (
+                    <div
+                      className="absolute inset-0 rounded-[28px]"
+                      style={{
+                        background: 'conic-gradient(from 0deg, #FFB800, #FFD700, #FFB800)',
+                        animation: 'vip-border-rotate 8s linear infinite',
+                      }}
+                    />
+                  )}
+
+                  <div className={`relative rounded-[26.5px] p-5 overflow-hidden ${jogador.isVIP ? 'relative' : ''}`}
+                    style={{
                       background: '#0d0d0d',
+                      zIndex: jogador.isVIP ? 1 : 'auto',
                     }}
                   >
-                    {/* VIP Indicator */}
+                    {/* VIP Crown */}
                     {jogador.isVIP && (
-                      <div className="absolute top-4 right-4 flex items-center gap-1 z-10">
-                        <span className="text-[18px] font-black uppercase tracking-wider" 
-                          style={{ color: PRIMARY_COLOR, textShadow: `0 0 10px ${PRIMARY_COLOR}80` }}
-                        >
-                          VIP
-                        </span>
+                      <div className="absolute -top-1 left-1/2 -translate-x-1/2 z-10">
+                        <VipCrown />
                       </div>
                     )}
                     

@@ -11,7 +11,12 @@
       "WebFetch(domain:docs.cakto.com.br)",
       "WebFetch(domain:www.mercadopago.com.br)",
       "Bash(rm -rf supabase/functions/create-payment)",
-      "Bash(rm -rf supabase/functions/cakto-webhook)"
+      "Bash(rm -rf supabase/functions/cakto-webhook)",
+      "Bash(rm -f deno.json)",
+      "Bash(rm -f .vscode/settings.json)",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(npx supabase *)"
     ]
   }
 }

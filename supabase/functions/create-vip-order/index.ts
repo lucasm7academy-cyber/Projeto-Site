@@ -11,11 +11,8 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, content-type, apikey",
 };
 
-interface CreateOrderRequest {
+interface CreateVipOrderRequest {
   userId: string;
-  productId: string;
-  amount: number;
-  mcs: number;
 }
 
 interface MercadoPagoOrderResponse {
@@ -33,12 +30,12 @@ serve(async (req: Request) => {
 
   try {
     // Parse request body
-    const body: CreateOrderRequest = await req.json();
-    const { userId, productId, amount, mcs } = body;
+    const body: CreateVipOrderRequest = await req.json();
+    const { userId } = body;
 
-    if (!userId || !productId || !amount || !mcs) {
+    if (!userId) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: userId, productId, amount, mcs" }),
+        JSON.stringify({ error: "Missing required field: userId" }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -46,14 +43,14 @@ serve(async (req: Request) => {
       );
     }
 
-    console.log('[create-mercado-pago-order] Processing order for user:', userId);
+    console.log('[create-vip-order] Processing VIP subscription for user:', userId);
 
     // Initialize Supabase client with service role for database operations
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SERVICE_ROLE_KEY")!;
 
     if (!supabaseServiceKey) {
-      console.error('[create-mercado-pago-order] SERVICE_ROLE_KEY not configured');
+      console.error('[create-vip-order] SERVICE_ROLE_KEY not configured');
       return new Response(JSON.stringify({ error: "Server configuration error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -66,34 +63,34 @@ serve(async (req: Request) => {
     const mercadoPagoAccessToken = Deno.env.get("MERCADO_PAGO_ACCESS_TOKEN");
 
     if (!mercadoPagoAccessToken) {
-      console.error('[create-mercado-pago-order] MERCADO_PAGO_ACCESS_TOKEN not configured');
+      console.error('[create-vip-order] MERCADO_PAGO_ACCESS_TOKEN not configured');
       return new Response(JSON.stringify({ error: "Server configuration error" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Step 1: Create order in Mercado Pago
-    console.log('[create-mercado-pago-order] Creating order in Mercado Pago...', { amount, mcs });
+    // Step 1: Create order in Mercado Pago for VIP subscription
+    console.log('[create-vip-order] Creating VIP order in Mercado Pago...');
 
     const orderPayload = {
-      title: `M7 Academy - ${mcs} MCs`,
-      description: `Compra de ${mcs} M7 Coins`,
+      title: "M7 Academy VIP — 1 mês",
+      description: "Assinatura VIP M7 Academy - Acesso a todos os benefícios exclusivos",
       notification_url: `${supabaseUrl}/functions/v1/mercado-pago-webhook`,
       payer: {
-        email: `user-${userId}@m7academy.local`, // Placeholder email
+        email: `user-${userId}@m7academy.local`,
       },
       items: [
         {
-          id: productId,
-          title: `${mcs} MCs`,
+          id: "vip_monthly",
+          title: "M7 Academy VIP — 1 mês",
           quantity: 1,
-          unit_price: amount,
+          unit_price: 9.90,
         },
       ],
       metadata: {
         user_id: userId,
-        mcs: mcs,
+        tipo: "vip",
       },
     };
 
@@ -108,8 +105,8 @@ serve(async (req: Request) => {
 
     if (!createOrderResponse.ok) {
       const errorText = await createOrderResponse.text();
-      console.error('[create-mercado-pago-order] Mercado Pago error:', errorText);
-      return new Response(JSON.stringify({ error: "Failed to create payment order" }), {
+      console.error('[create-vip-order] Mercado Pago error:', errorText);
+      return new Response(JSON.stringify({ error: "Failed to create VIP order" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -118,55 +115,52 @@ serve(async (req: Request) => {
     const orderData: MercadoPagoOrderResponse = await createOrderResponse.json();
     const orderId = String(orderData.id);
 
-    console.log('[create-mercado-pago-order] Order created successfully:', orderId);
-    console.log('[create-mercado-pago-order] Order data keys:', Object.keys(orderData));
+    console.log('[create-vip-order] VIP order created successfully:', orderId);
 
     // Step 2: Get QR Code image from Mercado Pago
-    // Try to get the QR code - it might be in different formats
     let qrCodeBase64 = null;
 
     if (orderData.qr_code_base64) {
       qrCodeBase64 = orderData.qr_code_base64;
     } else if (orderData.qr_code) {
-      // If it's a URL or raw code, we'll use it
       qrCodeBase64 = orderData.qr_code;
     }
 
     // If we still don't have QR code, generate one using a QR code API
     if (!qrCodeBase64 && orderData.init_point) {
-      console.log('[create-mercado-pago-order] Generating QR code from checkout URL...');
-      // Use a free QR code API to generate from the checkout URL
+      console.log('[create-vip-order] Generating QR code from checkout URL...');
       const qrApiResponse = await fetch(
         `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(orderData.init_point)}`
       );
       if (qrApiResponse.ok) {
         const blob = await qrApiResponse.arrayBuffer();
         qrCodeBase64 = btoa(String.fromCharCode(...new Uint8Array(blob)));
-        console.log('[create-mercado-pago-order] QR code generated from URL');
+        console.log('[create-vip-order] QR code generated from URL');
       }
     }
 
-    console.log('[create-mercado-pago-order] QR Code obtained:', qrCodeBase64 ? 'yes' : 'no');
+    console.log('[create-vip-order] QR Code obtained:', qrCodeBase64 ? 'yes' : 'no');
 
-    // Step 3: Insert payment record in Supabase
+    // Step 3: Insert VIP payment record in Supabase
     const { error: insertError } = await supabase.from("pagamentos").insert({
       user_id: userId,
-      cakto_order_id: orderId, // Using same column name for compatibility
-      produto_id: productId,
-      valor_brl: amount,
-      mcs_creditados: mcs,
+      cakto_order_id: orderId,
+      produto_id: "vip_monthly",
+      valor_brl: 9.90,
+      mcs_creditados: 0,
+      tipo: "vip",
       status: "pendente",
     });
 
     if (insertError) {
-      console.error('[create-mercado-pago-order] Failed to insert payment record:', insertError);
-      return new Response(JSON.stringify({ error: "Failed to save payment record" }), {
+      console.error('[create-vip-order] Failed to insert payment record:', insertError);
+      return new Response(JSON.stringify({ error: "Failed to save VIP order" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log('[create-mercado-pago-order] Payment record inserted successfully');
+    console.log('[create-vip-order] VIP payment record inserted successfully');
 
     // Return QR code and order info to frontend
     return new Response(
@@ -174,8 +168,8 @@ serve(async (req: Request) => {
         success: true,
         orderId,
         qrCode: qrCodeBase64,
-        brCode: orderData.qr_code, // PIX copia e cola
-        paymentUrl: orderData.init_point, // Link to Mercado Pago checkout (fallback)
+        brCode: orderData.qr_code,
+        paymentUrl: orderData.init_point,
       }),
       {
         status: 200,
@@ -183,7 +177,7 @@ serve(async (req: Request) => {
       }
     );
   } catch (error) {
-    console.error('[create-mercado-pago-order] Error:', error);
+    console.error('[create-vip-order] Error:', error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {

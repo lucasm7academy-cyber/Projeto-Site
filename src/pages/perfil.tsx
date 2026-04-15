@@ -24,6 +24,7 @@ import { getDDRVersion, buildProfileIconUrl } from '../api/riot';
 import { sincronizarContaRiot } from '../api/player';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { VipLabel } from '../components/VipBadge';
 
 const getImageUrl = (fileName: string) => {
   const { data } = supabase.storage
@@ -807,10 +808,10 @@ export default function Perfil() {
                     <h1 className="text-3xl md:text-4xl font-headline font-black tracking-tight text-white uppercase">
                       {contaRiot?.riot_id ?? user?.email?.split('@')[0]}
                     </h1>
-                    <div className="flex items-center justify-center sm:justify-start gap-2">
+                    <div className="flex items-center justify-center sm:justify-start gap-3">
                       {isVip && (
-                        <div className="px-2 py-0.5 bg-primary/10 border border-primary/20 rounded text-[10px] font-black text-primary uppercase tracking-widest">
-                          PRO PLAYER
+                        <div className="relative">
+                          <VipLabel text="VIP" />
                         </div>
                       )}
                     </div>

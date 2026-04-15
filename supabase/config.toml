@@ -1,5 +1,8 @@
 [functions.create-mercado-pago-order]
 verify_jwt = false
 
+[functions.create-vip-order]
+verify_jwt = false
+
 [functions.mercado-pago-webhook]
 verify_jwt = false

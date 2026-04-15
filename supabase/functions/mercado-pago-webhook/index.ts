@@ -1,5 +1,9 @@
+// @ts-ignore - Deno types not available in VSCode
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// @ts-ignore - Deno types not available in VSCode
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.0";
+
+declare const Deno: any;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +11,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, content-type, apikey",
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -121,49 +125,77 @@ serve(async (req) => {
 
     const userId = paymentRecord.user_id;
     const mcs = paymentRecord.mcs_creditados;
+    const tipo = paymentRecord.tipo || 'mc';
 
-    console.log('[mercado-pago-webhook] Crediting MCs:', { user: userId, mcs });
+    console.log('[mercado-pago-webhook] Processing payment:', { user: userId, tipo, mcs });
 
-    // Fetch current balance
-    const { data: currentBalance, error: balanceFetchError } = await supabase
-      .from("saldos")
-      .select("saldo")
-      .eq("user_id", userId)
-      .maybeSingle();
+    // Route payment processing based on type
+    if (tipo === 'vip') {
+      // VIP subscription processing
+      console.log('[mercado-pago-webhook] Processing VIP subscription for user:', userId);
 
-    if (balanceFetchError && balanceFetchError.code !== "PGRST116") {
-      console.error('[mercado-pago-webhook] Error fetching current balance:', balanceFetchError);
-      throw balanceFetchError;
-    }
+      const vipExpiresAt = new Date();
+      vipExpiresAt.setDate(vipExpiresAt.getDate() + 30); // 30 days from now
 
-    // Update or create balance
-    if (!currentBalance) {
-      // Create new balance record
-      const { error: insertError } = await supabase.from("saldos").insert({
-        user_id: userId,
-        saldo: mcs,
-      });
+      const { error: updateVipError } = await supabase
+        .from("profiles")
+        .update({
+          is_vip: true,
+          vip_expira_em: vipExpiresAt.toISOString(),
+        })
+        .eq("id", userId);
 
-      if (insertError) {
-        console.error('[mercado-pago-webhook] Error creating balance:', insertError);
-        throw insertError;
+      if (updateVipError) {
+        console.error('[mercado-pago-webhook] Error updating VIP status:', updateVipError);
+        throw updateVipError;
       }
 
-      console.log('[mercado-pago-webhook] New balance created:', { user: userId, saldo: mcs });
+      console.log('[mercado-pago-webhook] VIP activated:', { user: userId, expiresAt: vipExpiresAt });
     } else {
-      // Update existing balance
-      const newBalance = (currentBalance.saldo || 0) + mcs;
-      const { error: updateError } = await supabase
-        .from("saldos")
-        .update({ saldo: newBalance })
-        .eq("user_id", userId);
+      // MC coins processing (default behavior)
+      console.log('[mercado-pago-webhook] Crediting MCs:', { user: userId, mcs });
 
-      if (updateError) {
-        console.error('[mercado-pago-webhook] Error updating balance:', updateError);
-        throw updateError;
+      // Fetch current balance
+      const { data: currentBalance, error: balanceFetchError } = await supabase
+        .from("saldos")
+        .select("saldo")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (balanceFetchError && balanceFetchError.code !== "PGRST116") {
+        console.error('[mercado-pago-webhook] Error fetching current balance:', balanceFetchError);
+        throw balanceFetchError;
       }
 
-      console.log('[mercado-pago-webhook] Balance updated:', { user: userId, newSaldo: newBalance });
+      // Update or create balance
+      if (!currentBalance) {
+        // Create new balance record
+        const { error: insertError } = await supabase.from("saldos").insert({
+          user_id: userId,
+          saldo: mcs,
+        });
+
+        if (insertError) {
+          console.error('[mercado-pago-webhook] Error creating balance:', insertError);
+          throw insertError;
+        }
+
+        console.log('[mercado-pago-webhook] New balance created:', { user: userId, saldo: mcs });
+      } else {
+        // Update existing balance
+        const newBalance = (currentBalance.saldo || 0) + mcs;
+        const { error: updateError } = await supabase
+          .from("saldos")
+          .update({ saldo: newBalance })
+          .eq("user_id", userId);
+
+        if (updateError) {
+          console.error('[mercado-pago-webhook] Error updating balance:', updateError);
+          throw updateError;
+        }
+
+        console.log('[mercado-pago-webhook] Balance updated:', { user: userId, newSaldo: newBalance });
+      }
     }
 
     // Update payment status to approved
