@@ -365,9 +365,9 @@ function HextechActionBar({
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[2px] bg-gradient-to-r from-transparent via-[#FFB700]/40 to-transparent blur-sm" />
 
       {/* Mesmo gap do MIDDLE SECTION — laterais alinham com as colunas dos slots */}
-      <div className={`relative w-full flex items-end justify-center ${sala.modo === '1v1' ? 'gap-[68vmin]' : 'gap-[76vmin]'}`}>
+      <div className={`relative w-full flex items-end justify-center px-[1vmin] ${sala.modo === '1v1' ? 'lg:gap-[60vmin] md:gap-[40vmin] gap-[16vmin]' : 'lg:gap-[68vmin] md:gap-[48vmin] gap-[20vmin]'}`}>
 
-        {/* ESQUERDA — alinha com coluna esquerda (items-start) */}
+        {/* ESQUERDA — alinha com coluna esquerda (items-start) — mais perto da sidebar */}
         <div className="flex items-end justify-start w-[48vmin]">
           <SalaChat salaId={sala.id} usuarioAtual={usuarioAtual} jogadores={sala.jogadores} />
         </div>
@@ -716,7 +716,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   };
 
   return (
-    <div className="flex-1 w-full h-full bg-[#050505] flex flex-col items-center justify-between p-0 font-sans relative overflow-hidden min-h-screen">
+    <div className="flex-1 w-full h-full bg-[#050505] flex flex-col items-center justify-between p-0 font-sans relative overflow-hidden">
       
       {/* BACKGROUND IMAGE */}
       <img 
@@ -1419,19 +1419,19 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                 }
               }
             }}
-            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-black uppercase tracking-wider text-sm transition-all border-2 ${
+            className={`flex items-center gap-2 px-3 py-3 rounded-xl font-black uppercase tracking-wider text-sm transition-all border-2 ${
               salaStreamAtiva
                 ? 'bg-purple-600/40 border-purple-500 text-purple-200 hover:bg-purple-600/60'
                 : 'bg-purple-600/10 border-purple-500/30 text-purple-400 hover:bg-purple-600/20 hover:border-purple-500/50'
             }`}
           >
             <Eye className="w-5 h-5" />
-            <span className="hidden sm:inline">
-              {salaStreamAtiva ? '🔴 TRANSMITINDO' : '📹 TRANSMITIR'}
-            </span>
-            <span className="sm:hidden">
-              {salaStreamAtiva ? '🔴' : '📹'}
-            </span>
+            {salaStreamAtiva && (
+              <>
+                <span className="text-red-500 text-lg font-black">●</span>
+                <span className="hidden sm:inline">TRANSMITINDO</span>
+              </>
+            )}
           </button>
         </motion.div>
       )}
@@ -1447,7 +1447,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         >
           <button
             onClick={() => setIsStreamModalOpen(true)}
-            className="flex items-center gap-3 px-4 py-3 rounded-xl font-black uppercase tracking-wider text-sm transition-all border-2 bg-blue-600/10 border-blue-500/30 text-blue-400 hover:bg-blue-600/20 hover:border-blue-500/50 animate-pulse"
+            className="flex items-center gap-3 px-4 py-3 rounded-xl font-black uppercase tracking-wider text-sm transition-all border-2 bg-purple-600/10 border-purple-500/30 text-purple-400 hover:bg-purple-600/20 hover:border-purple-500/50 animate-pulse"
           >
             <Eye className="w-5 h-5" />
             <span className="hidden sm:inline">ASSISTIR LIVE</span>
