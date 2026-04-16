@@ -365,7 +365,7 @@ function HextechActionBar({
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[2px] bg-gradient-to-r from-transparent via-[#FFB700]/40 to-transparent blur-sm" />
 
       {/* Mesmo gap do MIDDLE SECTION — laterais alinham com as colunas dos slots */}
-      <div className={`relative w-full flex items-end justify-center px-[1vmin] ${sala.modo === '1v1' ? 'lg:gap-[60vmin] md:gap-[40vmin] gap-[16vmin]' : 'lg:gap-[68vmin] md:gap-[48vmin] gap-[20vmin]'}`}>
+      <div className={`relative w-full flex items-end justify-center ${sala.modo === '1v1' ? 'gap-[68vmin]' : 'gap-[76vmin]'}`}>
 
         {/* ESQUERDA — alinha com coluna esquerda (items-start) — mais perto da sidebar */}
         <div className="flex items-end justify-start w-[48vmin]">
@@ -373,8 +373,7 @@ function HextechActionBar({
         </div>
 
         {/* CENTRO — absolutamente centralizado, independente dos laterais */}
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-[-20vmin] flex flex-col items-center pointer-events-none gap-[4vmin]">
-          {/* Botão de Ação Principal */}
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[8vmin] flex flex-col items-center pointer-events-none">
           <div className="pointer-events-auto flex flex-col items-center">
             {estado === 'confirmacao' && jogadorAtual ? (
               <motion.button
@@ -402,23 +401,22 @@ function HextechActionBar({
                 </span>
               </div>
             )}
-          </div>
 
-          {/* Status da Sala — abaixo do botão */}
-          <div className="pointer-events-auto flex flex-col items-center gap-1 max-w-[40vmin]">
-            <div className="flex items-center gap-2">
-              <div className={`w-1.5 h-1.5 rounded-full ${['em_partida', 'finalizacao'].includes(estado) ? 'bg-red-400' : estado === 'confirmacao' ? 'bg-yellow-400 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_#22c55e]'} animate-pulse`} />
-              <span className="text-[1vmin] font-black uppercase tracking-[0.3em] text-white/20">
-                Status da Sala
-              </span>
+            <div className="flex flex-col items-center gap-1 mt-6 max-w-[40vmin]">
+              <div className="flex items-center gap-2">
+                <div className={`w-1.5 h-1.5 rounded-full ${['em_partida', 'finalizacao'].includes(estado) ? 'bg-red-400' : estado === 'confirmacao' ? 'bg-yellow-400 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_#22c55e]'} animate-pulse`} />
+                <span className="text-[1vmin] font-black uppercase tracking-[0.3em] text-white/20">
+                  Status da Sala
+                </span>
+              </div>
+              <p className="text-[1.2vmin] font-medium text-white/30 text-center leading-relaxed">
+                {estado === 'aberta' && sala.jogadores.length < (sala.modo === '1v1' ? 2 : 10) && "Aberta entre na vaga."}
+                {estado === 'aberta' && sala.jogadores.length === (sala.modo === '1v1' ? 2 : 10) && "Aberta assim que todos os jogadores forem completados."}
+                {estado === 'confirmacao' && "Assim que todas as vagas forem preenchidas, a sala entrará em processo de confirmação."}
+                {estado === 'em_partida' && "Partida em andamento. Boa sorte aos invocadores!"}
+                {estado === 'finalizacao' && "Partida finalizada. Aguardando processamento do resultado."}
+              </p>
             </div>
-            <p className="text-[1.2vmin] font-medium text-white/30 text-center leading-relaxed">
-              {estado === 'aberta' && sala.jogadores.length < (sala.modo === '1v1' ? 2 : 10) && "Aberta entre na vaga."}
-              {estado === 'aberta' && sala.jogadores.length === (sala.modo === '1v1' ? 2 : 10) && "Aberta assim que todos os jogadores forem completados."}
-              {estado === 'confirmacao' && "Assim que todas as vagas forem preenchidas, a sala entrará em processo de confirmação."}
-              {estado === 'em_partida' && "Partida em andamento. Boa sorte aos invocadores!"}
-              {estado === 'finalizacao' && "Partida finalizada. Aguardando processamento do resultado."}
-            </p>
           </div>
         </div>
 
@@ -727,7 +725,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       />
 
       {/* MASSIVE CENTRAL CIRCLE */}
-      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black border-[4px] border-white/5 flex flex-col items-center justify-center z-10">
+      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black border-[4px] border-white/5 flex flex-col items-center justify-center z-10">
         <div className="absolute inset-10 rounded-full border border-white/[0.02]" />
         <ArcaneIndicators />
         <CentralDisplay />
@@ -735,13 +733,13 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Blur overlay de Confirmação (atrás) — z-20 */}
       {sala.estado === 'confirmacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
       )}
 
       {/* Overlay de Confirmação (conteúdo, frente) — z-50 */}
       {sala.estado === 'confirmacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full flex flex-col items-center justify-center z-50 pointer-events-none">
-          <span className="lg:text-[15vmin] md:text-[12vmin] text-[10vmin] font-black text-white tabular-nums leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">{timerConfirmacao}</span>
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 pointer-events-none">
+          <span className="text-[15vmin] font-black text-white tabular-nums leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">{timerConfirmacao}</span>
           <span className="text-[2vmin] font-black text-white/40 uppercase tracking-[1em] mt-6">CONFIRME AGORA</span>
         </div>
       )}
@@ -800,12 +798,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Blur overlay (atrás) — z-20 */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
       )}
 
       {/* Conteúdo e botões (frente) — z-50 */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full flex flex-col items-center justify-center z-50 p-[4vmin] lg:p-[8vmin] text-center pointer-events-auto">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
             Draft Finalizado!
           </p>
@@ -870,12 +868,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Blur overlay para cargos especiais (atrás) — z-20 */}
       {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
       )}
 
       {/* Conteúdo e botões para cargos especiais (frente) — z-50 */}
       {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full flex flex-col items-center justify-center z-50 p-[4vmin] lg:p-[8vmin] text-center pointer-events-auto">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
             Draft Finalizado!
           </p>
@@ -1022,12 +1020,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       {/* Overlay de Votação de Resultado */}
       {/* Blur overlay de Finalização (atrás) — z-20 */}
       {sala.estado === 'finalizacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
       )}
 
       {/* Overlay de Finalização (conteúdo, frente) — z-50 */}
       {sala.estado === 'finalizacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full flex flex-col items-center justify-center z-50 p-[4vmin] lg:p-[8vmin] text-center pointer-events-auto">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
           {meuVotoResultado ? (
             /* Já votou — mostra confirmação e botão de sair */
             <div className="flex flex-col items-center gap-[2vmin]">
@@ -1093,7 +1091,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       )}
 
       {/* TOP BAR */}
-      <div className="w-full h-[10vmin] flex items-start justify-center pt-[2vmin] z-30">
+      <div className="w-full h-[10vmin] flex items-start justify-center pt-[2vmin] z-50">
         <div className="w-full max-w-6xl h-[7vmin] bg-black rounded-xl border border-white/10 flex items-center px-[3vmin] shadow-2xl mx-4 justify-between relative overflow-visible">
           <div className="flex items-center">
             <button onClick={acaoSairDaSala} className="mr-[3vmin] text-white/40 hover:text-white transition-colors">
@@ -1143,7 +1141,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       )}
 
       {/* MIDDLE SECTION */}
-      <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] overflow-x-auto px-[1vmin] ${isX1 ? 'lg:gap-[60vmin] md:gap-[40vmin] gap-[20vmin]' : 'lg:gap-[68vmin] md:gap-[48vmin] gap-[24vmin]'}`}>
+      <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] ${isX1 ? 'gap-[68vmin]' : 'gap-[76vmin]'}`}>
         <div className="flex flex-col gap-[1.5vmin] items-start">
           {/* Team Blue Header - Hextech Badge */}
           <div className="relative mb-[1vmin] ml-[0.5vmin] w-[22vmin]">
@@ -1427,10 +1425,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           >
             <Eye className="w-5 h-5" />
             {salaStreamAtiva && (
-              <>
-                <span className="text-red-500 text-lg font-black">●</span>
-                <span className="hidden sm:inline">TRANSMITINDO</span>
-              </>
+              <span className="hidden sm:inline">
+                🔴 TRANSMITINDO
+              </span>
+            )}
+            {salaStreamAtiva && (
+              <span className="sm:hidden">
+                🔴
+              </span>
             )}
           </button>
         </motion.div>
