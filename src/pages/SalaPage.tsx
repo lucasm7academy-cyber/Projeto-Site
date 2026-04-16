@@ -396,8 +396,8 @@ function HextechActionBar({
               </motion.button>
             ) : (
               <div className="px-[10vmin] py-[2vmin] border border-white/5 bg-white/5 rounded-sm">
-                <span className="text-[1.1vmin] font-black uppercase tracking-[0.8em] text-white">
-                  Aguardando Jogadores
+                <span className="text-[1.8vmin] font-black uppercase tracking-none text-white">
+                  Jogadores em Preparação
                 </span>
               </div>
             )}
@@ -810,44 +810,27 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           <p className="text-[1.2vmin] text-white/30 uppercase tracking-widest mb-[2vmin]">
             {cargoUsuario === 'jogador' ? 'Aguardando partida...' : 'Entre na sala usando o código abaixo'}
           </p>
-          {(() => {
-            const canSeeCode = cargoUsuario !== 'jogador' || !!jogadorAtual;
-            console.log('[SalaPage] Verificando visibilidade do código:', {cargoUsuario, jogadorAtual: !!jogadorAtual, canSeeCode});
-            return canSeeCode;
-          })() ? (
-            sala.codigoPartida ? (
-              <div className="flex flex-col items-center gap-[1.5vmin]">
-                <div className="px-[3vmin] py-[1.5vmin] bg-black/40 border border-[#FFB700]/20 rounded-xl">
-                  <span className="text-[2.2vmin] font-black text-[#FFB700] tracking-[0.2em] select-all">
-                    {sala.codigoPartida}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(sala.codigoPartida!);
-                    setCopiadoCodigo(true);
-                    setTimeout(() => setCopiadoCodigo(false), 2000);
-                  }}
-                  className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
-                    copiadoCodigo
-                      ? 'bg-green-500/20 border-green-500/40 text-green-400'
-                      : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
-                  }`}
-                >
-                  {copiadoCodigo
-                    ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
-                    : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
-                  }
-                </button>
-              </div>
-            ) : (
-              <div className="px-[4vmin] py-[2vmin]">
-                <span className="text-[2vmin] text-white/20">Atribuindo código...</span>
-              </div>
-            )
+          {sala.codigoPartida ? (
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(sala.codigoPartida!);
+                setCopiadoCodigo(true);
+                setTimeout(() => setCopiadoCodigo(false), 2000);
+              }}
+              className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
+                copiadoCodigo
+                  ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                  : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
+              }`}
+            >
+              {copiadoCodigo
+                ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
+                : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
+              }
+            </button>
           ) : (
-            <div className="px-[4vmin] py-[2vmin] rounded-lg bg-blue-500/10 border border-blue-500/20">
-              <span className="text-[1.3vmin] text-blue-300">Entre na sala como jogador para ver o código</span>
+            <div className="px-[4vmin] py-[2vmin]">
+              <span className="text-[2vmin] text-white/20">Atribuindo código...</span>
             </div>
           )}
 
@@ -881,30 +864,23 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             Entre na sala usando o código abaixo
           </p>
           {sala.codigoPartida ? (
-            <div className="flex flex-col items-center gap-[1.5vmin]">
-              <div className="px-[3vmin] py-[1.5vmin] bg-black/40 border border-[#FFB700]/20 rounded-xl">
-                <span className="text-[2.2vmin] font-black text-[#FFB700] tracking-[0.2em] select-all">
-                  {sala.codigoPartida}
-                </span>
-              </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(sala.codigoPartida!);
-                  setCopiadoCodigo(true);
-                  setTimeout(() => setCopiadoCodigo(false), 2000);
-                }}
-                className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
-                  copiadoCodigo
-                    ? 'bg-green-500/20 border-green-500/40 text-green-400'
-                    : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
-                }`}
-              >
-                {copiadoCodigo
-                  ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
-                  : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
-                }
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(sala.codigoPartida!);
+                setCopiadoCodigo(true);
+                setTimeout(() => setCopiadoCodigo(false), 2000);
+              }}
+              className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
+                copiadoCodigo
+                  ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                  : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
+              }`}
+            >
+              {copiadoCodigo
+                ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
+                : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
+              }
+            </button>
           ) : (
             <div className="px-[4vmin] py-[2vmin]">
               <span className="text-[2vmin] text-white/20">Atribuindo código...</span>
