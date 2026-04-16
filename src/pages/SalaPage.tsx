@@ -373,7 +373,7 @@ function HextechActionBar({
         </div>
 
         {/* CENTRO — absolutamente centralizado, independente dos laterais */}
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-[8vmin] flex flex-col items-center pointer-events-none">
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[2vmin] flex flex-col items-center pointer-events-none">
           <div className="pointer-events-auto flex flex-col items-center">
             {estado === 'confirmacao' && jogadorAtual ? (
               <motion.button
