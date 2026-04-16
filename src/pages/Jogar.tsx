@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Play, ChevronLeft, ChevronRight, Trophy, Users, Eye, Coins,
   Search, Lock, Zap, Crown, X, LogIn, Plus, SlidersHorizontal,
-  Sword, Shield, Swords, Gem,Snowflake
+  Sword, Shield, Swords, Gem, Snowflake, Tv2
 } from 'lucide-react';
 import {
   MODOS_JOGO, OPCOES_ELO, OPCOES_MPOINTS, getModoInfo, getMPointsInfo,
@@ -412,6 +412,7 @@ const Jogar = () => {
   const [busca, setBusca] = useState('');
   const [filtroModo, setFiltroModo] = useState<ModoJogo | 'todos'>('todos');
   const [viewerCounts, setViewerCounts] = useState<Record<number, number>>({});
+  const [streamsAtivos, setStreamsAtivos] = useState<Record<number, boolean>>({}); // Track active streams per sala
   
   // Modais
   const [showCriarModal, setShowCriarModal] = useState(false);
@@ -499,6 +500,19 @@ const Jogar = () => {
       .channel('salas_jogar_page')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' }, recarregarSalas)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores' }, recarregarSalas)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_streams' }, async () => {
+        // Atualizar streams ativos
+        const { data: streams } = await supabase
+          .from('sala_streams')
+          .select('sala_id')
+          .eq('ativo', true);
+
+        const streamMap: Record<number, boolean> = {};
+        if (streams) {
+          streams.forEach(s => { streamMap[s.sala_id as number] = true; });
+        }
+        setStreamsAtivos(streamMap);
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -796,13 +810,21 @@ const Jogar = () => {
                 const mpInfo = getMPointsInfo(sala.mpoints);
                 const estaCheia = sala.jogadores.length >= sala.maxJogadores;
                 const jaEsta = sala.jogadores.some(j => j.id === usuarioAtual.id);
+                const estaCheiaOuEncerrada = estaCheia || sala.estado === 'encerrada';
                 // Pode entrar na sala para assistir/visualizar mesmo se estiver cheia
                 // Mas não pode entrar em uma vaga se não houver vagas disponíveis
                 const podeEntrar = !jaEsta; // Sempre pode entrar na sala para assistir
 
                 return (
-                  <div 
-                    key={sala.id} 
+                  <div
+                    key={sala.id}
+                    onClick={() => {
+                      if (sala.temSenha && !jaEsta) {
+                        setShowSenhaModal({ salaId: sala.id, nome: sala.nome });
+                      } else {
+                        entrarNaSala(sala);
+                      }
+                    }}
                     className="flex-none w-full sm:w-[380px] h-[320px] rounded-xl overflow-hidden relative cursor-pointer border border-white/10 hover:border-[#FFB700]/50 transition-all snap-start group/card bg-black"
                   >
                     {/* Background Image */}
@@ -867,6 +889,12 @@ const Jogar = () => {
                             Mín: {sala.eloMinimo}
                           </span>
                         )}
+                        {streamsAtivos[sala.id] && (
+                          <span className="px-2 py-1 rounded text-[10px] font-black uppercase flex items-center gap-1 bg-purple-600/20 border border-purple-500/30 text-purple-400 animate-pulse">
+                            <Tv2 className="w-3 h-3" />
+                            ENTRAR / ASSISTIR
+                          </span>
+                        )}
                       </div>
                       
                       {/* Criador */}
@@ -886,19 +914,19 @@ const Jogar = () => {
                             entrarNaSala(sala);
                           }
                         }}
-                        disabled={!podeEntrar}
+                        disabled={!podeEntrar || sala.estado === 'encerrada'}
                         className={`mt-auto w-full py-3 rounded-lg font-black text-sm uppercase transition-all flex items-center justify-center gap-2 ${
-                          jaEsta
+                          sala.estado === 'encerrada'
+                            ? 'bg-black border border-white/10 text-white/40 cursor-not-allowed'
+                            : jaEsta
                             ? 'bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30'
                             : podeEntrar
-                            ? estaCheia
-                              ? 'bg-purple-600/20 border border-purple-500/30 text-purple-400 hover:bg-purple-600/30'
-                              : 'bg-[#FFB700] hover:bg-[#e0a000] text-black'
+                            ? 'bg-[#FFB700] hover:bg-[#e0a000] text-black'
                             : 'bg-white/5 text-white/20 border border-white/10 cursor-not-allowed'
                         }`}
                       >
                         <LogIn className="w-4 h-4" />
-                        {jaEsta ? 'VOLTAR' : estaCheia ? '👁️ ASSISTIR' : 'ENTRAR'}
+                        {sala.estado === 'encerrada' ? 'FINALIZADO' : jaEsta ? 'VOLTAR' : 'ENTRAR'}
                       </button>
                     </div>
                   </div>
