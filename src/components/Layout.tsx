@@ -20,6 +20,7 @@ import {
   X,
   ChevronDown,
   CreditCard,
+  Tv2,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
@@ -41,9 +42,12 @@ export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const isSalaPage = location.pathname.startsWith('/sala/');
+  const isDraftPage = location.pathname.startsWith('/draft/');
+  const isGamePage = isSalaPage || isDraftPage; // Colapsível em salas e drafts
   const { playSound } = useSound();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isGamePage); // Começa fechada em salas
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [isVipModalOpen, setIsVipModalOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
@@ -137,6 +141,7 @@ export default function Layout() {
     { label: 'Campeonatos', icon: Trophy, path: '/campeonatos' },
     { label: 'Times', icon: Users, path: '/times' },
     { label: 'Players', icon: UserIcon, path: '/players' },
+    { label: 'Streamers', icon: Tv2, path: '/streamers' },
     { label: 'Estatísticas', icon: LineChart, path: '/estatisticas' },
     { label: 'Histórico', icon: History, path: '/historico' },
   ];
@@ -150,7 +155,10 @@ export default function Layout() {
     { label: 'Políticas', icon: ShieldCheck, path: '/politicas' },
   ];
 
-  const sidebarWidths = "hidden lg:flex lg:w-[220px] xl:w-[240px] 2xl:w-[200px] shrink-0";
+  // Em salas/drafts: colapsível em qualquer tamanho | Fora de salas: padrão responsivo
+  const sidebarWidths = isGamePage
+    ? `${isSidebarOpen ? 'w-[220px] xl:w-[240px] 2xl:w-[200px]' : 'w-0'} shrink-0 transition-all duration-300 ease-out`
+    : "hidden lg:flex lg:w-[220px] xl:w-[240px] 2xl:w-[200px] shrink-0";
 
   const riotIconUrl = contaRiot?.profile_icon_id
     ? buildProfileIconUrl(contaRiot.profile_icon_id)
@@ -166,13 +174,18 @@ export default function Layout() {
         <div className="flex justify-between items-center h-full px-3 md:px-6">
           {/* Lado esquerdo - Mobile: apenas menu hambúrguer | Desktop: menu + logo + nome + bem-vindo */}
           <div className="flex items-center gap-2 md:gap-4">
-            {/* Menu Hamburguer - visível em mobile/tablet */}
-            <button 
-              className="lg:hidden text-white/80 hover:text-primary transition-colors p-1.5 md:p-2 rounded-lg hover:bg-white/5"
+            {/* Menu Hamburguer - visível em mobile/tablet OU sidebar toggle em salas */}
+            <button
+              className={`text-white/80 hover:text-primary transition-colors p-1.5 md:p-2 rounded-lg hover:bg-white/5 ${isGamePage ? '' : 'lg:hidden'}`}
               onClick={() => {
                 playSound('click');
-                setIsMobileMenuOpen(!isMobileMenuOpen);
+                if (isGamePage) {
+                  setIsSidebarOpen(!isSidebarOpen);
+                } else {
+                  setIsMobileMenuOpen(!isMobileMenuOpen);
+                }
               }}
+              title={isGamePage ? 'Toggle Sidebar' : 'Menu'}
             >
               <Menu size={18} className="md:w-5 md:h-5" />
             </button>
@@ -360,9 +373,9 @@ export default function Layout() {
       </header>
 
       {/* Layout Principal */}
-      <div className="flex h-full pt-14 md:pt-16">
+      <div className="flex h-full pt-14 md:pt-16 overflow-hidden">
         {/* Sidebar Desktop */}
-        <aside className={`${sidebarWidths} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex flex-col z-[50] h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 hidden lg:flex overflow-visible`}>
+        <aside className={`${sidebarWidths} ${isGamePage ? 'flex' : 'hidden lg:flex'} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex-col z-[50] h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 overflow-hidden`}>
           {/* Top Section - Profile/Link (Non-scrolling to allow balloon overflow) */}
           <div className="py-6 px-3 overflow-visible relative z-[60]">
             {contaRiot ? (
