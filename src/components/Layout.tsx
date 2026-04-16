@@ -70,6 +70,15 @@ export default function Layout() {
     navigate('/');
   };
 
+  // Fechar sidebar ao entrar em página de jogo
+  useEffect(() => {
+    if (isGamePage) {
+      setIsSidebarOpen(false);
+    } else {
+      setIsSidebarOpen(true);
+    }
+  }, [isGamePage]);
+
   useEffect(() => {
     const carregarDados = async () => {
       if (!supabase) return;
