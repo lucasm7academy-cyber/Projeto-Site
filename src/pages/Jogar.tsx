@@ -796,7 +796,9 @@ const Jogar = () => {
                 const mpInfo = getMPointsInfo(sala.mpoints);
                 const estaCheia = sala.jogadores.length >= sala.maxJogadores;
                 const jaEsta = sala.jogadores.some(j => j.id === usuarioAtual.id);
-                const podeEntrar = !estaCheia && !jaEsta;
+                // Pode entrar na sala para assistir/visualizar mesmo se estiver cheia
+                // Mas não pode entrar em uma vaga se não houver vagas disponíveis
+                const podeEntrar = !jaEsta; // Sempre pode entrar na sala para assistir
 
                 return (
                   <div 
@@ -884,17 +886,19 @@ const Jogar = () => {
                             entrarNaSala(sala);
                           }
                         }}
-                        disabled={!podeEntrar && !jaEsta}
+                        disabled={!podeEntrar}
                         className={`mt-auto w-full py-3 rounded-lg font-black text-sm uppercase transition-all flex items-center justify-center gap-2 ${
                           jaEsta
                             ? 'bg-green-500/20 border border-green-500/30 text-green-400 hover:bg-green-500/30'
                             : podeEntrar
-                            ? 'bg-[#FFB700] hover:bg-[#e0a000] text-black'
+                            ? estaCheia
+                              ? 'bg-purple-600/20 border border-purple-500/30 text-purple-400 hover:bg-purple-600/30'
+                              : 'bg-[#FFB700] hover:bg-[#e0a000] text-black'
                             : 'bg-white/5 text-white/20 border border-white/10 cursor-not-allowed'
                         }`}
                       >
                         <LogIn className="w-4 h-4" />
-                        {jaEsta ? 'VOLTAR' : estaCheia ? 'CHEIA' : 'ENTRAR'}
+                        {jaEsta ? 'VOLTAR' : estaCheia ? '👁️ ASSISTIR' : 'ENTRAR'}
                       </button>
                     </div>
                   </div>
