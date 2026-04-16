@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Crown, UserPlus, Check, ArrowLeft, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Trash2, Zap, RefreshCw, Clock, CheckCircle, Send
+  Crown, UserPlus, Check, ArrowLeft, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Send
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { buildProfileIconUrl, buildChampionIconUrl, getDDRVersion } from '../api/riot';
@@ -17,6 +17,9 @@ import { SalaRegrasProvider, useSalaRegras } from '../contexts/SalaRegras';
 import { getModoInfo, getMPointsInfo, ROLE_CONFIG, type Role } from '../components/partidas/salaConfig';
 import { DraftRoom } from '../components/draft/DraftRoom';  // ✅ NOVO IMPORT
 import { type DraftState, type Champion } from '../components/draft/draftTypes';
+import { StreamModal } from '../components/StreamModal';
+import { StreamerPanel } from '../components/StreamerPanel';
+import { WatchStreamPanel } from '../components/WatchStreamPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPO DO USUÁRIO
@@ -114,7 +117,7 @@ export default function SalaPage() {
     return (
       <div className="flex-1 bg-[#050505] flex flex-col items-center justify-center text-white">
         <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#FFB700] border-t-transparent mb-4" />
-        <p className="text-white/40 font-bold uppercase tracking-widest text-xs">Carregando sala...</p>
+        <p className="text-white font-bold uppercase tracking-widest text-xs">Carregando sala...</p>
       </div>
     );
   }
@@ -203,29 +206,6 @@ function CentralDisplay() {
   );
 }
 
-function ScoreboardHeader() {
-  return (
-    <div className="flex items-center justify-center h-full scale-90">
-      <div className="relative flex items-center">
-        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-gradient-to-r from-transparent via-[#FFB700]/30 to-transparent" />
-        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1/2 h-[1px] bg-gradient-to-r from-transparent via-[#FFB700]/30 to-transparent" />
-        
-        <div className="relative z-10 h-[3.5vmin] w-[14vmin] bg-blue-600 flex items-center justify-center border-y border-l border-white/20 rounded-l transform -skew-x-12 ml-1 shadow-[0_0_20px_rgba(37,99,235,0.6)]">
-          <span className="text-[1vmin] font-black text-white uppercase tracking-[0.2em] skew-x-12 italic drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">TEAM BLUE</span>
-        </div>
-
-        <div className="relative z-20 h-[5.5vmin] w-[11vmin] bg-[#0a0a0a] border border-white/20 rounded flex items-center justify-center shadow-[inset_0_0_15px_rgba(0,0,0,1)] mx-[-0.8vmin]">
-          <div className="absolute inset-0.5 border border-[#FFB700]/10 rounded" />
-          <span className="text-[2.5vmin] font-bold text-white tabular-nums tracking-tighter italic">00:00</span>
-        </div>
-
-        <div className="relative z-10 h-[3.5vmin] w-[14vmin] bg-red-600 flex items-center justify-center border-y border-r border-white/20 rounded-r transform skew-x-12 mr-1 shadow-[0_0_20px_rgba(220,38,38,0.6)]">
-          <span className="text-[1vmin] font-black text-white uppercase tracking-[0.2em] -skew-x-12 italic drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">TEAM RED</span>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function HextechModule({ 
   children, 
@@ -253,7 +233,7 @@ function HextechModule({
       disabled={disabled}
       className={`px-[3vmin] py-[1vmin] border rounded-sm transition-all duration-300 flex items-center justify-center min-w-[15vmin] group ${variants[variant]} ${disabled ? 'opacity-20 cursor-not-allowed' : ''}`}
     >
-      <span className="text-[1.2vmin] font-black uppercase tracking-[0.3em] italic transition-colors">{children}</span>
+      <span className="text-[1.2vmin] font-black uppercase tracking-[0.3em] transition-colors">{children}</span>
     </motion.button>
   );
 }
@@ -328,15 +308,15 @@ function SalaChat({ salaId, usuarioAtual, jogadores }: {
   const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } };
 
   return (
-    <div className="w-[36vmin] h-[17vmin] bg-white/[0.02] border border-white/5 rounded-sm flex flex-col">
+    <div className="w-[48vmin] h-[22vmin] bg-white/[0.02] border border-white/5 rounded-sm flex flex-col">
       {/* Mensagens */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-2.5 pt-2 space-y-1.5 scrollbar-thin scrollbar-thumb-[#FFB700]/20 scrollbar-track-transparent">
-        <div className="text-[0.8vmin] text-white/20 uppercase tracking-widest mb-1 font-bold">Chat da Sala</div>
+        <div className="text-[1vmin] text-white/20 uppercase tracking-widest mb-1 font-bold">Chat da Sala</div>
         {visiveis.length === 0 && (
-          <div className="text-[1vmin] text-white/10 italic">Nenhuma mensagem ainda.</div>
+          <div className="text-[1.2vmin] text-white/10">Nenhuma mensagem ainda.</div>
         )}
         {visiveis.map((m: MsgChat) => (
-          <div key={m.id} className="text-[1vmin] text-white leading-snug break-words">
+          <div key={m.id} className="text-[1.3vmin] text-white leading-snug break-words">
             <span className="font-black mr-1" style={{ color: corDoNick(m.user_id) }}>{m.nome}:</span>
             <span className="text-white/80">{m.texto}</span>
           </div>
@@ -345,9 +325,9 @@ function SalaChat({ salaId, usuarioAtual, jogadores }: {
       </div>
 
       {/* Input */}
-      <div className="border-t border-white/5 flex items-center px-2 gap-1.5 h-[3.5vmin] shrink-0">
+      <div className="border-t border-white/5 flex items-center px-2 gap-1.5 h-[4vmin] shrink-0">
         <button onClick={enviar} className="text-[#FFB700]/40 hover:text-[#FFB700] transition-colors shrink-0">
-          <Send className="w-[1.4vmin] h-[1.4vmin]" />
+          <Send className="w-[1.6vmin] h-[1.6vmin]" />
         </button>
         <input
           value={texto}
@@ -355,7 +335,7 @@ function SalaChat({ salaId, usuarioAtual, jogadores }: {
           onKeyDown={onKey}
           maxLength={200}
           placeholder="Pressione Enter para enviar..."
-          className="flex-1 bg-transparent text-[1vmin] text-white/70 placeholder:text-white/10 outline-none"
+          className="flex-1 bg-transparent text-[1.3vmin] text-white/70 placeholder:text-white/10 outline-none"
         />
       </div>
     </div>
@@ -385,28 +365,19 @@ function HextechActionBar({
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[2px] bg-gradient-to-r from-transparent via-[#FFB700]/40 to-transparent blur-sm" />
 
       {/* Mesmo gap do MIDDLE SECTION — laterais alinham com as colunas dos slots */}
-      <div className={`relative w-full flex items-end justify-center ${sala.modo === '1v1' ? 'gap-[60vmin]' : 'gap-[68vmin]'}`}>
+      <div className={`relative w-full flex items-end justify-center ${sala.modo === '1v1' ? 'gap-[68vmin]' : 'gap-[76vmin]'}`}>
 
         {/* ESQUERDA — alinha com coluna esquerda (items-start) */}
-        <div className="flex items-end justify-start w-[36vmin] pb-1">
-          <HextechModule variant="danger" onClick={acaoSairDaSala}>
-            Sair da Sala
-          </HextechModule>
+        <div className="flex items-end justify-start w-[48vmin]">
+          <SalaChat salaId={sala.id} usuarioAtual={usuarioAtual} jogadores={sala.jogadores} />
         </div>
 
         {/* CENTRO — absolutamente centralizado, independente dos laterais */}
-        <div className="absolute left-1/2 -translate-x-1/2 bottom-0 flex flex-col items-center pointer-events-none">
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[-20vmin] flex flex-col items-center pointer-events-none gap-[4vmin]">
+          {/* Botão de Ação Principal */}
           <div className="pointer-events-auto flex flex-col items-center">
-            <div className="flex items-center gap-2 mb-3">
-              <div className={`w-1.5 h-1.5 rounded-full ${['em_partida', 'finalizacao'].includes(estado) ? 'bg-red-400' : estado === 'confirmacao' ? 'bg-yellow-400 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_#22c55e]'} animate-pulse`} />
-              <span className="text-[9px] font-black uppercase tracking-[0.5em] text-white/30 italic">
-                Status: {estado.replace('_', ' ')}
-              </span>
-            </div>
-
             {estado === 'confirmacao' && jogadorAtual ? (
               <motion.button
-                whileHover={{ scale: 1.02, letterSpacing: '0.6em' }}
                 whileTap={{ scale: 0.98 }}
                 onClick={acaoConfirmarPresenca}
                 disabled={jogadorAtual.confirmado}
@@ -418,7 +389,6 @@ function HextechActionBar({
               </motion.button>
             ) : estado === 'em_partida' && !!jogadorAtual ? (
               <motion.button
-                whileHover={{ scale: 1.02, letterSpacing: '0.6em' }}
                 whileTap={{ scale: 0.98 }}
                 onClick={acaoSolicitarFinalizacao}
                 className="px-[10vmin] py-[2vmin] bg-orange-500 text-white font-black uppercase tracking-[0.4em] text-[1.4vmin] rounded-sm shadow-[0_0_40px_rgba(249,115,22,0.2)] hover:bg-orange-600 transition-all duration-500"
@@ -427,17 +397,34 @@ function HextechActionBar({
               </motion.button>
             ) : (
               <div className="px-[10vmin] py-[2vmin] border border-white/5 bg-white/5 rounded-sm">
-                <span className="text-[1.1vmin] font-black uppercase tracking-[0.8em] text-white/10 italic">
-                  {estado === 'aberta' ? 'Aguardando Jogadores' : 'Partida em Andamento'}
+                <span className="text-[1.1vmin] font-black uppercase tracking-[0.8em] text-white">
+                  Aguardando Jogadores
                 </span>
               </div>
             )}
           </div>
+
+          {/* Status da Sala — abaixo do botão */}
+          <div className="pointer-events-auto flex flex-col items-center gap-1 max-w-[40vmin]">
+            <div className="flex items-center gap-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${['em_partida', 'finalizacao'].includes(estado) ? 'bg-red-400' : estado === 'confirmacao' ? 'bg-yellow-400 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_#22c55e]'} animate-pulse`} />
+              <span className="text-[1vmin] font-black uppercase tracking-[0.3em] text-white/20">
+                Status da Sala
+              </span>
+            </div>
+            <p className="text-[1.2vmin] font-medium text-white/30 text-center leading-relaxed">
+              {estado === 'aberta' && sala.jogadores.length < (sala.modo === '1v1' ? 2 : 10) && "Aberta entre na vaga."}
+              {estado === 'aberta' && sala.jogadores.length === (sala.modo === '1v1' ? 2 : 10) && "Aberta assim que todos os jogadores forem completados."}
+              {estado === 'confirmacao' && "Assim que todas as vagas forem preenchidas, a sala entrará em processo de confirmação."}
+              {estado === 'em_partida' && "Partida em andamento. Boa sorte aos invocadores!"}
+              {estado === 'finalizacao' && "Partida finalizada. Aguardando processamento do resultado."}
+            </p>
+          </div>
         </div>
 
         {/* DIREITA — alinha com coluna direita (items-end), mesma largura dos slots */}
-        <div className="flex items-end justify-end w-[36vmin]">
-          <SalaChat salaId={sala.id} usuarioAtual={usuarioAtual} jogadores={sala.jogadores} />
+        <div className="flex items-end justify-end w-[48vmin]">
+          {/* Espaço reservado para stream buttons — renderizados via componentes laterais */}
         </div>
       </div>
     </div>
@@ -473,6 +460,8 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const [versionDDR, setVersionDDR] = useState('15.8.1');
   const [visualizandoPartida, setVisualizandoPartida] = useState(false);
   const [cargoUsuario, setCargoUsuario] = useState<'proprietario' | 'admin' | 'streamer' | 'coach' | 'jogador'>('jogador');
+  const [salaStreamAtiva, setSalaStreamAtiva] = useState<any>(null);
+  const [isStreamModalOpen, setIsStreamModalOpen] = useState(false);
   const vagasEmAndamento                    = useRef<Set<string>>(new Set());
 
   // Carregar cargo do usuário
@@ -487,6 +476,57 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       carregarCargo();
     }
   }, [usuarioAtual?.id]);
+
+  // Listen to active streams in this room
+  useEffect(() => {
+    if (!sala?.id) return;
+
+    const loadActiveStream = async () => {
+      const { data } = await supabase
+        .from('sala_streams')
+        .select('*')
+        .eq('sala_id', sala.id)
+        .eq('ativo', true)
+        .maybeSingle();
+
+      console.log('[SalaPage] Stream ativa carregada:', data);
+      setSalaStreamAtiva(data);
+    };
+
+    loadActiveStream();
+
+    // Subscribe to realtime updates
+    const subscription = supabase
+      .channel(`sala_streams_${sala.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sala_streams',
+          filter: `sala_id=eq.${sala.id}`,
+        },
+        (payload: any) => {
+          console.log('[SalaPage] Realtime update:', payload.eventType, payload);
+
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const newStream = payload.new as any;
+            if (newStream.ativo) {
+              console.log('[SalaPage] Ativando stream:', newStream);
+              setSalaStreamAtiva(newStream);
+            }
+          } else if (payload.eventType === 'DELETE' || (payload.new && !payload.new.ativo)) {
+            console.log('[SalaPage] Desativando stream');
+            setSalaStreamAtiva(null);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [sala?.id]);
 
   // Carregar draft quando estiver em aguardando_inicio, em_partida ou encerrada
   useEffect(() => {
@@ -512,6 +552,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       carregarDraft();
     }
   }, [sala?.id, sala?.draft_id, sala?.estado]);
+
 
   if (loading || !sala) {
     return (
@@ -574,15 +615,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const roles: Role[] = isX1 ? ['MID'] : ['TOP', 'JG', 'MID', 'ADC', 'SUP'];
   const timeA = sala.jogadores.filter(j => j.isTimeA);
   const timeB = sala.jogadores.filter(j => !j.isTimeA);
-  const isCriador = sala.criadorId === usuarioAtual.id;
 
   const slotWidths: Partial<Record<Role, string>> & Record<string, string> = {
-    TOP: 'w-[36vmin]',
-    JG:  'w-[34vmin]',
-    MID: isX1 ? 'w-[36vmin]' : 'w-[32vmin]',
-    ADC: 'w-[34vmin]',
-    SUP: 'w-[36vmin]',
-    RES: 'w-[32vmin]',
+    TOP: 'w-[42vmin]',
+    JG:  'w-[40vmin]',
+    MID: isX1 ? 'w-[42vmin]' : 'w-[38vmin]',
+    ADC: 'w-[40vmin]',
+    SUP: 'w-[42vmin]',
+    RES: 'w-[38vmin]',
   };
 
   const copiarLink = () => {
@@ -600,11 +640,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     const teamColor = isTimeA ? '#3B82F6' : '#ef4444';
 
     if (jog) {
+      const isConfirmado = sala.estado === 'confirmacao' && jog.confirmado;
       const avatarEl = (
-        <div className="w-[4vmin] h-[4vmin] rounded bg-white/5 flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
+        <div className={`w-[4.5vmin] h-[4.5vmin] rounded bg-white/5 flex items-center justify-center overflow-hidden border ${isConfirmado ? 'border-green-500' : 'border-white/10'} shrink-0`}>
           {jog.avatar
             ? <img src={jog.avatar} alt={jog.nome} className="w-full h-full object-cover" />
-            : <span className="text-white/20 text-[1.4vmin] font-bold">{jog.nome[0]}</span>
+            : <span className="text-white/20 text-[1.6vmin] font-bold">{jog.nome[0]}</span>
           }
         </div>
       );
@@ -612,29 +653,35 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       return (
         <div
           key={`${isTimeA ? 'A' : 'B'}-${role}`}
-          className={`relative ${widthClass} h-[7.5vmin] bg-black rounded-lg border border-white/10 flex flex-row items-center px-[1.5vmin] shadow-lg transition-all ${
-            sala.estado === 'confirmacao' && jog.confirmado ? 'border-green-500/30 bg-green-500/5' : ''
+          className={`relative ${widthClass} h-[8.5vmin] bg-black rounded-lg border transition-all shadow-lg flex flex-row items-center px-[1.5vmin] ${
+            isConfirmado ? 'border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.1)]' : 'border-white/10'
           } ${isTimeA ? 'justify-end' : 'justify-start'}`}
         >
+          {isConfirmado && (
+            <div className={`absolute ${isTimeA ? 'left-[1.5vmin]' : 'right-[1.5vmin]'} flex items-center justify-center`}>
+              <div className="w-[2.5vmin] h-[2.5vmin] bg-green-500 rounded-full flex items-center justify-center shadow-[0_0_10px_rgba(34,197,94,0.5)]">
+                <Check className="w-[1.6vmin] h-[1.6vmin] text-black stroke-[4px]" />
+              </div>
+            </div>
+          )}
+
           {isTimeA ? (
             // Time Azul — tudo agrupado na direita (lado interno):
-            // [nome] [tag] [avatar] [ícone rota]
-            <div className="flex items-center gap-[0.8vmin] overflow-hidden">
-              <span className="text-[1.6vmin] font-black tracking-tight truncate" style={{ color: teamColor }}>{jog.nome}</span>
-              <span className="text-white/60 text-[1.6vmin] font-semibold shrink-0">{jog.tag}</span>
-              {jog.isLider && <Crown className="w-[1.2vmin] h-[1.2vmin] text-yellow-400 shrink-0" />}
+            <div className="flex items-center gap-[1vmin] overflow-hidden">
+              <span className="text-[1.8vmin] font-black tracking-tight truncate" style={{ color: teamColor }}>{jog.nome}</span>
+              <span className="text-white/60 text-[1.8vmin] font-semibold shrink-0">{jog.tag}</span>
+              {jog.isLider && <Crown className="w-[1.4vmin] h-[1.4vmin] text-yellow-400 shrink-0" />}
               {avatarEl}
-              <img src={roleIcon.img} className="w-[3.2vmin] h-[3.2vmin] opacity-80 shrink-0" alt={role} />
+              <img src={roleIcon.img} className="w-[3.5vmin] h-[3.5vmin] opacity-80 shrink-0" alt={role} />
             </div>
           ) : (
             // Time Vermelho — tudo agrupado na esquerda (lado interno):
-            // [ícone rota] [avatar] [nome] [tag]
-            <div className="flex items-center gap-[0.8vmin] overflow-hidden">
-              <img src={roleIcon.img} className="w-[3.2vmin] h-[3.2vmin] opacity-80 shrink-0" alt={role} />
+            <div className="flex items-center gap-[1vmin] overflow-hidden">
+              <img src={roleIcon.img} className="w-[3.5vmin] h-[3.5vmin] opacity-80 shrink-0" alt={role} />
               {avatarEl}
-              <span className="text-[1.6vmin] font-black tracking-tight truncate" style={{ color: teamColor }}>{jog.nome}</span>
-              <span className="text-white/60 text-[1.6vmin] font-semibold shrink-0">{jog.tag}</span>
-              {jog.isLider && <Crown className="w-[1.2vmin] h-[1.2vmin] text-yellow-400 shrink-0" />}
+              <span className="text-[1.8vmin] font-black tracking-tight truncate" style={{ color: teamColor }}>{jog.nome}</span>
+              <span className="text-white/60 text-[1.8vmin] font-semibold shrink-0">{jog.tag}</span>
+              {jog.isLider && <Crown className="w-[1.4vmin] h-[1.4vmin] text-yellow-400 shrink-0" />}
             </div>
           )}
         </div>
@@ -648,20 +695,20 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         key={`${isTimeA ? 'A' : 'B'}-${role}`}
         onClick={() => podeEntrar && acaoEntrarVaga(role, isTimeA)}
         disabled={!podeEntrar}
-        className={`relative ${widthClass} h-[7.5vmin] bg-black rounded-lg border border-white/5 flex ${isLeft ? 'flex-row-reverse' : 'flex-row'} items-center px-[1.5vmin] gap-[1vmin] transition-all group ${
+        className={`relative ${widthClass} h-[8.5vmin] bg-black rounded-lg border border-white/5 flex ${isLeft ? 'flex-row-reverse' : 'flex-row'} items-center px-[1.5vmin] gap-[1vmin] transition-all group ${
           podeEntrar ? 'hover:bg-white/[0.03] border-white/10' : 'opacity-10 cursor-not-allowed'
         }`}
       >
-        <div className="w-[4vmin] h-[4vmin] rounded border border-white/5 bg-white/5 flex items-center justify-center">
-          <UserPlus className="w-[1.8vmin] h-[1.8vmin] text-white/10 group-hover:text-white/40 transition-colors" />
+        <div className="w-[4.5vmin] h-[4.5vmin] rounded border border-white/5 bg-white/5 flex items-center justify-center">
+          <UserPlus className="w-[2vmin] h-[2vmin] text-white/10 group-hover:text-white/40 transition-colors" />
         </div>
         <div className={`flex flex-col ${isLeft ? 'items-end text-right' : 'items-start text-left'}`}>
-          <span className="text-[1vmin] font-black text-white/10 uppercase tracking-[0.2em] group-hover:text-white/30 transition-colors">
+          <span className="text-[1.2vmin] font-black text-white/10 uppercase tracking-[0.2em] group-hover:text-white/30 transition-colors">
             {podeEntrar ? 'ENTRAR' : role}
           </span>
           <div className={`flex items-center gap-[0.7vmin] mt-[0.2vmin] ${isLeft ? 'flex-row-reverse' : 'flex-row'}`}>
-            <img src={roleIcon.img} className="w-[1.3vmin] h-[1.3vmin] opacity-10 group-hover:opacity-30 transition-opacity" alt={role} />
-            <span className="text-[0.9vmin] font-black text-white/5 uppercase tracking-widest">{role}</span>
+            <img src={roleIcon.img} className="w-[1.5vmin] h-[1.5vmin] opacity-10 group-hover:opacity-30 transition-opacity" alt={role} />
+            <span className="text-[1.1vmin] font-black text-white/5 uppercase tracking-widest">{role}</span>
           </div>
         </div>
       </button>
@@ -669,7 +716,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   };
 
   return (
-    <div className="flex-1 w-full bg-[#050505] flex flex-col items-center justify-between p-0 font-sans relative overflow-hidden">
+    <div className="flex-1 w-full h-full bg-[#050505] flex flex-col items-center justify-between p-0 font-sans relative overflow-hidden min-h-screen">
       
       {/* BACKGROUND IMAGE */}
       <img 
@@ -680,7 +727,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       />
 
       {/* MASSIVE CENTRAL CIRCLE */}
-      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black border-[4px] border-white/5 flex flex-col items-center justify-center z-10">
+      <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black border-[4px] border-white/5 flex flex-col items-center justify-center z-10">
         <div className="absolute inset-10 rounded-full border border-white/[0.02]" />
         <ArcaneIndicators />
         <CentralDisplay />
@@ -688,18 +735,18 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Blur overlay de Confirmação (atrás) — z-20 */}
       {sala.estado === 'confirmacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
       )}
 
       {/* Overlay de Confirmação (conteúdo, frente) — z-50 */}
       {sala.estado === 'confirmacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 pointer-events-none">
-          <span className="text-[15vmin] font-black text-white tabular-nums leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">{timerConfirmacao}</span>
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full flex flex-col items-center justify-center z-50 pointer-events-none">
+          <span className="lg:text-[15vmin] md:text-[12vmin] text-[10vmin] font-black text-white tabular-nums leading-none drop-shadow-[0_0_30px_rgba(255,255,255,0.3)]">{timerConfirmacao}</span>
           <span className="text-[2vmin] font-black text-white/40 uppercase tracking-[1em] mt-6">CONFIRME AGORA</span>
         </div>
       )}
 
-      {/* Picks em AGUARDANDO_INICIO — acima do overlay */}
+      {/* Picks em AGUARDANDO_INICIO ou ABERTA — acima do overlay */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && draftFinalizado && (
         <div className="absolute top-[14vmin] left-1/2 -translate-x-1/2 w-[85vmin] z-50 text-center">
           <div className="grid grid-cols-2 gap-[4vmin]">
@@ -753,12 +800,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Blur overlay (atrás) — z-20 */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
       )}
 
       {/* Conteúdo e botões (frente) — z-50 */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full flex flex-col items-center justify-center z-50 p-[4vmin] lg:p-[8vmin] text-center pointer-events-auto">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
             Draft Finalizado!
           </p>
@@ -797,12 +844,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
               </div>
             ) : (
               <div className="px-[4vmin] py-[2vmin]">
-                <span className="text-[2vmin] text-white/20 italic">Atribuindo código...</span>
+                <span className="text-[2vmin] text-white/20">Atribuindo código...</span>
               </div>
             )
           ) : (
             <div className="px-[4vmin] py-[2vmin] rounded-lg bg-blue-500/10 border border-blue-500/20">
-              <span className="text-[1.3vmin] text-blue-300 italic">Entre na sala como jogador para ver o código</span>
+              <span className="text-[1.3vmin] text-blue-300">Entre na sala como jogador para ver o código</span>
             </div>
           )}
 
@@ -823,12 +870,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* Blur overlay para cargos especiais (atrás) — z-20 */}
       {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
       )}
 
       {/* Conteúdo e botões para cargos especiais (frente) — z-50 */}
       {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full flex flex-col items-center justify-center z-50 p-[4vmin] lg:p-[8vmin] text-center pointer-events-auto">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
             Draft Finalizado!
           </p>
@@ -862,14 +909,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             </div>
           ) : (
             <div className="px-[4vmin] py-[2vmin]">
-              <span className="text-[2vmin] text-white/20 italic">Atribuindo código...</span>
+              <span className="text-[2vmin] text-white/20">Atribuindo código...</span>
             </div>
           )}
         </div>
       )}
 
-      {/* Picks em AGUARDANDO_INICIO para cargos especiais */}
-      {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && draftFinalizado && (
+      {/* Picks em AGUARDANDO_INICIO ou ABERTA para cargos especiais */}
+      {(sala.estado === 'aguardando_inicio' || sala.estado === 'aberta') && !jogadorAtual && cargoUsuario !== 'jogador' && draftFinalizado && (
         <div className="absolute top-[11vmin] left-[5vmin] right-[5vmin] z-40 text-center">
           <div className="grid grid-cols-2 gap-[4vmin]">
             {/* Time Azul */}
@@ -975,12 +1022,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       {/* Overlay de Votação de Resultado */}
       {/* Blur overlay de Finalização (atrás) — z-20 */}
       {sala.estado === 'finalizacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full bg-black/40 backdrop-blur-sm z-20 pointer-events-none" />
       )}
 
       {/* Overlay de Finalização (conteúdo, frente) — z-50 */}
       {sala.estado === 'finalizacao' && (
-        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
+        <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 lg:w-[75vmin] lg:h-[75vmin] md:w-[65vmin] md:h-[65vmin] w-[55vmin] h-[55vmin] rounded-full flex flex-col items-center justify-center z-50 p-[4vmin] lg:p-[8vmin] text-center pointer-events-auto">
           {meuVotoResultado ? (
             /* Já votou — mostra confirmação e botão de sair */
             <div className="flex flex-col items-center gap-[2vmin]">
@@ -1052,9 +1099,9 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             <button onClick={acaoSairDaSala} className="mr-[3vmin] text-white/40 hover:text-white transition-colors">
               <ArrowLeft className="w-[2.5vmin] h-[2.5vmin]" />
             </button>
-            <div className="flex flex-col">
-              <h1 className="text-[2vmin] font-black uppercase tracking-tighter text-white italic leading-none">{sala.nome}</h1>
-              <div className="flex items-center gap-[1vmin] mt-[0.5vmin]">
+            <div className="flex items-center gap-[2vmin]">
+              <h1 className="text-[2vmin] font-black uppercase tracking-tighter text-white leading-none">{sala.nome}</h1>
+              <div className="flex items-center gap-[1vmin] bg-white/5 px-[1.5vmin] py-[0.5vmin] rounded-sm border border-white/10">
                 <span className="text-[1vmin] font-black text-[#FFB700] tracking-[0.5em]">{sala.codigo}</span>
                 <button onClick={copiarLink} className="text-white/20 hover:text-white/40 transition-colors">
                   {copiado ? <Check className="w-[1.4vmin] h-[1.4vmin] text-green-500" /> : <Copy className="w-[1.4vmin] h-[1.4vmin]" />}
@@ -1063,31 +1110,24 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             </div>
           </div>
 
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 hidden xl:block">
-            <ScoreboardHeader />
-          </div>
 
-          <div className="flex items-center gap-[3vmin]">
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[0.9vmin] font-black text-white/20 uppercase tracking-widest">MODO</span>
-              <span className="text-[1.2vmin] font-black text-white uppercase italic">{sala.modo}</span>
+          <div className="flex items-center gap-[2vmin]">
+            <div className="hidden sm:flex items-center gap-[1vmin] px-[1.5vmin] py-[0.8vmin] bg-white/5 rounded-lg border border-white/5">
+              <div className="flex flex-col items-center">
+                <span className="text-[0.7vmin] font-black text-white/20 uppercase tracking-widest">MODO</span>
+                <span className="text-[1.1vmin] font-black text-white uppercase">{sala.modo}</span>
+              </div>
             </div>
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-[0.9vmin] font-black text-white/20 uppercase tracking-widest">MPOINTS</span>
-              <span className="text-[1.2vmin] font-black text-[#FFB700] uppercase">{sala.mpoints}</span>
+            <div className="hidden sm:flex items-center gap-[1vmin] px-[1.5vmin] py-[0.8vmin] bg-white/5 rounded-lg border border-white/5">
+              <div className="flex flex-col items-center">
+                <span className="text-[0.7vmin] font-black text-white/20 uppercase tracking-widest">COINS</span>
+                <span className="text-[1.1vmin] font-black text-[#FFB700] uppercase">{sala.mpoints}</span>
+              </div>
             </div>
             <div className="flex items-center gap-[1vmin] px-[1.5vmin] py-[0.8vmin] bg-white/5 rounded-lg border border-white/5">
               <Eye className="w-[1.8vmin] h-[1.8vmin] text-[#FFB700]" />
               <span className="text-[1.4vmin] font-black text-white tabular-nums">{viewers}</span>
             </div>
-            {isCriador && sala.estado === 'aberta' && (
-              <button
-                onClick={async () => { await acaoApagarSala(); navigate('/jogar'); }}
-                className="p-[1vmin] rounded-lg bg-red-500/10 hover:bg-red-500/20 transition-colors"
-              >
-                <Trash2 className="w-[1.8vmin] h-[1.8vmin] text-red-400" />
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -1103,11 +1143,27 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       )}
 
       {/* MIDDLE SECTION */}
-      <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] ${isX1 ? 'gap-[60vmin]' : 'gap-[68vmin]'}`}>
+      <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] overflow-x-auto px-[1vmin] ${isX1 ? 'lg:gap-[60vmin] md:gap-[40vmin] gap-[20vmin]' : 'lg:gap-[68vmin] md:gap-[48vmin] gap-[24vmin]'}`}>
         <div className="flex flex-col gap-[1.5vmin] items-start">
+          {/* Team Blue Header - Hextech Badge */}
+          <div className="relative mb-[1vmin] ml-[0.5vmin] w-[22vmin]">
+            <div className="absolute inset-0 bg-[#3B82F6]/10 skew-x-[-12deg] border-l-2 border-[#3B82F6]" />
+            <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col">
+              <span className="text-[0.8vmin] font-black text-[#3B82F6] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe</span>
+              <span className="text-[1.6vmin] font-black text-white uppercase tracking-wider leading-none">Azul</span>
+            </div>
+          </div>
           {roles.map((role) => renderSlot(role, true))}
         </div>
-        <div className="flex flex-col gap-[1.5vmin] items-end">
+        <div className="flex flex-col gap-[1.5vmin] items-end text-right">
+          {/* Team Red Header - Hextech Badge */}
+          <div className="relative mb-[1vmin] mr-[0.5vmin] w-[22vmin]">
+            <div className="absolute inset-0 bg-[#ef4444]/10 skew-x-[12deg] border-r-2 border-[#ef4444]" />
+            <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col items-end">
+              <span className="text-[0.8vmin] font-black text-[#ef4444] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe</span>
+              <span className="text-[1.6vmin] font-black text-white uppercase tracking-wider leading-none">Vermelha</span>
+            </div>
+          </div>
           {roles.map((role) => renderSlot(role, false))}
         </div>
       </div>
@@ -1314,6 +1370,100 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             </div>
           </motion.div>
         </div>
+      )}
+
+      {/* Botão de Transmitir (Streamer) — lado direito superior */}
+      {cargoUsuario === 'streamer' && (
+        <motion.div
+          initial={{ x: 100, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 100, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="fixed right-4 top-20 z-40 md:right-8 md:top-24"
+        >
+          <button
+            onClick={async () => {
+              if (salaStreamAtiva) {
+                await supabase
+                  .from('sala_streams')
+                  .delete()
+                  .eq('sala_id', sala.id)
+                  .eq('user_id', usuarioAtual.id);
+                setSalaStreamAtiva(null);
+                setIsStreamModalOpen(false);
+              } else {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('twitch')
+                  .eq('id', usuarioAtual.id)
+                  .maybeSingle();
+
+                const twitchChannel = (profile as any)?.twitch;
+                if (!twitchChannel) {
+                  alert('Você precisa cadastrar um canal Twitch no seu perfil');
+                  return;
+                }
+
+                const { error } = await supabase
+                  .from('sala_streams')
+                  .insert({
+                    sala_id: sala.id,
+                    user_id: usuarioAtual.id,
+                    twitch_channel: twitchChannel,
+                    ativo: true,
+                  });
+
+                if (error) {
+                  console.error('Erro ao ativar transmissão:', error);
+                  alert('Erro ao ativar transmissão');
+                }
+              }
+            }}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl font-black uppercase tracking-wider text-sm transition-all border-2 ${
+              salaStreamAtiva
+                ? 'bg-purple-600/40 border-purple-500 text-purple-200 hover:bg-purple-600/60'
+                : 'bg-purple-600/10 border-purple-500/30 text-purple-400 hover:bg-purple-600/20 hover:border-purple-500/50'
+            }`}
+          >
+            <Eye className="w-5 h-5" />
+            <span className="hidden sm:inline">
+              {salaStreamAtiva ? '🔴 TRANSMITINDO' : '📹 TRANSMITIR'}
+            </span>
+            <span className="sm:hidden">
+              {salaStreamAtiva ? '🔴' : '📹'}
+            </span>
+          </button>
+        </motion.div>
+      )}
+
+      {/* Botão de Assistir (Watch Stream) — lado direito inferior */}
+      {salaStreamAtiva && (
+        <motion.div
+          initial={{ x: 100, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 100, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="fixed right-4 bottom-4 z-40 md:right-8 md:bottom-8"
+        >
+          <button
+            onClick={() => setIsStreamModalOpen(true)}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl font-black uppercase tracking-wider text-sm transition-all border-2 bg-blue-600/10 border-blue-500/30 text-blue-400 hover:bg-blue-600/20 hover:border-blue-500/50 animate-pulse"
+          >
+            <Eye className="w-5 h-5" />
+            <span className="hidden sm:inline">ASSISTIR LIVE</span>
+            <span className="sm:hidden">🔴</span>
+          </button>
+        </motion.div>
+      )}
+
+      {/* Stream Modal */}
+      {salaStreamAtiva && salaStreamAtiva.twitch_channel && (
+        <StreamModal
+          isOpen={isStreamModalOpen}
+          onClose={() => setIsStreamModalOpen(false)}
+          channel={salaStreamAtiva.twitch_channel}
+          title={`Transmissão da Sala ${sala.codigoPartida || sala.id}`}
+        />
       )}
 
       {/* Side Vignettes */}
