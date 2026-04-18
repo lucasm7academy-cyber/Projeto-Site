@@ -425,6 +425,8 @@ export async function entrarNaVaga(
             if (nome) camposAtualizacao[campoNome] = nome;
             if (tag) camposAtualizacao[campoTag] = tag;
 
+            console.log(`[entrarNaVaga] Campos a atualizar:`, camposAtualizacao);
+
             if (Object.keys(camposAtualizacao).length > 0) {
               const { error: updateError } = await supabase
                 .from('salas')
@@ -434,8 +436,10 @@ export async function entrarNaVaga(
               if (updateError) {
                 console.error(`[entrarNaVaga] Erro ao atualizar dados do time:`, updateError);
               } else {
-                console.log(`[entrarNaVaga] ✅ Dados do time registrados: ${campoNome}=${nome}`);
+                console.log(`[entrarNaVaga] ✅ Dados do time registrados:`, camposAtualizacao);
               }
+            } else {
+              console.warn(`[entrarNaVaga] ⚠️ Nenhum campo para atualizar!`);
             }
           }
         }
