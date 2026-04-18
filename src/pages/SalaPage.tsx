@@ -188,6 +188,12 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome }: {
   timeANome?: string;
   timeBNome?: string;
 }) {
+  // Debug: log props da logo
+  if (modo === 'time_vs_time') {
+    console.log('[CentralDisplay] timeALogo:', timeALogo);
+    console.log('[CentralDisplay] timeBLogo:', timeBLogo);
+  }
+
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-full">
       {/* Background image */}
