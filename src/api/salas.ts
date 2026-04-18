@@ -289,8 +289,18 @@ export async function entrarNaVaga(
     .eq('vinculado', false)
     .neq('sala_id', salaId);
 
-  // Remove vaga anterior nesta sala usando sairDaVaga para resetar time_id se necessário
-  await sairDaVaga(salaId, usuario.id);
+  // Buscar info da vaga anterior ANTES de sair (para resetar time_id depois)
+  const { data: vagaAnterior } = await supabase
+    .from('sala_jogadores')
+    .select('is_time_a')
+    .eq('sala_id', salaId)
+    .eq('user_id', usuario.id)
+    .eq('vinculado', false)
+    .maybeSingle();
+
+  // Remove vaga anterior (sem passar por sairDaVaga, para evitar race condition)
+  await supabase.from('sala_jogadores').delete()
+    .eq('sala_id', salaId).eq('user_id', usuario.id).eq('vinculado', false);
 
   // Conta jogadores para definir líder
   const { count } = await supabase.from('sala_jogadores')
@@ -321,6 +331,28 @@ export async function entrarNaVaga(
     }
   }
 
+  // Após INSERT bem-sucedido, limpar time_id do lado anterior (time_vs_time)
+  if (vagaAnterior && modo === 'time_vs_time') {
+    const { count: contagem } = await supabase
+      .from('sala_jogadores')
+      .select('*', { count: 'exact', head: true })
+      .eq('sala_id', salaId)
+      .eq('is_time_a', vagaAnterior.is_time_a)
+      .eq('vinculado', false);
+
+    if (contagem === 0) {
+      const campoTimeIdAntigo = vagaAnterior.is_time_a ? 'time_a_id' : 'time_b_id';
+      try {
+        await supabase
+          .from('salas')
+          .update({ [campoTimeIdAntigo]: null })
+          .eq('id', salaId);
+      } catch (err: any) {
+        console.error(`[entrarNaVaga] Erro ao limpar ${campoTimeIdAntigo}:`, err);
+      }
+    }
+  }
+
   // ========== REGISTRAR TIME NA SALA (time_vs_time) ==========
   if (modo === 'time_vs_time') {
     const { data: membro } = await supabase
@@ -342,10 +374,16 @@ export async function entrarNaVaga(
       const timeIdJaDefinido = isTimeA ? sala?.time_a_id : sala?.time_b_id;
 
       if (!timeIdJaDefinido) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('salas')
           .update({ [campoTimeId]: membro.time_id })
           .eq('id', salaId);
+
+        if (updateError) {
+          console.error(`[entrarNaVaga] Erro ao registrar ${campoTimeId}:`, updateError);
+          // Se falhar, retorna erro mas o jogador já entrou (insert funcionou)
+          // A UI vai detectar via realtime que time_id não foi registrado
+        }
       }
     }
   }
