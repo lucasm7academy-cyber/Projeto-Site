@@ -405,6 +405,9 @@ export async function entrarNaVaga(
           }
 
           if (timeData) {
+            console.log('[entrarNaVaga] Dados do time recebidos:', Object.keys(timeData));
+            console.log('[entrarNaVaga] timeData completo:', timeData);
+
             const campoLogo = isTimeA ? 'time_a_logo' : 'time_b_logo';
             const campoNome = isTimeA ? 'time_a_nome' : 'time_b_nome';
             const campoTag = isTimeA ? 'time_a_tag' : 'time_b_tag';
@@ -413,6 +416,8 @@ export async function entrarNaVaga(
             const logo = (timeData as any).logo_url || (timeData as any).logoUrl || (timeData as any).logo;
             const nome = (timeData as any).name || (timeData as any).nome;
             const tag = (timeData as any).tag;
+
+            console.log(`[entrarNaVaga] Logo encontrada: ${logo}, Nome: ${nome}, Tag: ${tag}`);
 
             // Preparar UPDATE com dados do time
             const camposAtualizacao: Record<string, any> = {};
