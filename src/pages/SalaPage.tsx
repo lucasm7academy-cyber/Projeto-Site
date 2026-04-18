@@ -181,9 +181,16 @@ function ArcaneIndicators() {
   );
 }
 
-function CentralDisplay() {
+function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome }: {
+  modo?: string;
+  timeALogo?: string;
+  timeBLogo?: string;
+  timeANome?: string;
+  timeBNome?: string;
+}) {
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-full">
+      {/* Background image */}
       <AnimatePresence mode="wait">
         <motion.div
           key="image-step"
@@ -193,15 +200,51 @@ function CentralDisplay() {
           transition={{ duration: 1.5, ease: "easeOut" }}
           className="absolute inset-0 flex items-center justify-center"
         >
-          <img 
-            src="https://static.wikia.nocookie.net/leagueoflegends/images/9/9c/Summoner%27s_Rift_LoL_Promo_01.png/revision/latest/scale-to-width-down/1000?cb=20220817091416" 
-            alt="Summoner's Rift" 
+          <img
+            src="https://static.wikia.nocookie.net/leagueoflegends/images/9/9c/Summoner%27s_Rift_LoL_Promo_01.png/revision/latest/scale-to-width-down/1000?cb=20220817091416"
+            alt="Summoner's Rift"
             className="w-[90%] h-[90%] object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]"
             referrerPolicy="no-referrer"
           />
         </motion.div>
       </AnimatePresence>
       <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,118,0.06))] bg-[length:100%_2px,3px_100%] z-20 opacity-20" />
+
+      {/* Logos time_vs_time — sobreposto no centro */}
+      {modo === 'time_vs_time' && (
+        <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
+          <div className="flex items-center justify-center gap-[8vmin] relative w-full h-full">
+            {/* Time A Logo */}
+            <div className="w-[32vmin] h-[32vmin] rounded-2xl overflow-hidden border-4 border-blue-500/40 flex-shrink-0 bg-blue-600/10">
+              {timeALogo ? (
+                <img src={timeALogo} alt="Time A" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-blue-600/5">
+                  <span className="text-[12vmin] font-black text-blue-400/30">?</span>
+                </div>
+              )}
+            </div>
+
+            {/* VS Badge */}
+            <div className="absolute z-40 pointer-events-auto">
+              <div className="w-[8vmin] h-[8vmin] bg-black/80 border-4 border-white/30 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(0,0,0,0.8)]">
+                <span className="text-[3.5vmin] font-black text-white/80">VS</span>
+              </div>
+            </div>
+
+            {/* Time B Logo */}
+            <div className="w-[32vmin] h-[32vmin] rounded-2xl overflow-hidden border-4 border-red-500/40 flex-shrink-0 bg-red-600/10">
+              {timeBLogo ? (
+                <img src={timeBLogo} alt="Time B" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-red-600/5">
+                  <span className="text-[12vmin] font-black text-red-400/30">?</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -746,7 +789,13 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black border-[4px] border-white/5 flex flex-col items-center justify-center z-10">
         <div className="absolute inset-10 rounded-full border border-white/[0.02]" />
         <ArcaneIndicators />
-        <CentralDisplay />
+        <CentralDisplay
+          modo={sala?.modo}
+          timeALogo={sala?.timeALogo}
+          timeBLogo={sala?.timeBLogo}
+          timeANome={sala?.timeANome}
+          timeBNome={sala?.timeBNome}
+        />
       </div>
 
       {/* Blur overlay de Confirmação (atrás) — z-20 */}
@@ -1139,47 +1188,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         {/* TEAM HEADERS COM VS NO MEIO */}
         {sala.modo === 'time_vs_time' ? (
           <div className="flex flex-col items-center gap-[3vmin]">
-            {/* Logos grandes com VS */}
-            <div className="flex items-center justify-center gap-[4vmin] relative">
-              {/* Time A Logo */}
-              <div className="flex flex-col items-center gap-[1vmin]">
-                <div className="w-[12vmin] h-[12vmin] bg-blue-600/10 border-2 border-blue-500/30 rounded-2xl flex items-center justify-center">
-                  {sala.timeALogo ? (
-                    <img src={sala.timeALogo} alt="Time A" className="w-[10vmin] h-[10vmin] object-contain" />
-                  ) : (
-                    <span className="text-[5vmin] font-black text-blue-400/40">?</span>
-                  )}
-                </div>
-                <div className="text-center">
-                  <span className="text-[0.9vmin] font-black text-blue-400 uppercase tracking-widest">Time A</span>
-                  <p className="text-[1.2vmin] font-black text-white">{sala.timeANome || 'Aguardando'}</p>
-                </div>
-              </div>
-
-              {/* VS Badge */}
-              <div className="absolute text-center z-10">
-                <div className="w-[5vmin] h-[5vmin] bg-black border-2 border-white/20 rounded-full flex items-center justify-center">
-                  <span className="text-[2vmin] font-black text-white/60">VS</span>
-                </div>
-              </div>
-
-              {/* Time B Logo */}
-              <div className="flex flex-col items-center gap-[1vmin]">
-                <div className="w-[12vmin] h-[12vmin] bg-red-600/10 border-2 border-red-500/30 rounded-2xl flex items-center justify-center">
-                  {sala.timeBLogo ? (
-                    <img src={sala.timeBLogo} alt="Time B" className="w-[10vmin] h-[10vmin] object-contain" />
-                  ) : (
-                    <span className="text-[5vmin] font-black text-red-400/40">?</span>
-                  )}
-                </div>
-                <div className="text-center">
-                  <span className="text-[0.9vmin] font-black text-red-400 uppercase tracking-widest">Time B</span>
-                  <p className="text-[1.2vmin] font-black text-white">{sala.timeBNome || 'Aguardando'}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Vagas abaixo das logos */}
+            {/* Vagas lado a lado */}
             <div className="flex gap-[76vmin]">
               <div className="flex flex-col gap-[1.5vmin] items-start">
                 {roles.map((role) => renderSlot(role, true))}
