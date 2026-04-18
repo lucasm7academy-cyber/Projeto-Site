@@ -436,7 +436,7 @@ function HextechActionBar({
 function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const navigate = useNavigate();
   const {
-    sala, loading, jogadorAtual, viewers, semContaRiot,
+    sala, loading, jogadorAtual, viewers, semContaRiot, erroEntrada,
     timerConfirmacao, timerCancelamento, timerFinalizacao,
     meuVotoResultado,
     contagemVotosResultado,
@@ -571,6 +571,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         onDraftFinalizado={acaoDraftFinalizado}
         onPickTimeout={acaoCancelarDraftPorTimeout}
         onSair={acaoSairDaSala}
+        onDraftReset={() => acaoCancelarDraftPorTimeout(usuarioAtual.id)}
       />
     );
   }
@@ -715,14 +716,31 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
   return (
     <div className="flex-1 w-full h-full bg-[#050505] flex flex-col items-center justify-between p-0 font-sans relative overflow-hidden">
-      
+
       {/* BACKGROUND IMAGE */}
-      <img 
-        src="/images/mapa1.png" 
-        alt="Background Map" 
+      <img
+        src="/images/mapa1.png"
+        alt="Background Map"
         className="absolute inset-0 w-full h-full object-cover z-0 pointer-events-none"
         referrerPolicy="no-referrer"
       />
+
+      {/* ERRO DE ENTRADA — TOP CENTER */}
+      <AnimatePresence>
+        {erroEntrada && (
+          <motion.div
+            initial={{ y: -20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -20, opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="absolute top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none"
+          >
+            <div className="px-4 py-2 rounded-lg bg-red-500/15 border border-red-500/40 text-red-300 text-sm font-bold">
+              {erroEntrada}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* MASSIVE CENTRAL CIRCLE */}
       <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full bg-black border-[4px] border-white/5 flex flex-col items-center justify-center z-10">
@@ -1118,28 +1136,84 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* MIDDLE SECTION */}
       <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] ${isX1 ? 'gap-[68vmin]' : 'gap-[76vmin]'}`}>
-        <div className="flex flex-col gap-[1.5vmin] items-start">
-          {/* Team Blue Header - Hextech Badge */}
-          <div className="relative mb-[1vmin] ml-[0.5vmin] w-[22vmin]">
-            <div className="absolute inset-0 bg-[#3B82F6]/10 skew-x-[-12deg] border-l-2 border-[#3B82F6]" />
-            <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col">
-              <span className="text-[0.8vmin] font-black text-[#3B82F6] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe</span>
-              <span className="text-[1.6vmin] font-black text-white uppercase tracking-wider leading-none">Azul</span>
+        {/* TEAM HEADERS COM VS NO MEIO */}
+        {sala.modo === 'time_vs_time' ? (
+          <div className="flex flex-col items-center gap-[3vmin]">
+            {/* Logos grandes com VS */}
+            <div className="flex items-center justify-center gap-[4vmin] relative">
+              {/* Time A Logo */}
+              <div className="flex flex-col items-center gap-[1vmin]">
+                <div className="w-[12vmin] h-[12vmin] bg-blue-600/10 border-2 border-blue-500/30 rounded-2xl flex items-center justify-center">
+                  {sala.timeALogo ? (
+                    <img src={sala.timeALogo} alt="Time A" className="w-[10vmin] h-[10vmin] object-contain" />
+                  ) : (
+                    <span className="text-[5vmin] font-black text-blue-400/40">?</span>
+                  )}
+                </div>
+                <div className="text-center">
+                  <span className="text-[0.9vmin] font-black text-blue-400 uppercase tracking-widest">Time A</span>
+                  <p className="text-[1.2vmin] font-black text-white">{sala.timeANome || 'Aguardando'}</p>
+                </div>
+              </div>
+
+              {/* VS Badge */}
+              <div className="absolute text-center z-10">
+                <div className="w-[5vmin] h-[5vmin] bg-black border-2 border-white/20 rounded-full flex items-center justify-center">
+                  <span className="text-[2vmin] font-black text-white/60">VS</span>
+                </div>
+              </div>
+
+              {/* Time B Logo */}
+              <div className="flex flex-col items-center gap-[1vmin]">
+                <div className="w-[12vmin] h-[12vmin] bg-red-600/10 border-2 border-red-500/30 rounded-2xl flex items-center justify-center">
+                  {sala.timeBLogo ? (
+                    <img src={sala.timeBLogo} alt="Time B" className="w-[10vmin] h-[10vmin] object-contain" />
+                  ) : (
+                    <span className="text-[5vmin] font-black text-red-400/40">?</span>
+                  )}
+                </div>
+                <div className="text-center">
+                  <span className="text-[0.9vmin] font-black text-red-400 uppercase tracking-widest">Time B</span>
+                  <p className="text-[1.2vmin] font-black text-white">{sala.timeBNome || 'Aguardando'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Vagas abaixo das logos */}
+            <div className="flex gap-[76vmin]">
+              <div className="flex flex-col gap-[1.5vmin] items-start">
+                {roles.map((role) => renderSlot(role, true))}
+              </div>
+              <div className="flex flex-col gap-[1.5vmin] items-end">
+                {roles.map((role) => renderSlot(role, false))}
+              </div>
             </div>
           </div>
-          {roles.map((role) => renderSlot(role, true))}
-        </div>
-        <div className="flex flex-col gap-[1.5vmin] items-end text-right">
-          {/* Team Red Header - Hextech Badge */}
-          <div className="relative mb-[1vmin] mr-[0.5vmin] w-[22vmin]">
-            <div className="absolute inset-0 bg-[#ef4444]/10 skew-x-[12deg] border-r-2 border-[#ef4444]" />
-            <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col items-end">
-              <span className="text-[0.8vmin] font-black text-[#ef4444] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe</span>
-              <span className="text-[1.6vmin] font-black text-white uppercase tracking-wider leading-none">Vermelha</span>
+        ) : (
+          /* OUTROS MODOS - Layout original */
+          <>
+            <div className="flex flex-col gap-[1.5vmin] items-start">
+              <div className="relative mb-[1vmin] ml-[0.5vmin] w-[22vmin]">
+                <div className="absolute inset-0 bg-[#3B82F6]/10 skew-x-[-12deg] border-l-2 border-[#3B82F6]" />
+                <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col">
+                  <span className="text-[0.8vmin] font-black text-[#3B82F6] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe</span>
+                  <span className="text-[1.6vmin] font-black text-white uppercase tracking-wider leading-none">Azul</span>
+                </div>
+              </div>
+              {roles.map((role) => renderSlot(role, true))}
             </div>
-          </div>
-          {roles.map((role) => renderSlot(role, false))}
-        </div>
+            <div className="flex flex-col gap-[1.5vmin] items-end text-right">
+              <div className="relative mb-[1vmin] mr-[0.5vmin] w-[22vmin]">
+                <div className="absolute inset-0 bg-[#ef4444]/10 skew-x-[12deg] border-r-2 border-[#ef4444]" />
+                <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col items-end">
+                  <span className="text-[0.8vmin] font-black text-[#ef4444] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe</span>
+                  <span className="text-[1.6vmin] font-black text-white uppercase tracking-wider leading-none">Vermelha</span>
+                </div>
+              </div>
+              {roles.map((role) => renderSlot(role, false))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* BOTTOM BAR */}
@@ -1353,11 +1427,13 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           animate={{ x: 0, opacity: 1 }}
           exit={{ x: 100, opacity: 0 }}
           transition={{ duration: 0.3 }}
-          className="fixed right-4 top-20 z-40 md:right-8 md:top-24"
+          className="fixed right-4 top-20 z-[9999] md:right-8 md:top-24 pointer-events-auto"
         >
           <button
-            onClick={async () => {
+            onClick={async (e) => {
+              e.stopPropagation();
               if (salaStreamAtiva) {
+                // Desligar transmissão
                 await supabase
                   .from('sala_streams')
                   .delete()
@@ -1366,6 +1442,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                 setSalaStreamAtiva(null);
                 setIsStreamModalOpen(false);
               } else {
+                // Ligar transmissão
                 const { data: profile } = await supabase
                   .from('profiles')
                   .select('twitch')
@@ -1378,14 +1455,34 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                   return;
                 }
 
-                const { error } = await supabase
+                // Check if stream already exists for this user in this room
+                const { data: existingStream } = await supabase
                   .from('sala_streams')
-                  .insert({
-                    sala_id: sala.id,
-                    user_id: usuarioAtual.id,
-                    twitch_channel: twitchChannel,
-                    ativo: true,
-                  });
+                  .select('id')
+                  .eq('sala_id', sala.id)
+                  .eq('user_id', usuarioAtual.id)
+                  .maybeSingle();
+
+                let error;
+                if (existingStream) {
+                  // Update existing stream to active
+                  const result = await supabase
+                    .from('sala_streams')
+                    .update({ ativo: true })
+                    .eq('id', existingStream.id);
+                  error = result.error;
+                } else {
+                  // Insert new stream
+                  const result = await supabase
+                    .from('sala_streams')
+                    .insert({
+                      sala_id: sala.id,
+                      user_id: usuarioAtual.id,
+                      twitch_channel: twitchChannel,
+                      ativo: true,
+                    });
+                  error = result.error;
+                }
 
                 if (error) {
                   console.error('Erro ao ativar transmissão:', error);

@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.mercado-pago-webhook]
 verify_jwt = false
+
+[functions.check-twitch-lives]
+verify_jwt = false

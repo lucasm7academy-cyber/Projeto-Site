@@ -26,6 +26,7 @@ interface DraftRoomProps {
   onDraftFinalizado?: (draft: DraftState) => void;
   onSair?: () => void;
   onPickTimeout?: (usuarioId: string) => void;
+  onDraftReset?: () => void;
 }
 
 export const DraftRoom: React.FC<DraftRoomProps> = ({
@@ -35,6 +36,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   onDraftFinalizado,
   onSair,
   onPickTimeout,
+  onDraftReset,
 }) => {
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [champions, setChampions] = useState<Record<string, Champion>>({});
@@ -48,6 +50,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const [nomeJogador, setNomeJogador] = useState<string>('');
   const [jogadorAtual, setJogadorAtual] = useState<{ blue: string; red: string }>({ blue: 'Jogador Azul', red: 'Jogador Vermelho' });
   const [timerFrozen, setTimerFrozen] = useState(false);
+  const [dotAnimation, setDotAnimation] = useState(0);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ============================================================
@@ -70,8 +73,8 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
           .eq('role', modo === '1v1' ? 'MID' : 'JG');
         
         if (jogadores) {
-          const blue = jogadores.find(j => j.is_time_a);
-          const red = jogadores.find(j => !j.is_time_a);
+          const blue = jogadores.find((j: any) => j.is_time_a);
+          const red = jogadores.find((j: any) => !j.is_time_a);
           setJogadorAtual({
             blue: blue?.nome || 'Time Azul',
             red: red?.nome || 'Time Vermelho'
@@ -121,6 +124,39 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
     });
     return () => { if (channel) supabase.removeChannel(channel); };
   }, [salaId, draft?.id, onDraftFinalizado]);
+
+  // ============================================================
+  // ANIMAÇÃO DOS 3 PONTINHOS
+  // ============================================================
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDotAnimation(prev => (prev + 1) % 3);
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+
+  // ============================================================
+  // DETECTAR DRAFT ZERADO (SEM NENHUMA SELEÇÃO) E RESETAR SALA
+  // ============================================================
+  useEffect(() => {
+    if (!draft || draft.status !== 'ongoing') return;
+
+    const turnOrder = getTurnOrder(modo);
+    const totalTurnos = turnOrder.length;
+
+    // Só reseta se completou TODOS os turnos SEM fazer nenhuma seleção
+    const nenhuma_selecao =
+      draft.blue_bans.length === 0 &&
+      draft.blue_picks.length === 0 &&
+      draft.red_bans.length === 0 &&
+      draft.red_picks.length === 0;
+
+    // Se chegou ao final e ninguém escolheu nada
+    if (draft.current_turn >= totalTurnos && nenhuma_selecao) {
+      console.log('[DraftRoom] ⚠️ Draft completo sem nenhuma seleção - resetando sala');
+      onDraftReset?.();
+    }
+  }, [draft?.current_turn, draft?.blue_bans, draft?.blue_picks, draft?.red_bans, draft?.red_picks, modo, onDraftReset]);
 
   // ============================================================
   // TIMER
@@ -180,6 +216,11 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const handleBanir = async (champion: Champion) => {
     if (!draft || !meuTime || !isMeuTurno()) return;
     if (draft.current_phase !== 'ban') return;
+    // Bloquear se timer expirou
+    if (timer <= 0) {
+      console.log('[DraftRoom] ❌ Tempo expirado - não pode banir');
+      return;
+    }
     const sucesso = await banirCampeao(draft, champion.id, meuTime, modo);
     if (sucesso) setSelectedChamp(null);
   };
@@ -187,6 +228,11 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const handlePickar = async (champion: Champion) => {
     if (!draft || !meuTime || !isMeuTurno()) return;
     if (draft.current_phase !== 'pick') return;
+    // Bloquear se timer expirou
+    if (timer <= 0) {
+      console.log('[DraftRoom] ❌ Tempo expirado - não pode escolher');
+      return;
+    }
     const sucesso = await pickarCampeao(draft, champion.id, meuTime, modo);
     if (sucesso) setSelectedChamp(null);
   };
@@ -382,59 +428,81 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
         {/* LEFT PANEL - BLUE TEAM */}
         <div className="w-[25vmin] flex flex-col items-center gap-[1.5vmin] pointer-events-auto">
           <div className="relative">
-            <motion.div 
+            <motion.div
               initial={false}
-              animate={draft?.current_team === 'blue' ? { 
+              animate={draft?.current_team === 'blue' ? {
                 boxShadow: ["0 0 20px rgba(8,8,255,0.3)", "0 0 60px rgba(8,8,255,0.9)", "0 0 20px rgba(8,8,255,0.3)"],
                 borderColor: ["#0000FF", "#4d4dFF", "#0000FF"]
-              } : { 
+              } : {
                 boxShadow: "0 0 0px rgba(0,0,0,0)",
                 borderColor: "rgba(255,255,255,0.1)"
               }}
               transition={draft?.current_team === 'blue' ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
               className={`w-[18vmin] h-[18vmin] rounded-full border-[0.6vmin] overflow-hidden bg-black transition-all duration-300 ${draft?.current_team === 'blue' ? 'border-[#0000FF]' : 'border-white/10'}`}
             >
+              {/* Se é turno do outro time: mostra apenas o avatar */}
+              {draft?.current_team !== 'blue' && (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="w-[14vmin] h-[14vmin] rounded-full bg-gradient-to-br from-blue-500/40 to-blue-900/40 flex items-center justify-center border border-blue-400/30">
+                    <span className="text-[3vmin] font-black text-blue-400/60">👤</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Se é seu turno e selecionou campeão: mostra preview */}
               {selectedChamp && draft?.current_team === 'blue' ? (
-                <img 
-                  src={buildChampionIconUrl(selectedChamp.id, version)} 
-                  alt={selectedChamp.name} 
+                <img
+                  src={buildChampionIconUrl(selectedChamp.id, version)}
+                  alt={selectedChamp.name}
                   className="w-full h-full object-cover scale-125"
                   referrerPolicy="no-referrer"
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center opacity-10">
-                   <Ban className="w-[10vmin] h-[10vmin] text-white" />
+              ) : null}
+
+              {/* Se é seu turno e não selecionou: mostra 3 pontinhos */}
+              {draft?.current_team === 'blue' && !selectedChamp && (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-[1vmin]">
+                  <div className="flex gap-[0.8vmin]">
+                    <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0 }} className="w-[1.2vmin] h-[1.2vmin] bg-white/60 rounded-full" />
+                    <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }} className="w-[1.2vmin] h-[1.2vmin] bg-white/60 rounded-full" />
+                    <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }} className="w-[1.2vmin] h-[1.2vmin] bg-white/60 rounded-full" />
+                  </div>
+                  <p className="text-[1.2vmin] font-bold text-white/70 uppercase tracking-wider">Aguardando</p>
                 </div>
               )}
             </motion.div>
           </div>
 
           <div className="text-center">
-            <p className={`text-[1.5vmin] font-semibold uppercase tracking-widest transition-colors duration-300 mb-[0.5vmin] ${draft?.current_team === 'blue' ? 'text-[#0000FF]' : 'text-white/20'}`}>
-              {draft?.current_phase === 'ban' ? 'Banindo' : 'Escolhendo'}
-            </p>
-            <h2 className="text-[2.5vmin] font-bold text-white uppercase tracking-tighter">
-              {selectedChamp && draft?.current_team === 'blue' ? selectedChamp.name : jogadorAtual.blue}
-            </h2>
-            
-            {/* NOTIFICAÇÃO DE AGUARDE TURNO */}
+            {/* Se for seu turno, mostra a ação e o nome do jogador */}
+            {draft?.current_team === 'blue' && draft?.status === 'ongoing' && (
+              <>
+                <p className={`text-[1.5vmin] font-semibold uppercase tracking-widest transition-colors duration-300 mb-[0.5vmin] ${
+                  draft.current_phase === 'ban' ? 'text-red-400' : 'text-green-400'
+                }`}>
+                  {draft.current_phase === 'ban' ? 'Aguardando' : 'Aguardando'}
+                </p>
+                <h2 className="text-[2.5vmin] font-bold text-white uppercase tracking-tighter mb-[0.5vmin]">
+                  {jogadorAtual.blue}
+                </h2>
+                <p className="text-[1.3vmin] font-bold uppercase tracking-widest">
+                  {draft.current_phase === 'ban' ? 'Banir' : 'Escolher'}{'.'.repeat((dotAnimation % 3) + 1)}
+                </p>
+              </>
+            )}
+
+            {/* Se não for seu turno e for espectador de azul */}
             {possoJogar && meuTime === 'blue' && !isMeuTurno() && draft?.status === 'ongoing' && (
               <div className="mt-[1vmin] px-[2vmin] py-[0.5vmin] bg-blue-500/10 border border-blue-500/20 rounded-full">
                 <p className="text-blue-400 text-[1.2vmin] font-bold">⏳ Aguarde seu turno...</p>
               </div>
             )}
-            
-            {/* NOTIFICAÇÃO DE VEZ DO TIME */}
-            {draft?.current_team === 'blue' && draft?.status === 'ongoing' && (
-              <div className={`mt-[1vmin] px-[2vmin] py-[0.5vmin] rounded-full border ${
-                draft.current_phase === 'ban' 
-                  ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-                  : 'bg-green-500/10 border-green-500/20 text-green-400'
-              }`}>
-                <p className="text-[1.2vmin] font-bold uppercase">
-                  VEZ DO TIME AZUL
-                </p>
-              </div>
+
+            {/* Exibe o campeão selecionado se houver */}
+            {selectedChamp && draft?.current_team === 'blue' && (
+              <p className="text-[1.2vmin] font-bold text-[#c89b3c] mt-[0.5vmin] uppercase">
+                ↳ {selectedChamp.name}
+              </p>
             )}
           </div>
         </div>
@@ -442,59 +510,81 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
         {/* RIGHT PANEL - RED TEAM */}
         <div className="w-[25vmin] flex flex-col items-center gap-[1.5vmin] pointer-events-auto">
           <div className="relative">
-            <motion.div 
+            <motion.div
               initial={false}
-              animate={draft?.current_team === 'red' ? { 
+              animate={draft?.current_team === 'red' ? {
                 boxShadow: ["0 0 20px rgba(255,0,0,0.3)", "0 0 60px rgba(255,0,0,0.9)", "0 0 20px rgba(255,0,0,0.3)"],
                 borderColor: ["#FF0000", "#FF4d4d", "#FF0000"]
-              } : { 
+              } : {
                 boxShadow: "0 0 0px rgba(0,0,0,0)",
                 borderColor: "rgba(255,255,255,0.1)"
               }}
               transition={draft?.current_team === 'red' ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
               className={`w-[18vmin] h-[18vmin] rounded-full border-[0.6vmin] overflow-hidden bg-black transition-all duration-300 ${draft?.current_team === 'red' ? 'border-[#FF0000]' : 'border-white/10'}`}
             >
-               {selectedChamp && draft?.current_team === 'red' ? (
-                <img 
-                  src={buildChampionIconUrl(selectedChamp.id, version)} 
-                  alt={selectedChamp.name} 
+              {/* Se é turno do outro time: mostra apenas o avatar */}
+              {draft?.current_team !== 'red' && (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="w-[14vmin] h-[14vmin] rounded-full bg-gradient-to-br from-red-500/40 to-red-900/40 flex items-center justify-center border border-red-400/30">
+                    <span className="text-[3vmin] font-black text-red-400/60">👤</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Se é seu turno e selecionou campeão: mostra preview */}
+              {selectedChamp && draft?.current_team === 'red' ? (
+                <img
+                  src={buildChampionIconUrl(selectedChamp.id, version)}
+                  alt={selectedChamp.name}
                   className="w-full h-full object-cover scale-125"
                   referrerPolicy="no-referrer"
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center opacity-10">
-                  <Ban className="w-[10vmin] h-[10vmin] text-white" />
+              ) : null}
+
+              {/* Se é seu turno e não selecionou: mostra 3 pontinhos */}
+              {draft?.current_team === 'red' && !selectedChamp && (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-[1vmin]">
+                  <div className="flex gap-[0.8vmin]">
+                    <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0 }} className="w-[1.2vmin] h-[1.2vmin] bg-white/60 rounded-full" />
+                    <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }} className="w-[1.2vmin] h-[1.2vmin] bg-white/60 rounded-full" />
+                    <motion.div animate={{ scale: [1, 1.5, 1] }} transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }} className="w-[1.2vmin] h-[1.2vmin] bg-white/60 rounded-full" />
+                  </div>
+                  <p className="text-[1.2vmin] font-bold text-white/70 uppercase tracking-wider">Aguardando</p>
                 </div>
               )}
             </motion.div>
           </div>
 
           <div className="text-center">
-            <p className={`text-[1.5vmin] font-semibold uppercase tracking-widest transition-colors duration-300 mb-[0.5vmin] ${draft?.current_team === 'red' ? 'text-[#FF0000]' : 'text-white/20'}`}>
-              {draft?.current_phase === 'ban' ? 'Banindo' : 'Escolhendo'}
-            </p>
-            <h2 className="text-[2.5vmin] font-black text-white uppercase tracking-tighter">
-              {selectedChamp && draft?.current_team === 'red' ? selectedChamp.name : jogadorAtual.red}
-            </h2>
-            
-            {/* NOTIFICAÇÃO DE AGUARDE TURNO */}
+            {/* Se for seu turno, mostra a ação e o nome do jogador */}
+            {draft?.current_team === 'red' && draft?.status === 'ongoing' && (
+              <>
+                <p className={`text-[1.5vmin] font-semibold uppercase tracking-widest transition-colors duration-300 mb-[0.5vmin] ${
+                  draft.current_phase === 'ban' ? 'text-red-400' : 'text-green-400'
+                }`}>
+                  {draft.current_phase === 'ban' ? 'Aguardando' : 'Aguardando'}
+                </p>
+                <h2 className="text-[2.5vmin] font-bold text-white uppercase tracking-tighter mb-[0.5vmin]">
+                  {jogadorAtual.red}
+                </h2>
+                <p className="text-[1.3vmin] font-bold uppercase tracking-widest">
+                  {draft.current_phase === 'ban' ? 'Banir' : 'Escolher'}{'.'.repeat((dotAnimation % 3) + 1)}
+                </p>
+              </>
+            )}
+
+            {/* Se não for seu turno e for espectador de vermelho */}
             {possoJogar && meuTime === 'red' && !isMeuTurno() && draft?.status === 'ongoing' && (
               <div className="mt-[1vmin] px-[2vmin] py-[0.5vmin] bg-blue-500/10 border border-blue-500/20 rounded-full">
                 <p className="text-blue-400 text-[1.2vmin] font-bold">⏳ Aguarde seu turno...</p>
               </div>
             )}
-            
-            {/* NOTIFICAÇÃO DE VEZ DO TIME */}
-            {draft?.current_team === 'red' && draft?.status === 'ongoing' && (
-              <div className={`mt-[1vmin] px-[2vmin] py-[0.5vmin] rounded-full border ${
-                draft.current_phase === 'ban' 
-                  ? 'bg-red-500/10 border-red-500/20 text-red-400' 
-                  : 'bg-green-500/10 border-green-500/20 text-green-400'
-              }`}>
-                <p className="text-[1.2vmin] font-bold uppercase">
-                  VEZ DO TIME VERMELHO
-                </p>
-              </div>
+
+            {/* Exibe o campeão selecionado se houver */}
+            {selectedChamp && draft?.current_team === 'red' && (
+              <p className="text-[1.2vmin] font-bold text-[#c89b3c] mt-[0.5vmin] uppercase">
+                ↳ {selectedChamp.name}
+              </p>
             )}
           </div>
         </div>

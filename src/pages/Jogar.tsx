@@ -351,12 +351,14 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
               <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">ELO Mínimo</label>
               <select
                 value={eloMinimo} onChange={(e) => setEloMinimo(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm"
+                disabled={modo === 'time_vs_time'}
+                className={`w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm ${modo === 'time_vs_time' ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {OPCOES_ELO.map(elo => (
                   <option key={elo.valor} value={elo.valor} className="bg-[#0d0d0d]">{elo.label}</option>
                 ))}
               </select>
+              {modo === 'time_vs_time' && <p className="text-[9px] text-white/30 italic">Desativado para times</p>}
             </div>
             <div className="space-y-2">
               <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Senha</label>

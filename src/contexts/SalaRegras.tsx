@@ -120,6 +120,7 @@ interface SalaRegrasContextType {
   sala: Sala | null;
   loading: boolean;
   erro: string | null;
+  erroEntrada: string | null;
 
   // Timers (segundos restantes)
   timerConfirmacao:  number;
@@ -187,6 +188,7 @@ export function SalaRegrasProvider({
   const [votos, setVotos]     = useState<Voto[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro]                = useState<string | null>(null);
+  const [erroEntrada, setErroEntrada] = useState<string | null>(null);
   const [timerConfirmacao, setTimerConfirmacao] = useState(TIMER_CONFIRMACAO_S);
   const [timerFinalizacao, setTimerFinalizacao] = useState(TIMER_FINALIZACAO_S);
   const [viewers, setViewers] = useState(0);
@@ -196,9 +198,11 @@ export function SalaRegrasProvider({
   const timerConfirmacaoRef  = useRef<NodeJS.Timeout | undefined>(undefined);
   const timerCancelamentoRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const timerFinalizacaoRef  = useRef<NodeJS.Timeout | undefined>(undefined);
+  const erroEntradaTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const transicionandoRef   = useRef(false); // evita dupla transição concorrente
   const otimisticoRef       = useRef(false); // true = aguardando DB confirmar update local
   const entrandoVagaRef     = useRef(false); // evita double-click / requisições simultâneas
+  const leaveTimeoutsRef    = useRef<Record<string, NodeJS.Timeout>>({}); // timeouts para remoção após leave
 
   // ── Carregamento e realtime ────────────────────────────────────────────────
 
@@ -241,15 +245,27 @@ export function SalaRegrasProvider({
 
     // ── Canal de Presence — conta visualizadores + auto-remove quem saiu ────────
     const presenceChannel = supabase.channel(`sala_presenca_${salaId}`);
+
     presenceChannel
       .on('presence', { event: 'sync' }, async () => {
         const state = presenceChannel.presenceState();
         setViewers(Object.keys(state).length);
 
-        // Limpa jogadores fantasmas: estão no slot mas não estão no canal de presence
+        // Cancela timeout de leave para usuarios que voltaram
         const presentIds = new Set(
           Object.values(state).flat().map((p: any) => p.user_id as string).filter(Boolean)
         );
+
+        // ✅ Se usuário voltou (está em presentIds), cancela o timeout
+        for (const userId of presentIds) {
+          if (leaveTimeoutsRef.current[userId]) {
+            console.log('[SalaRegras] Usuário reentrou, cancelando timeout:', userId);
+            clearTimeout(leaveTimeoutsRef.current[userId]);
+            delete leaveTimeoutsRef.current[userId];
+          }
+        }
+
+        // Limpa jogadores fantasmas: estão no slot mas não estão no canal de presence
         const { data: slots } = await supabase
           .from('sala_jogadores')
           .select('user_id')
@@ -257,27 +273,47 @@ export function SalaRegrasProvider({
           .eq('vinculado', false);
         if (slots) {
           for (const slot of slots) {
-            if (!presentIds.has(slot.user_id)) {
+            // ❌ Se usuário saiu (não está em presentIds) E não tem timeout, remove imediatamente
+            if (!presentIds.has(slot.user_id) && !leaveTimeoutsRef.current[slot.user_id]) {
+              console.log('[SalaRegras] Removendo jogador fantasma:', slot.user_id);
               sairDaVaga(salaId, slot.user_id).catch(() => {});
             }
           }
         }
       })
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        // Quando alguém fecha o navegador/aba, remove da vaga automaticamente
+        // Quando alguém sai, aguarda 10 segundos antes de remover
+        // Isso permite recarga rápida sem ser removido da vaga
         for (const p of (leftPresences as unknown as Array<{ user_id: string }>)) {
           if (p.user_id) {
-            sairDaVaga(salaId, p.user_id).catch(() => {});
+            console.log('[SalaRegras] Presença deixou a sala, aguardando 10s:', p.user_id);
+
+            // Cancela timeout anterior se existir
+            if (leaveTimeoutsRef.current[p.user_id]) {
+              clearTimeout(leaveTimeoutsRef.current[p.user_id]);
+            }
+
+            // Define novo timeout
+            leaveTimeoutsRef.current[p.user_id] = setTimeout(() => {
+              console.log('[SalaRegras] Removendo usuário após 10s de ausência:', p.user_id);
+              sairDaVaga(salaId, p.user_id).catch((err) => {
+                console.error('[SalaRegras] Erro ao remover usuário:', err);
+              });
+              delete leaveTimeoutsRef.current[p.user_id];
+            }, 10000); // 10 segundos
           }
         }
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
+          console.log('[SalaRegras] Presence inscrito, rastreando usuário:', usuarioAtual.id);
           await presenceChannel.track({ user_id: usuarioAtual.id });
         }
       });
 
     return () => {
+      // Limpar todos os timeouts de leave
+      Object.values(leaveTimeoutsRef.current).forEach(timeout => clearTimeout(timeout));
       supabase.removeChannel(channel);
       supabase.removeChannel(presenceChannel);
     };
@@ -560,7 +596,18 @@ export function SalaRegrasProvider({
     entrandoVagaRef.current = true;
     otimisticoRef.current = true;
     try {
-      await entrarNaVaga(salaId, usuarioAtual, role, isTimeA);
+      const resultado = await entrarNaVaga(salaId, usuarioAtual, role, isTimeA, sala?.modo);
+      if (!resultado.sucesso && resultado.erro) {
+        console.warn('[SalaRegras] Erro ao entrar na vaga:', resultado.erro);
+        setErroEntrada(resultado.erro);
+        // Auto-clear mensagem após 3.5 segundos
+        if (erroEntradaTimeoutRef.current) clearTimeout(erroEntradaTimeoutRef.current);
+        erroEntradaTimeoutRef.current = setTimeout(() => {
+          setErroEntrada(null);
+          erroEntradaTimeoutRef.current = undefined;
+        }, 3500);
+        return;
+      }
     } finally {
       entrandoVagaRef.current = false;
       otimisticoRef.current = false;
@@ -633,7 +680,7 @@ export function SalaRegrasProvider({
     if (!sala || !sala.draft_id) return;
 
     try {
-      console.log(`[SalaRegras] Cancelando draft por timeout. Usuário que falhou: ${userIdQueFalhou}`);
+      console.log(`[SalaRegras] Cancelando draft por timeout. Resetando sala completamente.`);
 
       // 1. Deletar o draft
       const { error: erroDraft } = await supabase
@@ -647,7 +694,19 @@ export function SalaRegrasProvider({
         console.log('[SalaRegras] Draft deletado com sucesso');
       }
 
-      // 2. Limpar draft_id na sala e voltar para 'preenchendo'
+      // 2. Expulsar TODOS os jogadores das vagas
+      const { error: erroExpulsaoTotal } = await supabase
+        .from('sala_jogadores')
+        .delete()
+        .eq('sala_id', salaId);
+
+      if (erroExpulsaoTotal) {
+        console.error('[SalaRegras] Erro ao expulsar todos os jogadores:', erroExpulsaoTotal);
+      } else {
+        console.log('[SalaRegras] Todos os jogadores foram expulsos das vagas');
+      }
+
+      // 3. Limpar draft_id na sala e voltar para 'preenchendo'
       const { error: erroSala } = await supabase
         .from('salas')
         .update({
@@ -660,32 +719,6 @@ export function SalaRegrasProvider({
         console.error('[SalaRegras] Erro ao atualizar sala:', erroSala);
       } else {
         console.log('[SalaRegras] Sala resetada para preenchendo');
-      }
-
-      // 3. Expulsar o jogador da vaga (manter na sala)
-      const { error: erroExpulsao } = await supabase
-        .from('sala_jogadores')
-        .delete()
-        .eq('sala_id', salaId)
-        .eq('user_id', userIdQueFalhou);
-
-      if (erroExpulsao) {
-        console.error('[SalaRegras] Erro ao expulsar jogador:', erroExpulsao);
-      } else {
-        console.log('[SalaRegras] Jogador expulso da vaga:', userIdQueFalhou);
-      }
-
-      // 4. Desconfirmar TODOS os jogadores (inclusive os restantes)
-      const { error: erroDesconfirma, data: dataDesconfirma } = await supabase
-        .from('sala_jogadores')
-        .update({ confirmado: false })
-        .eq('sala_id', salaId)
-        .select();
-
-      if (erroDesconfirma) {
-        console.error('[SalaRegras] Erro ao desconfirmar jogadores:', erroDesconfirma);
-      } else {
-        console.log('[SalaRegras] Jogadores desconfirmados:', dataDesconfirma?.length || 0);
       }
 
       console.log('[SalaRegras] Draft cancelado e sala resetada com sucesso');
@@ -721,6 +754,7 @@ export function SalaRegrasProvider({
     sala,
     loading,
     erro,
+    erroEntrada,
     timerConfirmacao,
     timerCancelamento,
     timerFinalizacao,

@@ -53,10 +53,12 @@ export interface Sala {
   timeANome?: string;
   timeATag?: string;
   timeALogo?: string;
+  timeAId?: string | null;
   timeBNome?: string;
   timeBTag?: string;
   draft_id?: string | null;
   timeBLogo?: string;
+  timeBId?: string | null;
   jogadores: JogadorNaSala[];
   maxJogadores: number;
   temSenha: boolean;
@@ -84,9 +86,11 @@ function mapSala(row: any, jogadoresRows: any[]): Sala {
     timeANome:    row.time_a_nome,
     timeATag:     row.time_a_tag,
     timeALogo:    row.time_a_logo,
+    timeAId:      row.time_a_id ?? null,
     timeBNome:    row.time_b_nome,
     timeBTag:     row.time_b_tag,
     timeBLogo:    row.time_b_logo,
+    timeBId:      row.time_b_id ?? null,
     maxJogadores: row.max_jogadores,
     temSenha:     row.tem_senha,
     senha:        row.senha,
@@ -214,8 +218,9 @@ export async function entrarNaVaga(
   salaId: number,
   usuario: { id: string; nome: string; tag?: string; elo: string; avatar?: string },
   role: string,
-  isTimeA: boolean
-): Promise<boolean> {
+  isTimeA: boolean,
+  modo?: string
+): Promise<{ sucesso: boolean; erro?: string }> {
   // Verifica se vaga está ocupada por outro
   const { data: existente } = await supabase
     .from('sala_jogadores')
@@ -227,7 +232,7 @@ export async function entrarNaVaga(
 
   if (existente && existente.user_id !== usuario.id) {
     console.warn('[entrarNaVaga] vaga ocupada por outro jogador');
-    return false;
+    return { sucesso: false, erro: 'Vaga ocupada' };
   }
 
   // Verifica se usuário está vinculado a outra sala (bloqueio absoluto)
@@ -241,8 +246,41 @@ export async function entrarNaVaga(
 
   if (vinculo) {
     console.warn('[entrarNaVaga] jogador vinculado a outra sala');
-    return false;
+    return { sucesso: false, erro: 'Você está em outra sala' };
   }
+
+  // ========== VALIDAÇÃO PARA time_vs_time ==========
+  if (modo === 'time_vs_time') {
+    // Buscar time do usuário
+    const { data: membro } = await supabase
+      .from('time_membros')
+      .select('time_id')
+      .eq('user_id', usuario.id)
+      .maybeSingle();
+
+    if (!membro || !membro.time_id) {
+      console.warn('[entrarNaVaga] usuário sem time tentando entrar em time_vs_time');
+      return { sucesso: false, erro: 'Você precisa estar em um time' };
+    }
+
+    // Buscar info da sala para verificar time_a_id e time_b_id
+    const { data: sala } = await supabase
+      .from('salas')
+      .select('time_a_id, time_b_id')
+      .eq('id', salaId)
+      .single();
+
+    if (sala) {
+      const timeIdDaSala = isTimeA ? sala.time_a_id : sala.time_b_id;
+
+      // Se já tem time definido naquele lado, verificar se é o mesmo
+      if (timeIdDaSala && timeIdDaSala !== membro.time_id) {
+        console.warn('[entrarNaVaga] time diferente tentando entrar em vaga ocupada');
+        return { sucesso: false, erro: 'Esta vaga é exclusiva para outro time' };
+      }
+    }
+  }
+  // ========== FIM VALIDAÇÃO time_vs_time ==========
 
   // Remove o usuário de qualquer outra sala em que esteja sem vínculo
   // (impede que uma pessoa fique em duas salas ao mesmo tempo)
@@ -276,20 +314,80 @@ export async function entrarNaVaga(
   const { error } = await supabase.from('sala_jogadores').insert(row);
   if (error) {
     if (error.code === '23505') {
-      // Unique constraint (sala_id, role, is_time_a) — dois jogadores entraram ao mesmo tempo
       console.warn('[entrarNaVaga] conflito de vaga — vaga preenchida por outro jogador no mesmo instante');
+      return { sucesso: false, erro: 'Vaga já foi preenchida' };
     } else {
       console.error('[entrarNaVaga]', error);
+      return { sucesso: false, erro: 'Erro ao entrar na vaga' };
     }
-    return false;
   }
-  return true;
+
+  // ========== REGISTRAR TIME NA SALA (time_vs_time) ==========
+  if (modo === 'time_vs_time') {
+    const { data: membro } = await supabase
+      .from('time_membros')
+      .select('time_id')
+      .eq('user_id', usuario.id)
+      .maybeSingle();
+
+    if (membro?.time_id) {
+      // Buscar sala para ver qual time já está definido
+      const { data: sala } = await supabase
+        .from('salas')
+        .select('time_a_id, time_b_id')
+        .eq('id', salaId)
+        .single();
+
+      // Se esse lado ainda não tem time definido, registrar
+      const campoTimeId = isTimeA ? 'time_a_id' : 'time_b_id';
+      const timeIdJaDefinido = isTimeA ? sala?.time_a_id : sala?.time_b_id;
+
+      if (!timeIdJaDefinido) {
+        await supabase
+          .from('salas')
+          .update({ [campoTimeId]: membro.time_id })
+          .eq('id', salaId);
+      }
+    }
+  }
+  // ========== FIM REGISTRAR TIME ==========
+
+  return { sucesso: true };
 }
 
 // ── Sair da vaga ──────────────────────────────────────────────────────────────
 export async function sairDaVaga(salaId: number, userId: string): Promise<void> {
+  // Buscar o jogador para saber qual lado estava (time_a ou time_b)
+  const { data: jogador } = await supabase
+    .from('sala_jogadores')
+    .select('is_time_a')
+    .eq('sala_id', salaId)
+    .eq('user_id', userId)
+    .eq('vinculado', false)
+    .maybeSingle();
+
+  // Remove o jogador da vaga
   await supabase.from('sala_jogadores').delete()
     .eq('sala_id', salaId).eq('user_id', userId).eq('vinculado', false);
+
+  // Se era time_vs_time, verificar se ainda há jogadores naquele lado
+  if (jogador) {
+    const { count } = await supabase
+      .from('sala_jogadores')
+      .select('*', { count: 'exact', head: true })
+      .eq('sala_id', salaId)
+      .eq('is_time_a', jogador.is_time_a)
+      .eq('vinculado', false);
+
+    // Se nenhum jogador restante naquele lado, limpar o time_id
+    if (count === 0) {
+      const campoTimeId = jogador.is_time_a ? 'time_a_id' : 'time_b_id';
+      await supabase
+        .from('salas')
+        .update({ [campoTimeId]: null })
+        .eq('id', salaId);
+    }
+  }
 }
 
 // ── Confirmar/desconfirmar presença (DELETE+INSERT evita UPDATE policy) ───────

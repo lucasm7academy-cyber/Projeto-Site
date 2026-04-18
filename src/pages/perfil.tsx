@@ -636,9 +636,23 @@ export default function Perfil() {
   };
 
   const salvarCampo = async (campos: Record<string, string>) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from('profiles').upsert({ id: user.id, ...campos }, { onConflict: 'id' });
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        console.error('Usuário não autenticado');
+        return;
+      }
+      const { error } = await supabase.from('profiles').upsert({ id: user.id, ...campos }, { onConflict: 'id' });
+      if (error) {
+        console.error('Erro ao salvar campos:', error);
+        alert('Erro ao salvar: ' + error.message);
+      } else {
+        console.log('✅ Campos salvos com sucesso:', campos);
+      }
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      alert('Erro ao salvar dados');
+    }
   };
 
   const handleLane = async (id: string, isSecondary = false) => {
@@ -668,16 +682,27 @@ export default function Perfil() {
   };
 
   const handleSalvarRedes = async () => {
+    // Limpar Twitch: se vier URL, extrai só o nome do canal
+    const cleanTwitch = redesTemp.twitch
+      .replace('https://www.twitch.tv/', '')
+      .replace('https://twitch.tv/', '')
+      .replace('http://www.twitch.tv/', '')
+      .replace('http://twitch.tv/', '')
+      .replace(/^@/, '')
+      .trim();
+
+    console.log('[Perfil] Twitch antes:', redesTemp.twitch, 'depois:', cleanTwitch);
+
     setInstagram(redesTemp.instagram);
-    setTwitch(redesTemp.twitch);
+    setTwitch(cleanTwitch);
     setYoutube(redesTemp.youtube);
     setDiscord(redesTemp.discord);
     setEditandoRedes(false);
-    await salvarCampo({ 
-      instagram: redesTemp.instagram, 
-      twitch: redesTemp.twitch, 
+    await salvarCampo({
+      instagram: redesTemp.instagram,
+      twitch: cleanTwitch,
       youtube: redesTemp.youtube,
-      discord: redesTemp.discord 
+      discord: redesTemp.discord
     });
   };
 
@@ -1223,7 +1248,7 @@ export default function Perfil() {
             <div className="space-y-4 relative z-10">
               {[
                 { icon: <IgIcon className="w-5 h-5" />, key: 'instagram' as const, label: 'Instagram', placeholder: 'Link do Instagram', value: instagram },
-                { icon: <Tv2 className="w-5 h-5" />,    key: 'twitch'    as const, label: 'Twitch',    placeholder: 'Link da Twitch',   value: twitch   },
+                { icon: <Tv2 className="w-5 h-5" />,    key: 'twitch'    as const, label: 'Twitch',    placeholder: 'Ex: onelucks_ (só o nome do canal)',   value: twitch   },
                 { icon: <Youtube className="w-5 h-5" />, key: 'youtube' as const, label: 'YouTube',   placeholder: 'Link do YouTube',  value: youtube  },
                 { icon: <MessageSquare className="w-5 h-5" />, key: 'discord' as const, label: 'Discord', placeholder: 'Usuário (ex: nick#0000)', value: discord },
               ].map(({ icon, key, placeholder, value }) => (
@@ -1231,7 +1256,20 @@ export default function Perfil() {
                   <span className="text-white/30 shrink-0">{icon}</span>
                   {editandoRedes ? (
                     <input type="text" value={redesTemp[key]}
-                      onChange={e => setRedesTemp(p => ({ ...p, [key]: e.target.value }))}
+                      onChange={e => {
+                        let newValue = e.target.value;
+                        // Se é Twitch, limpa a URL automaticamente
+                        if (key === 'twitch') {
+                          newValue = newValue
+                            .replace('https://www.twitch.tv/', '')
+                            .replace('https://twitch.tv/', '')
+                            .replace('http://www.twitch.tv/', '')
+                            .replace('http://twitch.tv/', '')
+                            .replace(/^@/, '')
+                            .trim();
+                        }
+                        setRedesTemp(p => ({ ...p, [key]: newValue }));
+                      }}
                       placeholder={placeholder}
                       className="flex-1 bg-black/40 border border-white/10 rounded-xl px-4 py-2 text-white text-sm placeholder:text-white/20 focus:outline-none focus:border-primary transition-all"
                     />

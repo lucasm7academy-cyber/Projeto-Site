@@ -16,7 +16,13 @@
       "Bash(rm -f .vscode/settings.json)",
       "Bash(cat)",
       "Read(//tmp/**)",
-      "Bash(npx supabase *)"
+      "Bash(npx supabase *)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(awk '/function SalaPageView/,/^}/ {print NR\": \"$0}' src/pages/SalaPage.tsx)",
+      "Bash(awk '/function SalaPageView/,/return \\\\\\(/ {print NR\": \"$0}' src/pages/SalaPage.tsx)"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
     ]
   }
 }

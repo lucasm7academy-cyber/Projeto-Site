@@ -7,7 +7,7 @@ import { motion } from 'motion/react';
 import {
   Crown, Gem, Users, Trophy, Shield, Zap, TrendingUp, Star,
   User, Settings, LogOut, ChevronRight, Clock, Calendar, Coins,
-  Swords, Target, Medal, ArrowUpRight, Plus, Edit, Copy, CheckCircle
+  Swords, Target, Medal, ArrowUpRight, Plus, Edit, Copy, CheckCircle, Tv2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { buildProfileIconUrl } from '../api/riot';
@@ -61,6 +61,15 @@ interface TorneioAtivo {
   icon: React.ElementType;
 }
 
+interface StreamerAtivo {
+  id: string;
+  user_id: string;
+  twitch_channel: string;
+  stream_title: string;
+  viewer_count: number;
+  thumbnail_url: string;
+}
+
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -72,6 +81,7 @@ const Lobby = () => {
   const [userTeam, setUserTeam] = useState<UserTeam | null>(null);
   const [topJogadores, setTopJogadores] = useState<TopPlayer[]>([]);
   const [torneiosAtivos, setTorneiosAtivos] = useState<TorneioAtivo[]>([]);
+  const [streamersAtivos, setStreamersAtivos] = useState<StreamerAtivo[]>([]);
   const [convitesTime, setConvitesTime] = useState(0);
   const [copied, setCopied] = useState(false);
 
@@ -167,6 +177,22 @@ const Lobby = () => {
         { id: '2', nome: 'DUELO DOS REIS', premio: 'VIP 3 Meses + Skin Lendária', dataFim: '2026-04-18', participantes: 128, cor: '#a855f7', icon: Crown },
         { id: '3', nome: 'ARAM INSANO', premio: '10.000 MP', dataFim: '2026-04-15', participantes: 64, cor: '#3b82f6', icon: Swords }
       ]);
+
+      // 6. Streamers Ativos
+      try {
+        const { data: streams } = await supabase
+          .from('twitch_lives_ativas')
+          .select('*')
+          .eq('ao_vivo', true)
+          .limit(3)
+          .order('viewer_count', { ascending: false });
+
+        if (streams) {
+          setStreamersAtivos(streams as StreamerAtivo[]);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar streamers:', error);
+      }
 
       setLoading(false);
     };
@@ -414,6 +440,55 @@ const Lobby = () => {
                 ))}
               </div>
             </div>
+
+            {/* ============================================ */}
+            {/* STREAMERS AO VIVO */}
+            {/* ============================================ */}
+            {streamersAtivos.length > 0 && (
+              <div className="bg-[#0D0D0D] border border-white/10 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
+                      <Tv2 className="w-5 h-5 text-purple-400" />
+                    </div>
+                    <h2 className="text-lg font-black text-white uppercase tracking-wider">🎥 Streamers ao Vivo</h2>
+                  </div>
+                  <button
+                    onClick={() => navigate('/streamers')}
+                    className="text-white/40 hover:text-white text-xs font-bold uppercase flex items-center gap-1"
+                  >
+                    VER TODOS <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {streamersAtivos.map((stream) => (
+                    <motion.div
+                      key={stream.id}
+                      whileHover={{ scale: 1.02 }}
+                      onClick={() => navigate('/streamers')}
+                      className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/5 hover:border-purple-500/30 transition-all cursor-pointer"
+                    >
+                      {stream.thumbnail_url && (
+                        <img
+                          src={stream.thumbnail_url}
+                          alt={stream.stream_title}
+                          className="w-16 h-12 rounded object-cover border border-white/10"
+                        />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-black bg-red-600 text-white px-2 py-1 rounded">LIVE</span>
+                          <span className="text-xs text-white/40">@{stream.twitch_channel}</span>
+                        </div>
+                        <p className="text-sm font-bold text-white line-clamp-2 mt-1">{stream.stream_title}</p>
+                        <p className="text-xs text-white/40 mt-1">{stream.viewer_count.toLocaleString()} espectadores</p>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* COLUNA DIREITA (1/3) */}
