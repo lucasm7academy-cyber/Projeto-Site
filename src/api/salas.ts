@@ -384,11 +384,15 @@ export async function entrarNaVaga(
 
       if (!timeIdJaDefinido) {
         // Buscar dados do time (logo, nome, tag)
-        const { data: timeData } = await supabase
+        const { data: timeData, error: timeError } = await supabase
           .from('times')
-          .select('id, name, tag, logo_url')
+          .select('*')
           .eq('id', membro.time_id)
           .maybeSingle();
+
+        if (timeError) {
+          console.error('[entrarNaVaga] Erro ao buscar dados do time:', timeError);
+        }
 
         if (timeData) {
           // Preparar campos para atualizar
@@ -399,9 +403,14 @@ export async function entrarNaVaga(
           const campoNome = isTimeA ? 'time_a_nome' : 'time_b_nome';
           const campoTag = isTimeA ? 'time_a_tag' : 'time_b_tag';
 
-          if (timeData.logo_url) camposAtualizacao[campoLogo] = timeData.logo_url;
-          if (timeData.name) camposAtualizacao[campoNome] = timeData.name;
-          if (timeData.tag) camposAtualizacao[campoTag] = timeData.tag;
+          // Tenta diferentes nomes de campo para logo
+          const logo = (timeData as any).logo_url || (timeData as any).logoUrl || (timeData as any).logo;
+          const nome = (timeData as any).name || (timeData as any).nome;
+          const tag = (timeData as any).tag;
+
+          if (logo) camposAtualizacao[campoLogo] = logo;
+          if (nome) camposAtualizacao[campoNome] = nome;
+          if (tag) camposAtualizacao[campoTag] = tag;
 
           const { error: updateError } = await supabase
             .from('salas')
