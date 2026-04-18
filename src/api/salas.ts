@@ -342,13 +342,22 @@ export async function entrarNaVaga(
 
     if (contagem === 0) {
       const campoTimeIdAntigo = vagaAnterior.is_time_a ? 'time_a_id' : 'time_b_id';
+      const campoLogoAntigo = vagaAnterior.is_time_a ? 'time_a_logo' : 'time_b_logo';
+      const campoNomeAntigo = vagaAnterior.is_time_a ? 'time_a_nome' : 'time_b_nome';
+      const campoTagAntigo = vagaAnterior.is_time_a ? 'time_a_tag' : 'time_b_tag';
+
       try {
         await supabase
           .from('salas')
-          .update({ [campoTimeIdAntigo]: null })
+          .update({
+            [campoTimeIdAntigo]: null,
+            [campoLogoAntigo]: null,
+            [campoNomeAntigo]: null,
+            [campoTagAntigo]: null,
+          })
           .eq('id', salaId);
       } catch (err: any) {
-        console.error(`[entrarNaVaga] Erro ao limpar ${campoTimeIdAntigo}:`, err);
+        console.error(`[entrarNaVaga] Erro ao limpar time do lado:`, err);
       }
     }
   }
@@ -374,15 +383,34 @@ export async function entrarNaVaga(
       const timeIdJaDefinido = isTimeA ? sala?.time_a_id : sala?.time_b_id;
 
       if (!timeIdJaDefinido) {
-        const { error: updateError } = await supabase
-          .from('salas')
-          .update({ [campoTimeId]: membro.time_id })
-          .eq('id', salaId);
+        // Buscar dados do time (logo, nome, tag)
+        const { data: timeData } = await supabase
+          .from('times')
+          .select('id, name, tag, logo_url')
+          .eq('id', membro.time_id)
+          .maybeSingle();
 
-        if (updateError) {
-          console.error(`[entrarNaVaga] Erro ao registrar ${campoTimeId}:`, updateError);
-          // Se falhar, retorna erro mas o jogador já entrou (insert funcionou)
-          // A UI vai detectar via realtime que time_id não foi registrado
+        if (timeData) {
+          // Preparar campos para atualizar
+          const camposAtualizacao: Record<string, any> = {
+            [campoTimeId]: membro.time_id,
+          };
+          const campoLogo = isTimeA ? 'time_a_logo' : 'time_b_logo';
+          const campoNome = isTimeA ? 'time_a_nome' : 'time_b_nome';
+          const campoTag = isTimeA ? 'time_a_tag' : 'time_b_tag';
+
+          if (timeData.logo_url) camposAtualizacao[campoLogo] = timeData.logo_url;
+          if (timeData.name) camposAtualizacao[campoNome] = timeData.name;
+          if (timeData.tag) camposAtualizacao[campoTag] = timeData.tag;
+
+          const { error: updateError } = await supabase
+            .from('salas')
+            .update(camposAtualizacao)
+            .eq('id', salaId);
+
+          if (updateError) {
+            console.error(`[entrarNaVaga] Erro ao registrar dados do time:`, updateError);
+          }
         }
       }
     }
@@ -416,17 +444,26 @@ export async function sairDaVaga(salaId: number, userId: string): Promise<void> 
       .eq('is_time_a', jogador.is_time_a)
       .eq('vinculado', false);
 
-    // Se nenhum jogador restante naquele lado, limpar o time_id
+    // Se nenhum jogador restante naquele lado, limpar o time_id e dados
     // Verificar também que ele é false (não vinculado) para ter certeza
     if (!countError && count === 0) {
       const campoTimeId = jogador.is_time_a ? 'time_a_id' : 'time_b_id';
+      const campoLogo = jogador.is_time_a ? 'time_a_logo' : 'time_b_logo';
+      const campoNome = jogador.is_time_a ? 'time_a_nome' : 'time_b_nome';
+      const campoTag = jogador.is_time_a ? 'time_a_tag' : 'time_b_tag';
+
       try {
         await supabase
           .from('salas')
-          .update({ [campoTimeId]: null })
+          .update({
+            [campoTimeId]: null,
+            [campoLogo]: null,
+            [campoNome]: null,
+            [campoTag]: null,
+          })
           .eq('id', salaId);
       } catch (err) {
-        console.error('[sairDaVaga] Erro ao resetar time_id:', err);
+        console.error('[sairDaVaga] Erro ao resetar time:', err);
       }
     }
   }
