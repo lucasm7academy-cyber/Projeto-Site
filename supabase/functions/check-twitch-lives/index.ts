@@ -68,7 +68,7 @@ export const handler = async (req: Request): Promise<Response> => {
     }
 
     // Get unique Twitch channel names
-    const twitchChannels = [...new Set(profiles.map((p) => p.twitch).filter(Boolean))];
+    const twitchChannels = [...new Set(profiles.map((p) => p.twitch).filter(Boolean))] as string[];
 
     if (twitchChannels.length === 0) {
       return new Response(JSON.stringify({ message: 'No Twitch channels to check' }), {
@@ -78,7 +78,7 @@ export const handler = async (req: Request): Promise<Response> => {
     }
 
     // Build query string for Twitch API
-    const userLogins = twitchChannels.map((ch) => `user_login=${encodeURIComponent(ch)}`).join('&');
+    const userLogins = twitchChannels.map((ch: string) => `user_login=${encodeURIComponent(ch)}`).join('&');
     const streamsUrl = `https://api.twitch.tv/helix/streams?${userLogins}&first=100`;
 
     // Fetch streams from Twitch API

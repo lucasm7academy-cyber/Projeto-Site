@@ -37,7 +37,7 @@ interface StreamCard extends TwitchLiveStream {
 export default function Streamers() {
   const [streams, setStreams] = useState<StreamCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const fetchTimeoutRef = React.useRef<NodeJS.Timeout>();
+  const fetchTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
 
   const fetchStreams = React.useCallback(async () => {
     try {
