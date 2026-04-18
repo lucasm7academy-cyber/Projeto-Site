@@ -367,12 +367,12 @@ export async function sairDaVaga(salaId: number, userId: string): Promise<void> 
     .maybeSingle();
 
   // Remove o jogador da vaga
-  await supabase.from('sala_jogadores').delete()
+  const { error: deleteError } = await supabase.from('sala_jogadores').delete()
     .eq('sala_id', salaId).eq('user_id', userId).eq('vinculado', false);
 
-  // Se era time_vs_time, verificar se ainda há jogadores naquele lado
-  if (jogador) {
-    const { count } = await supabase
+  // Se foi deletado e era time_vs_time, verificar se ainda há jogadores naquele lado
+  if (!deleteError && jogador) {
+    const { count, error: countError } = await supabase
       .from('sala_jogadores')
       .select('*', { count: 'exact', head: true })
       .eq('sala_id', salaId)
@@ -380,12 +380,17 @@ export async function sairDaVaga(salaId: number, userId: string): Promise<void> 
       .eq('vinculado', false);
 
     // Se nenhum jogador restante naquele lado, limpar o time_id
-    if (count === 0) {
+    // Verificar também que ele é false (não vinculado) para ter certeza
+    if (!countError && count === 0) {
       const campoTimeId = jogador.is_time_a ? 'time_a_id' : 'time_b_id';
-      await supabase
-        .from('salas')
-        .update({ [campoTimeId]: null })
-        .eq('id', salaId);
+      try {
+        await supabase
+          .from('salas')
+          .update({ [campoTimeId]: null })
+          .eq('id', salaId);
+      } catch (err) {
+        console.error('[sairDaVaga] Erro ao resetar time_id:', err);
+      }
     }
   }
 }
