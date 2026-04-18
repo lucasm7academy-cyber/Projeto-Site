@@ -289,9 +289,8 @@ export async function entrarNaVaga(
     .eq('vinculado', false)
     .neq('sala_id', salaId);
 
-  // Remove vaga anterior nesta sala (DELETE é permitido por RLS)
-  await supabase.from('sala_jogadores').delete()
-    .eq('sala_id', salaId).eq('user_id', usuario.id);
+  // Remove vaga anterior nesta sala usando sairDaVaga para resetar time_id se necessário
+  await sairDaVaga(salaId, usuario.id);
 
   // Conta jogadores para definir líder
   const { count } = await supabase.from('sala_jogadores')
