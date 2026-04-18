@@ -506,8 +506,8 @@ function HextechActionBar({
               </div>
               <p className="text-[1.2vmin] font-medium text-white/30 text-center leading-relaxed">
                 {estado === 'aberta' && sala.jogadores.length < (sala.modo === '1v1' ? 2 : 10) && "Aberta entre na vaga."}
-                {estado === 'aberta' && sala.jogadores.length === (sala.modo === '1v1' ? 2 : 10) && "Aberta assim que todos os jogadores forem completados."}
-                {estado === 'confirmacao' && "Assim que todas as vagas forem preenchidas, a sala entrará em processo de confirmação."}
+                {estado === 'aberta' && sala.jogadores.length === (sala.modo === '1v1' ? 2 : 10) && "Assim que todas as vagas forem preenchidas, a sala entrará em processo de confirmação."}
+                {estado === 'confirmacao' && "Confirme sua presença para iniciar a partida! Após todos confirmarem, o draft começará..."}
                 {estado === 'em_partida' && "Partida em andamento. Boa sorte aos invocadores!"}
                 {estado === 'finalizacao' && "Partida finalizada. Aguardando processamento do resultado."}
               </p>
@@ -1635,20 +1635,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           >
             <Tv2 className="w-4 h-4" />
             <span className="hidden sm:inline">Transmitir</span>
-          </motion.button>
-        )}
-
-        {/* Botão ASSISTIR (se houver stream ativa) */}
-        {salaStreamAtiva && (
-          <motion.button
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            onClick={() => setIsStreamModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg font-black uppercase tracking-wider text-xs transition-all border-2 bg-purple-600/10 border-purple-500/30 text-purple-400 hover:bg-purple-600/20 hover:border-purple-500/50 animate-pulse"
-            title="Assistir transmissão"
-          >
-            <Eye className="w-4 h-4" />
-            <span className="hidden sm:inline">Assistir</span>
           </motion.button>
         )}
       </div>
