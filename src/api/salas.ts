@@ -53,9 +53,11 @@ export interface Sala {
   timeANome?: string;
   timeATag?: string;
   timeALogo?: string;
+  timeAColor?: string;
   timeAId?: string | null;
   timeBNome?: string;
   timeBTag?: string;
+  timeBColor?: string;
   draft_id?: string | null;
   timeBLogo?: string;
   timeBId?: string | null;
@@ -86,10 +88,12 @@ function mapSala(row: any, jogadoresRows: any[]): Sala {
     timeANome:    row.time_a_nome,
     timeATag:     row.time_a_tag,
     timeALogo:    row.time_a_logo,
+    timeAColor:   row.time_a_color,
     timeAId:      row.time_a_id ?? null,
     timeBNome:    row.time_b_nome,
     timeBTag:     row.time_b_tag,
     timeBLogo:    row.time_b_logo,
+    timeBColor:   row.time_b_color,
     timeBId:      row.time_b_id ?? null,
     maxJogadores: row.max_jogadores,
     temSenha:     row.tem_senha,
@@ -138,7 +142,15 @@ export async function buscarSalaCompleta(salaId: number): Promise<Sala | null> {
     .select('*, sala_jogadores(*)')
     .eq('id', salaId)
     .single();
-  if (error || !data) return null;
+  if (error) {
+    console.error('[buscarSalaCompleta] Erro ao buscar sala:', error);
+    return null;
+  }
+  if (!data) {
+    console.log('[buscarSalaCompleta] Nenhum dado encontrado para sala:', salaId);
+    return null;
+  }
+  console.log('[buscarSalaCompleta] Dados brutos da sala:', { timeBLogo: data.time_b_logo, timeALogo: data.time_a_logo, timeBNome: data.time_b_nome });
   return mapSala(data, data.sala_jogadores ?? []);
 }
 
@@ -345,6 +357,7 @@ export async function entrarNaVaga(
       const campoLogoAntigo = vagaAnterior.is_time_a ? 'time_a_logo' : 'time_b_logo';
       const campoNomeAntigo = vagaAnterior.is_time_a ? 'time_a_nome' : 'time_b_nome';
       const campoTagAntigo = vagaAnterior.is_time_a ? 'time_a_tag' : 'time_b_tag';
+      const campoCorAntigo = vagaAnterior.is_time_a ? 'time_a_color' : 'time_b_color';
 
       try {
         await supabase
@@ -354,6 +367,7 @@ export async function entrarNaVaga(
             [campoLogoAntigo]: null,
             [campoNomeAntigo]: null,
             [campoTagAntigo]: null,
+            [campoCorAntigo]: null,
           })
           .eq('id', salaId);
       } catch (err: any) {
@@ -411,24 +425,27 @@ export async function entrarNaVaga(
             const campoLogo = isTimeA ? 'time_a_logo' : 'time_b_logo';
             const campoNome = isTimeA ? 'time_a_nome' : 'time_b_nome';
             const campoTag = isTimeA ? 'time_a_tag' : 'time_b_tag';
+            const campoCor = isTimeA ? 'time_a_color' : 'time_b_color';
 
             // Tenta diferentes nomes de campo para logo
             const logo = (timeData as any).logo_url || (timeData as any).logoUrl || (timeData as any).logo;
             const nome = (timeData as any).name || (timeData as any).nome;
             const tag = (timeData as any).tag;
+            const cor = (timeData as any).gradient_from || (timeData as any).color || '#a855f7';
 
-            console.log(`[entrarNaVaga] Logo encontrada: ${logo}, Nome: ${nome}, Tag: ${tag}`);
+            console.log(`[entrarNaVaga] Logo encontrada: ${logo}, Nome: ${nome}, Tag: ${tag}, Cor: ${cor}`);
 
             // Preparar UPDATE com dados do time
             const camposAtualizacao: Record<string, any> = {};
             if (logo) camposAtualizacao[campoLogo] = logo;
             if (nome) camposAtualizacao[campoNome] = nome;
             if (tag) camposAtualizacao[campoTag] = tag;
+            if (cor) camposAtualizacao[campoCor] = cor;
 
             console.log(`[entrarNaVaga] Campos a atualizar:`, camposAtualizacao);
 
             if (Object.keys(camposAtualizacao).length > 0) {
-              const { error: updateError } = await supabase
+              const { error: updateError, data: updateData } = await supabase
                 .from('salas')
                 .update(camposAtualizacao)
                 .eq('id', salaId);
@@ -437,6 +454,7 @@ export async function entrarNaVaga(
                 console.error(`[entrarNaVaga] Erro ao atualizar dados do time:`, updateError);
               } else {
                 console.log(`[entrarNaVaga] ✅ Dados do time registrados:`, camposAtualizacao);
+                console.log(`[entrarNaVaga] Update data:`, updateData);
               }
             } else {
               console.warn(`[entrarNaVaga] ⚠️ Nenhum campo para atualizar!`);
@@ -482,19 +500,25 @@ export async function sairDaVaga(salaId: number, userId: string): Promise<void> 
       const campoLogo = jogador.is_time_a ? 'time_a_logo' : 'time_b_logo';
       const campoNome = jogador.is_time_a ? 'time_a_nome' : 'time_b_nome';
       const campoTag = jogador.is_time_a ? 'time_a_tag' : 'time_b_tag';
+      const campoCor = jogador.is_time_a ? 'time_a_color' : 'time_b_color';
 
-      try {
-        await supabase
-          .from('salas')
-          .update({
-            [campoTimeId]: null,
-            [campoLogo]: null,
-            [campoNome]: null,
-            [campoTag]: null,
-          })
-          .eq('id', salaId);
-      } catch (err) {
-        console.error('[sairDaVaga] Erro ao resetar time:', err);
+      console.log(`[sairDaVaga] Último jogador saiu. Resetando ${jogador.is_time_a ? 'TIME A' : 'TIME B'} da sala ${salaId}`);
+
+      const { error: resetError } = await supabase
+        .from('salas')
+        .update({
+          [campoTimeId]: null,
+          [campoLogo]: null,
+          [campoNome]: null,
+          [campoTag]: null,
+          [campoCor]: null,
+        })
+        .eq('id', salaId);
+
+      if (resetError) {
+        console.error(`[sairDaVaga] Erro ao resetar time:`, resetError);
+      } else {
+        console.log(`[sairDaVaga] ✅ Time resetado com sucesso`);
       }
     }
   }

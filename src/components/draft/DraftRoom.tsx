@@ -5,7 +5,7 @@
 
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { motion } from 'motion/react';
-import { Search, Ban } from 'lucide-react';
+import { Search, Ban, Copy, Check, Tv2, Eye } from 'lucide-react';
 import { FiShieldOff } from 'react-icons/fi';
 import { supabase } from '../../lib/supabase';
 import { getDDRVersion, buildChampionIconUrl } from '../../api/riot';
@@ -23,6 +23,10 @@ interface DraftRoomProps {
   salaId: number;
   usuarioId: string;
   modo: string;
+  timeALogo?: string;
+  timeBLogo?: string;
+  codigoPartida?: string;
+  cargoUsuario?: string;
   onDraftFinalizado?: (draft: DraftState) => void;
   onSair?: () => void;
   onPickTimeout?: (usuarioId: string) => void;
@@ -33,6 +37,10 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   salaId,
   usuarioId,
   modo,
+  timeALogo,
+  timeBLogo,
+  codigoPartida,
+  cargoUsuario,
   onDraftFinalizado,
   onSair,
   onPickTimeout,
@@ -51,64 +59,72 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const [jogadorAtual, setJogadorAtual] = useState<{ blue: string; red: string }>({ blue: 'Jogador Azul', red: 'Jogador Vermelho' });
   const [timerFrozen, setTimerFrozen] = useState(false);
   const [dotAnimation, setDotAnimation] = useState(0);
+  const [copiado, setCopiado] = useState(false);
+  const [isStreamModalOpen, setIsStreamModalOpen] = useState(false);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initializedRef = useRef(false);
 
   // ============================================================
-  // INITIALIZATION
+  // INITIALIZATION (só roda uma vez)
   // ============================================================
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
     const inicializar = async () => {
-      setLoading(true);
-      const permissao = await podeControlarDraft(salaId, usuarioId, modo) as any;
-      setMeuTime(permissao.team);
-      setPossoJogar(permissao.pode);
-      setNomeJogador(permissao.nome || 'Jogador');
-
-      // Buscar nomes dos jogadores de cada time
       try {
-        const { data: jogadores } = await (supabase as any)
-          .from('sala_jogadores')
-          .select('user_id, nome, is_time_a, role')
-          .eq('sala_id', salaId)
-          .eq('role', modo === '1v1' ? 'MID' : 'JG');
-        
-        if (jogadores) {
-          const blue = jogadores.find((j: any) => j.is_time_a);
-          const red = jogadores.find((j: any) => !j.is_time_a);
-          setJogadorAtual({
-            blue: blue?.nome || 'Time Azul',
-            red: red?.nome || 'Time Vermelho'
-          });
+        const permissao = await podeControlarDraft(salaId, usuarioId, modo) as any;
+        setMeuTime(permissao.team);
+        setPossoJogar(permissao.pode);
+        setNomeJogador(permissao.nome || 'Jogador');
+
+        // Buscar nomes dos jogadores de cada time
+        try {
+          const { data: jogadores } = await (supabase as any)
+            .from('sala_jogadores')
+            .select('user_id, nome, is_time_a, role')
+            .eq('sala_id', salaId)
+            .eq('role', modo === '1v1' ? 'MID' : 'JG');
+
+          if (jogadores) {
+            const blue = jogadores.find((j: any) => j.is_time_a);
+            const red = jogadores.find((j: any) => !j.is_time_a);
+            setJogadorAtual({
+              blue: blue?.nome || 'Time Azul',
+              red: red?.nome || 'Time Vermelho'
+            });
+          }
+        } catch (error) {
+          console.error('Erro ao buscar jogadores:', error);
         }
-      } catch (error) {
-        console.error('Erro ao buscar jogadores:', error);
+
+        try {
+          const v = await getDDRVersion();
+          setVersion(v);
+          const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${v}/data/pt_BR/champion.json`);
+          const data = await res.json();
+          setChampions(data.data);
+        } catch (error) {
+          console.error('Error fetching champions:', error);
+        }
+
+        let draftAtual = await buscarDraftDaSala(salaId);
+        console.log('[DraftRoom] Draft buscado:', draftAtual?.id, 'turn:', draftAtual?.current_turn, 'status:', draftAtual?.status);
+
+        if (!draftAtual) {
+          console.log('[DraftRoom] Nenhum draft encontrado, criando novo...');
+          draftAtual = await criarDraft(salaId, modo === 'time_vs_time');
+        }
+
+        setDraft(draftAtual);
+
+        if (draftAtual?.status === 'finished') {
+          onDraftFinalizado?.(draftAtual);
+          return;
+        }
+      } finally {
+        setLoading(false);
       }
-
-      try {
-        const v = await getDDRVersion();
-        setVersion(v);
-        const res = await fetch(`https://ddragon.leagueoflegends.com/cdn/${v}/data/pt_BR/champion.json`);
-        const data = await res.json();
-        setChampions(data.data);
-      } catch (error) {
-        console.error('Error fetching champions:', error);
-      }
-
-      let draftAtual = await buscarDraftDaSala(salaId);
-      console.log('[DraftRoom] Draft buscado:', draftAtual?.id, 'turn:', draftAtual?.current_turn, 'status:', draftAtual?.status);
-
-      if (!draftAtual) {
-        console.log('[DraftRoom] Nenhum draft encontrado, criando novo...');
-        draftAtual = await criarDraft(salaId, modo === 'time_vs_time');
-      }
-
-      setDraft(draftAtual);
-
-      if (draftAtual?.status === 'finished') {
-        onDraftFinalizado?.(draftAtual);
-        return;
-      }
-      setLoading(false);
     };
     inicializar();
   }, [salaId, usuarioId, modo, onDraftFinalizado]);
@@ -119,11 +135,33 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   useEffect(() => {
     if (!draft) return;
     const channel = inscreverDraftRealtime(salaId, (novoDraft) => {
+      // Verificar se timer expirou enquanto aba estava inativa
+      const agora = Date.now();
+      const tempoRestante = Math.max(0, Math.floor(((novoDraft.timer_end || agora) - agora) / 1000));
+
+      // Se timer zerou e a ação ainda não foi tomada, executar automaticamente
+      if (tempoRestante === 0 && novoDraft.status === 'ongoing' && !timerFrozen) {
+        const turnOrder = getTurnOrder(modo);
+        const ehMeuTurno = turnOrder[novoDraft.current_turn]?.team === meuTime;
+
+        if (ehMeuTurno && possoJogar && meuTime) {
+          console.log('[DraftRoom] ⏱️ Timer expirou - executando ação automática');
+          if (novoDraft.current_phase === 'ban') {
+            console.log('[DraftRoom] Ban automático em branco');
+            banirCampeao(novoDraft, '', novoDraft.current_team, modo);
+          } else {
+            console.log('[DraftRoom] Pick timeout - cancelando draft');
+            onPickTimeout?.(usuarioId);
+          }
+          setTimerFrozen(true);
+        }
+      }
+
       setDraft(novoDraft);
       if (novoDraft.status === 'finished') onDraftFinalizado?.(novoDraft);
     });
     return () => { if (channel) supabase.removeChannel(channel); };
-  }, [salaId, draft?.id, onDraftFinalizado]);
+  }, [salaId, draft?.id, onDraftFinalizado, meuTime, possoJogar, timerFrozen, modo, onPickTimeout, usuarioId]);
 
   // ============================================================
   // ANIMAÇÃO DOS 3 PONTINHOS
@@ -202,6 +240,24 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
       timeoutRef.current = null;
     }
   }, [draft?.current_turn]);
+
+  // ============================================================
+  // DETECTAR ABA VOLTANDO AO FOCO (Page Visibility API)
+  // ============================================================
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.hidden) return;
+      // Aba voltou ao foco - refrescar draft para detectar timeouts
+      console.log('[DraftRoom] Aba retomada - verificando timeout');
+      if (!draft) return;
+      const draftAtualizado = await buscarDraftDaSala(salaId);
+      if (draftAtualizado) {
+        setDraft(draftAtualizado);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [salaId, draft]);
 
   // ============================================================
   // ACTIONS
@@ -369,10 +425,49 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
           : 'bg-gradient-radial from-blue-900/40 via-black to-black'
       }`} />
 
+      {/* HUD FIXO: Código + Botões de Transmissão — SEMPRE VISÍVEL */}
+      <div className="absolute top-4 right-4 z-50 flex flex-col gap-2 items-end">
+        {/* Código da Partida */}
+        {codigoPartida && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#FFB700]/10 border border-[#FFB700]/30 text-[#FFB700] font-bold text-xs tracking-wider"
+          >
+            <span>#{codigoPartida}</span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(codigoPartida);
+                setCopiado(true);
+                setTimeout(() => setCopiado(false), 2000);
+              }}
+              className="hover:opacity-70 transition"
+              title="Copiar código"
+            >
+              {copiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </button>
+          </motion.div>
+        )}
+
+        {/* Botão TRANSMITIR (Streamer/Admin/Coach) */}
+        {(cargoUsuario === 'streamer' || cargoUsuario === 'admin' || cargoUsuario === 'coach') && modo === 'time_vs_time' && (
+          <motion.button
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => setIsStreamModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg font-bold uppercase tracking-wider text-xs transition-all border bg-purple-600/10 border-purple-500/30 text-purple-400 hover:bg-purple-600/20 hover:border-purple-500/50"
+            title="Transmitir ao vivo"
+          >
+            <Tv2 className="w-4 h-4" />
+            Transmitir
+          </motion.button>
+        )}
+      </div>
+
       {/* TOP DECORATION & CONTROLS */}
       <div className="absolute top-0 left-0 right-0 h-[5vmin] flex items-center justify-end px-[2vmin] gap-[2vmin] z-50">
         {onSair && (
-          <button 
+          <button
             onClick={onSair}
             className="px-[2vmin] py-[0.5vmin] border border-[#c89b3c]/40 bg-black/40 text-[#c89b3c] text-[1.2vmin] font-bold tracking-widest uppercase hover:bg-[#c89b3c]/10 hover:border-[#c89b3c] transition-all"
           >
@@ -443,9 +538,13 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
               {/* Se é turno do outro time: mostra apenas o avatar */}
               {draft?.current_team !== 'blue' && (
                 <div className="w-full h-full flex items-center justify-center">
-                  <div className="w-[14vmin] h-[14vmin] rounded-full bg-gradient-to-br from-blue-500/40 to-blue-900/40 flex items-center justify-center border border-blue-400/30">
-                    <span className="text-[3vmin] font-black text-blue-400/60">👤</span>
-                  </div>
+                  {timeALogo ? (
+                    <img src={timeALogo} alt="Time A" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-[14vmin] h-[14vmin] rounded-full bg-gradient-to-br from-blue-500/40 to-blue-900/40 flex items-center justify-center border border-blue-400/30">
+                      <span className="text-[3vmin] font-black text-blue-400/60">👤</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -522,12 +621,16 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
               transition={draft?.current_team === 'red' ? { duration: 1.5, repeat: Infinity, ease: "easeInOut" } : { duration: 0.3 }}
               className={`w-[18vmin] h-[18vmin] rounded-full border-[0.6vmin] overflow-hidden bg-black transition-all duration-300 ${draft?.current_team === 'red' ? 'border-[#FF0000]' : 'border-white/10'}`}
             >
-              {/* Se é turno do outro time: mostra apenas o avatar */}
+              {/* Se é turno do outro time: mostra logo do time */}
               {draft?.current_team !== 'red' && (
                 <div className="w-full h-full flex items-center justify-center">
-                  <div className="w-[14vmin] h-[14vmin] rounded-full bg-gradient-to-br from-red-500/40 to-red-900/40 flex items-center justify-center border border-red-400/30">
-                    <span className="text-[3vmin] font-black text-red-400/60">👤</span>
-                  </div>
+                  {timeBLogo ? (
+                    <img src={timeBLogo} alt="Time B" className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-[14vmin] h-[14vmin] rounded-full bg-gradient-to-br from-red-500/40 to-red-900/40 flex items-center justify-center border border-red-400/30">
+                      <span className="text-[3vmin] font-black text-red-400/60">👤</span>
+                    </div>
+                  )}
                 </div>
               )}
 

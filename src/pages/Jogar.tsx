@@ -220,12 +220,8 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
       eloMinimo: eloMinimo || undefined,
     };
 
-    // Se for Time vs Time, força usar o time do criador
-    if (modo === 'time_vs_time' && userTeam) {
-      dados.timeANome = userTeam.nome;
-      dados.timeATag = userTeam.tag;
-      dados.timeALogo = userTeam.logo;
-    }
+    // Para time_vs_time, a sala nasce branca (sem time preenchido)
+    // O criador entra como jogador normal depois
 
     await onCreate(dados);
     setLoading(false);

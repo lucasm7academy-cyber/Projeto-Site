@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Crown, UserPlus, Check, ArrowLeft, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Send
+  Crown, UserPlus, Check, ArrowLeft, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Send, Tv2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { buildProfileIconUrl, buildChampionIconUrl, getDDRVersion } from '../api/riot';
@@ -181,17 +181,21 @@ function ArcaneIndicators() {
   );
 }
 
-function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome }: {
+function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome, timeAColor, timeBColor, timeATag, timeBTag }: {
   modo?: string;
   timeALogo?: string;
   timeBLogo?: string;
   timeANome?: string;
   timeBNome?: string;
+  timeAColor?: string;
+  timeBColor?: string;
+  timeATag?: string;
+  timeBTag?: string;
 }) {
   // Debug: log props da logo
   if (modo === 'time_vs_time') {
-    console.log('[CentralDisplay] timeALogo:', timeALogo);
-    console.log('[CentralDisplay] timeBLogo:', timeBLogo);
+    console.log('[CentralDisplay] timeALogo:', timeALogo, 'timeAColor:', timeAColor);
+    console.log('[CentralDisplay] timeBLogo:', timeBLogo, 'timeBColor:', timeBColor);
   }
 
   return (
@@ -219,51 +223,75 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome }: {
       {/* Logos time_vs_time — sobreposto no centro */}
       {modo === 'time_vs_time' && (
         <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
-          <div className="flex items-center justify-center gap-[6vmin] relative h-[25vmin]">
+          <div className="flex items-center justify-center gap-[6vmin] relative">
             {/* Time A */}
-            <div className="flex flex-col items-center justify-start gap-[1vmin] h-full">
-              <div className="w-[15vmin] h-[15vmin] rounded-xl overflow-hidden border-3 border-blue-500/50 bg-blue-600/10 flex-shrink-0">
+            <div className="flex flex-col items-center justify-center gap-[1.5vmin]">
+              <div
+                className="w-[15vmin] h-[15vmin] rounded-xl overflow-hidden border-3 flex-shrink-0"
+                style={{
+                  borderColor: timeAColor || '#3b82f6',
+                  backgroundColor: `${timeAColor || '#3b82f6'}15`,
+                  boxShadow: `0 0 15px ${timeAColor || '#3b82f6'}60, inset 0 0 15px ${timeAColor || '#3b82f6'}20`
+                }}
+              >
                 {timeALogo ? (
                   <img src={timeALogo} alt="Time A" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-blue-600/5">
-                    <span className="text-[7.5vmin] font-black text-blue-400/30">?</span>
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-[7.5vmin] font-black opacity-30">?</span>
                   </div>
                 )}
               </div>
               {timeANome && (
-                <span className="text-[1.2vmin] font-black text-blue-300 uppercase tracking-widest whitespace-nowrap">
-                  #{timeANome.slice(0, 12)}
-                </span>
+                <div className="text-center">
+                  <div className="text-[1vmin] font-black text-white uppercase tracking-widest whitespace-nowrap">
+                    {timeANome.slice(0, 12)}
+                  </div>
+                  <div className="text-[0.9vmin] font-black uppercase tracking-widest whitespace-nowrap mt-[0.3vmin]" style={{ color: timeAColor || '#60a5fa' }}>
+                    #{timeATag?.slice(0, 6) || 'TIME'}
+                  </div>
+                </div>
               )}
               {!timeANome && (
-                <span className="text-[1.2vmin] font-black text-blue-400/20 uppercase tracking-widest">-</span>
+                <span className="text-[1.2vmin] font-black uppercase tracking-widest opacity-20">-</span>
               )}
             </div>
 
-            {/* VS Badge */}
-            <div className="w-[6.5vmin] h-[6.5vmin] bg-black/80 border-3 border-white/40 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.9)] flex-shrink-0">
-              <span className="text-[3vmin] font-black text-white/90">VS</span>
+            {/* VS Badge with PNG — Centered vertically with logos */}
+            <div className="flex items-center justify-center flex-shrink-0">
+              <img src="/images/vs.png" alt="VS" className="w-[5vmin] h-[5vmin] object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]" />
             </div>
 
             {/* Time B */}
-            <div className="flex flex-col items-center justify-start gap-[1vmin] h-full">
-              <div className="w-[15vmin] h-[15vmin] rounded-xl overflow-hidden border-3 border-red-500/50 bg-red-600/10 flex-shrink-0">
+            <div className="flex flex-col items-center justify-center gap-[1.5vmin]">
+              <div
+                className="w-[15vmin] h-[15vmin] rounded-xl overflow-hidden border-3 flex-shrink-0"
+                style={{
+                  borderColor: timeBColor || '#ef4444',
+                  backgroundColor: `${timeBColor || '#ef4444'}15`,
+                  boxShadow: `0 0 15px ${timeBColor || '#ef4444'}60, inset 0 0 15px ${timeBColor || '#ef4444'}20`
+                }}
+              >
                 {timeBLogo ? (
                   <img src={timeBLogo} alt="Time B" className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-red-600/5">
-                    <span className="text-[7.5vmin] font-black text-red-400/30">?</span>
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-[7.5vmin] font-black opacity-30">?</span>
                   </div>
                 )}
               </div>
               {timeBNome && (
-                <span className="text-[1.2vmin] font-black text-red-300 uppercase tracking-widest whitespace-nowrap">
-                  #{timeBNome.slice(0, 12)}
-                </span>
+                <div className="text-center">
+                  <div className="text-[1vmin] font-black text-white uppercase tracking-widest whitespace-nowrap">
+                    {timeBNome.slice(0, 12)}
+                  </div>
+                  <div className="text-[0.9vmin] font-black uppercase tracking-widest whitespace-nowrap mt-[0.3vmin]" style={{ color: timeBColor || '#f87171' }}>
+                    #{timeBTag?.slice(0, 6) || 'TIME'}
+                  </div>
+                </div>
               )}
               {!timeBNome && (
-                <span className="text-[1.2vmin] font-black text-red-400/20 uppercase tracking-widest">-</span>
+                <span className="text-[1.2vmin] font-black uppercase tracking-widest opacity-20">-</span>
               )}
             </div>
           </div>
@@ -547,15 +575,25 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     if (!sala?.id) return;
 
     const loadActiveStream = async () => {
-      const { data } = await supabase
-        .from('sala_streams')
-        .select('*')
-        .eq('sala_id', sala.id)
-        .eq('ativo', true)
-        .maybeSingle();
+      try {
+        console.log('[SalaPage] Carregando stream ativa para sala:', sala.id);
+        const { data, error } = await supabase
+          .from('sala_streams')
+          .select('*')
+          .eq('sala_id', sala.id)
+          .eq('ativo', true)
+          .maybeSingle();
 
-      console.log('[SalaPage] Stream ativa carregada:', data);
-      setSalaStreamAtiva(data);
+        if (error) {
+          console.error('[SalaPage] ❌ Erro ao carregar stream:', error);
+          return;
+        }
+
+        console.log('[SalaPage] ✅ Stream ativa carregada:', data);
+        setSalaStreamAtiva(data);
+      } catch (err) {
+        console.error('[SalaPage] ❌ Exception ao carregar stream:', err);
+      }
     };
 
     loadActiveStream();
@@ -572,21 +610,31 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           filter: `sala_id=eq.${sala.id}`,
         },
         (payload: any) => {
-          console.log('[SalaPage] Realtime update:', payload.eventType, payload);
+          console.log('[SalaPage] Realtime update - event:', payload.event, 'payload:', payload);
 
-          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const eventType = payload.event?.toUpperCase() || payload.eventType?.toUpperCase();
+          console.log('[SalaPage] Event type detected:', eventType);
+
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
             const newStream = payload.new as any;
-            if (newStream.ativo) {
-              console.log('[SalaPage] Ativando stream:', newStream);
+            console.log('[SalaPage] INSERT/UPDATE received - newStream:', newStream, 'ativo:', newStream?.ativo);
+            if (newStream?.ativo) {
+              console.log('[SalaPage] ✅ Ativando stream para todos:', newStream);
               setSalaStreamAtiva(newStream);
+            } else {
+              console.log('[SalaPage] ⚠️ Stream não está ativo, ignorando');
             }
-          } else if (payload.eventType === 'DELETE' || (payload.new && !payload.new.ativo)) {
-            console.log('[SalaPage] Desativando stream');
+          } else if (eventType === 'DELETE') {
+            console.log('[SalaPage] ❌ DELETE - Desativando stream');
             setSalaStreamAtiva(null);
+          } else {
+            console.log('[SalaPage] Unknown event type:', eventType);
           }
         }
       )
-      .subscribe();
+      .subscribe((status: any) => {
+        console.log('[SalaPage] Subscription status:', status);
+      });
 
     return () => {
       subscription.unsubscribe();
@@ -635,6 +683,10 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         salaId={sala.id}
         usuarioId={usuarioAtual.id}
         modo={sala.modo}
+        timeALogo={sala.timeALogo}
+        timeBLogo={sala.timeBLogo}
+        codigoPartida={sala.codigoPartida}
+        cargoUsuario={cargoUsuario}
         onDraftFinalizado={acaoDraftFinalizado}
         onPickTimeout={acaoCancelarDraftPorTimeout}
         onSair={acaoSairDaSala}
@@ -708,7 +760,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     if (jog) {
       const isConfirmado = sala.estado === 'confirmacao' && jog.confirmado;
       const avatarEl = (
-        <div className={`w-[4.5vmin] h-[4.5vmin] rounded bg-white/5 flex items-center justify-center overflow-hidden border ${isConfirmado ? 'border-green-500' : 'border-white/10'} shrink-0`}>
+        <div className="w-[4.5vmin] h-[4.5vmin] rounded bg-white/5 flex items-center justify-center overflow-hidden border border-white/10 shrink-0">
           {jog.avatar
             ? <img src={jog.avatar} alt={jog.nome} className="w-full h-full object-cover" />
             : <span className="text-white/20 text-[1.6vmin] font-bold">{jog.nome[0]}</span>
@@ -819,6 +871,10 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           timeBLogo={sala?.timeBLogo}
           timeANome={sala?.timeANome}
           timeBNome={sala?.timeBNome}
+          timeATag={sala?.timeATag}
+          timeBTag={sala?.timeBTag}
+          timeAColor={sala?.timeAColor}
+          timeBColor={sala?.timeBColor}
         />
       </div>
 
@@ -1544,7 +1600,60 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </motion.div>
       )}
 
-      {/* Botão de Assistir (Watch Stream) — lado direito inferior */}
+      {/* HUD FIXO: Código + Botões de Transmissão — SEMPRE VISÍVEL */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 md:top-6 md:right-6">
+        {/* Código da Partida */}
+        {sala.codigoPartida && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#FFB700]/10 border border-[#FFB700]/30 text-[#FFB700] font-bold text-sm tracking-wider"
+          >
+            <span className="text-xs">#{sala.codigoPartida}</span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(sala.codigoPartida!);
+                setCopiado(true);
+                setTimeout(() => setCopiado(false), 2000);
+              }}
+              className="hover:opacity-70 transition"
+              title="Copiar código"
+            >
+              {copiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </button>
+          </motion.div>
+        )}
+
+        {/* Botão TRANSMITIR (Streamer/Admin/Coach) */}
+        {(cargoUsuario === 'streamer' || cargoUsuario === 'admin' || cargoUsuario === 'coach') && sala.modo === 'time_vs_time' && (
+          <motion.button
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => setIsStreamModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg font-black uppercase tracking-wider text-xs transition-all border bg-purple-600/10 border-purple-500/30 text-purple-400 hover:bg-purple-600/20 hover:border-purple-500/50"
+            title="Transmitir ao vivo"
+          >
+            <Tv2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Transmitir</span>
+          </motion.button>
+        )}
+
+        {/* Botão ASSISTIR (se houver stream ativa) */}
+        {salaStreamAtiva && (
+          <motion.button
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => setIsStreamModalOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg font-black uppercase tracking-wider text-xs transition-all border-2 bg-purple-600/10 border-purple-500/30 text-purple-400 hover:bg-purple-600/20 hover:border-purple-500/50 animate-pulse"
+            title="Assistir transmissão"
+          >
+            <Eye className="w-4 h-4" />
+            <span className="hidden sm:inline">Assistir</span>
+          </motion.button>
+        )}
+      </div>
+
+      {/* Botão ASSISTIR em BAIXO (lado direito) — quando há stream ativa */}
       {salaStreamAtiva && (
         <motion.div
           initial={{ x: 100, opacity: 0 }}

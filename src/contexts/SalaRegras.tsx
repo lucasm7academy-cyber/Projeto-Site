@@ -207,7 +207,9 @@ export function SalaRegrasProvider({
   // ── Carregamento e realtime ────────────────────────────────────────────────
 
   const recarregar = useCallback(async () => {
+    console.log('[recarregar] Recarregando sala:', salaId);
     const atualizada = await buscarSalaCompleta(salaId);
+    console.log('[recarregar] Dados recebidos:', { timeBLogo: atualizada?.timeBLogo, timeALogo: atualizada?.timeALogo });
     // Nota: NÃO reseta otimisticoRef aqui.
     // Quem gerencia o flag é a função de ação (acaoEntrarVaga, etc.) via try/finally.
     // Isso garante que o DELETE intermediário do confirmarPresencaDB não dispare
@@ -233,11 +235,18 @@ export function SalaRegrasProvider({
     const channel = supabase
       .channel(`sala_regras_${salaId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'salas',
-          filter: `id=eq.${salaId}` }, recarregar)
+          filter: `id=eq.${salaId}` }, (payload) => {
+            console.log('[Realtime] salas table changed:', payload.eventType);
+            recarregar();
+          })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores',
-          filter: `sala_id=eq.${salaId}` }, recarregar)
+          filter: `sala_id=eq.${salaId}` }, (payload) => {
+            console.log('[Realtime] sala_jogadores changed:', payload.eventType);
+            recarregar();
+          })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_votos',
-          filter: `sala_id=eq.${salaId}` }, () => {
+          filter: `sala_id=eq.${salaId}` }, (payload) => {
+            console.log('[Realtime] sala_votos changed:', payload.eventType);
             if (sala?.estado === 'aguardando_inicio') recarregarVotos('aguardando_inicio');
             if (sala?.estado === 'finalizacao')       recarregarVotos('finalizacao');
           })
