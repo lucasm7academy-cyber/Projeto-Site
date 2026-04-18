@@ -383,42 +383,55 @@ export async function entrarNaVaga(
       const timeIdJaDefinido = isTimeA ? sala?.time_a_id : sala?.time_b_id;
 
       if (!timeIdJaDefinido) {
-        // Buscar dados do time (logo, nome, tag)
-        const { data: timeData, error: timeError } = await supabase
-          .from('times')
-          .select('*')
-          .eq('id', membro.time_id)
-          .maybeSingle();
+        // Registrar time_id PRIMEIRO
+        const { error: updateTimeIdError } = await supabase
+          .from('salas')
+          .update({ [campoTimeId]: membro.time_id })
+          .eq('id', salaId);
 
-        if (timeError) {
-          console.error('[entrarNaVaga] Erro ao buscar dados do time:', timeError);
-        }
+        if (updateTimeIdError) {
+          console.error(`[entrarNaVaga] Erro ao registrar ${campoTimeId}:`, updateTimeIdError);
+        } else {
+          // Só buscar dados do time SE o time_id foi registrado com sucesso
+          // Usar RPC ou query sem autenticação para buscar dados públicos do time
+          const { data: timeData, error: timeError } = await supabase
+            .from('times')
+            .select('*')
+            .eq('id', membro.time_id)
+            .maybeSingle();
 
-        if (timeData) {
-          // Preparar campos para atualizar
-          const camposAtualizacao: Record<string, any> = {
-            [campoTimeId]: membro.time_id,
-          };
-          const campoLogo = isTimeA ? 'time_a_logo' : 'time_b_logo';
-          const campoNome = isTimeA ? 'time_a_nome' : 'time_b_nome';
-          const campoTag = isTimeA ? 'time_a_tag' : 'time_b_tag';
+          if (timeError) {
+            console.warn('[entrarNaVaga] Aviso ao buscar dados do time:', timeError, '- continuando mesmo assim');
+          }
 
-          // Tenta diferentes nomes de campo para logo
-          const logo = (timeData as any).logo_url || (timeData as any).logoUrl || (timeData as any).logo;
-          const nome = (timeData as any).name || (timeData as any).nome;
-          const tag = (timeData as any).tag;
+          if (timeData) {
+            const campoLogo = isTimeA ? 'time_a_logo' : 'time_b_logo';
+            const campoNome = isTimeA ? 'time_a_nome' : 'time_b_nome';
+            const campoTag = isTimeA ? 'time_a_tag' : 'time_b_tag';
 
-          if (logo) camposAtualizacao[campoLogo] = logo;
-          if (nome) camposAtualizacao[campoNome] = nome;
-          if (tag) camposAtualizacao[campoTag] = tag;
+            // Tenta diferentes nomes de campo para logo
+            const logo = (timeData as any).logo_url || (timeData as any).logoUrl || (timeData as any).logo;
+            const nome = (timeData as any).name || (timeData as any).nome;
+            const tag = (timeData as any).tag;
 
-          const { error: updateError } = await supabase
-            .from('salas')
-            .update(camposAtualizacao)
-            .eq('id', salaId);
+            // Preparar UPDATE com dados do time
+            const camposAtualizacao: Record<string, any> = {};
+            if (logo) camposAtualizacao[campoLogo] = logo;
+            if (nome) camposAtualizacao[campoNome] = nome;
+            if (tag) camposAtualizacao[campoTag] = tag;
 
-          if (updateError) {
-            console.error(`[entrarNaVaga] Erro ao registrar dados do time:`, updateError);
+            if (Object.keys(camposAtualizacao).length > 0) {
+              const { error: updateError } = await supabase
+                .from('salas')
+                .update(camposAtualizacao)
+                .eq('id', salaId);
+
+              if (updateError) {
+                console.error(`[entrarNaVaga] Erro ao atualizar dados do time:`, updateError);
+              } else {
+                console.log(`[entrarNaVaga] ✅ Dados do time registrados: ${campoNome}=${nome}`);
+              }
+            }
           }
         }
       }
