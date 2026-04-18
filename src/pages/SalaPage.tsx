@@ -213,33 +213,45 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome }: {
       {/* Logos time_vs_time — sobreposto no centro */}
       {modo === 'time_vs_time' && (
         <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
-          <div className="flex items-center justify-center gap-[8vmin] relative w-full h-full">
-            {/* Time A Logo */}
-            <div className="w-[32vmin] h-[32vmin] rounded-2xl overflow-hidden border-4 border-blue-500/40 flex-shrink-0 bg-blue-600/10">
-              {timeALogo ? (
-                <img src={timeALogo} alt="Time A" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-blue-600/5">
-                  <span className="text-[12vmin] font-black text-blue-400/30">?</span>
-                </div>
+          <div className="flex items-center justify-center gap-[6vmin] relative">
+            {/* Time A */}
+            <div className="flex flex-col items-center gap-[1.5vmin]">
+              <div className="w-[10vmin] h-[10vmin] rounded-xl overflow-hidden border-3 border-blue-500/50 bg-blue-600/10">
+                {timeALogo ? (
+                  <img src={timeALogo} alt="Time A" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-blue-600/5">
+                    <span className="text-[5vmin] font-black text-blue-400/30">?</span>
+                  </div>
+                )}
+              </div>
+              {timeANome && (
+                <span className="text-[1vmin] font-black text-blue-300 uppercase tracking-widest">
+                  #{timeANome.slice(0, 10)}
+                </span>
               )}
             </div>
 
             {/* VS Badge */}
-            <div className="absolute z-40 pointer-events-auto">
-              <div className="w-[8vmin] h-[8vmin] bg-black/80 border-4 border-white/30 rounded-full flex items-center justify-center shadow-[0_0_40px_rgba(0,0,0,0.8)]">
-                <span className="text-[3.5vmin] font-black text-white/80">VS</span>
-              </div>
+            <div className="w-[5.5vmin] h-[5.5vmin] bg-black/80 border-3 border-white/40 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.9)] flex-shrink-0">
+              <span className="text-[2.5vmin] font-black text-white/90">VS</span>
             </div>
 
-            {/* Time B Logo */}
-            <div className="w-[32vmin] h-[32vmin] rounded-2xl overflow-hidden border-4 border-red-500/40 flex-shrink-0 bg-red-600/10">
-              {timeBLogo ? (
-                <img src={timeBLogo} alt="Time B" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-red-600/5">
-                  <span className="text-[12vmin] font-black text-red-400/30">?</span>
-                </div>
+            {/* Time B */}
+            <div className="flex flex-col items-center gap-[1.5vmin]">
+              <div className="w-[10vmin] h-[10vmin] rounded-xl overflow-hidden border-3 border-red-500/50 bg-red-600/10">
+                {timeBLogo ? (
+                  <img src={timeBLogo} alt="Time B" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-red-600/5">
+                    <span className="text-[5vmin] font-black text-red-400/30">?</span>
+                  </div>
+                )}
+              </div>
+              {timeBNome && (
+                <span className="text-[1vmin] font-black text-red-300 uppercase tracking-widest">
+                  #{timeBNome.slice(0, 10)}
+                </span>
               )}
             </div>
           </div>
