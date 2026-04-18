@@ -213,45 +213,51 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome }: {
       {/* Logos time_vs_time — sobreposto no centro */}
       {modo === 'time_vs_time' && (
         <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none">
-          <div className="flex items-center justify-center gap-[6vmin] relative">
+          <div className="flex items-center justify-center gap-[6vmin] relative h-[25vmin]">
             {/* Time A */}
-            <div className="flex flex-col items-center gap-[1.5vmin]">
-              <div className="w-[10vmin] h-[10vmin] rounded-xl overflow-hidden border-3 border-blue-500/50 bg-blue-600/10">
+            <div className="flex flex-col items-center justify-start gap-[1vmin] h-full">
+              <div className="w-[15vmin] h-[15vmin] rounded-xl overflow-hidden border-3 border-blue-500/50 bg-blue-600/10 flex-shrink-0">
                 {timeALogo ? (
                   <img src={timeALogo} alt="Time A" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-blue-600/5">
-                    <span className="text-[5vmin] font-black text-blue-400/30">?</span>
+                    <span className="text-[7.5vmin] font-black text-blue-400/30">?</span>
                   </div>
                 )}
               </div>
               {timeANome && (
-                <span className="text-[1vmin] font-black text-blue-300 uppercase tracking-widest">
-                  #{timeANome.slice(0, 10)}
+                <span className="text-[1.2vmin] font-black text-blue-300 uppercase tracking-widest whitespace-nowrap">
+                  #{timeANome.slice(0, 12)}
                 </span>
+              )}
+              {!timeANome && (
+                <span className="text-[1.2vmin] font-black text-blue-400/20 uppercase tracking-widest">-</span>
               )}
             </div>
 
             {/* VS Badge */}
-            <div className="w-[5.5vmin] h-[5.5vmin] bg-black/80 border-3 border-white/40 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.9)] flex-shrink-0">
-              <span className="text-[2.5vmin] font-black text-white/90">VS</span>
+            <div className="w-[6.5vmin] h-[6.5vmin] bg-black/80 border-3 border-white/40 rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.9)] flex-shrink-0">
+              <span className="text-[3vmin] font-black text-white/90">VS</span>
             </div>
 
             {/* Time B */}
-            <div className="flex flex-col items-center gap-[1.5vmin]">
-              <div className="w-[10vmin] h-[10vmin] rounded-xl overflow-hidden border-3 border-red-500/50 bg-red-600/10">
+            <div className="flex flex-col items-center justify-start gap-[1vmin] h-full">
+              <div className="w-[15vmin] h-[15vmin] rounded-xl overflow-hidden border-3 border-red-500/50 bg-red-600/10 flex-shrink-0">
                 {timeBLogo ? (
                   <img src={timeBLogo} alt="Time B" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-red-600/5">
-                    <span className="text-[5vmin] font-black text-red-400/30">?</span>
+                    <span className="text-[7.5vmin] font-black text-red-400/30">?</span>
                   </div>
                 )}
               </div>
               {timeBNome && (
-                <span className="text-[1vmin] font-black text-red-300 uppercase tracking-widest">
-                  #{timeBNome.slice(0, 10)}
+                <span className="text-[1.2vmin] font-black text-red-300 uppercase tracking-widest whitespace-nowrap">
+                  #{timeBNome.slice(0, 12)}
                 </span>
+              )}
+              {!timeBNome && (
+                <span className="text-[1.2vmin] font-black text-red-400/20 uppercase tracking-widest">-</span>
               )}
             </div>
           </div>
