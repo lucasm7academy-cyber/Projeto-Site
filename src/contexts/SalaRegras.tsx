@@ -18,6 +18,7 @@ import {
   type Sala, type EstadoSala, type JogadorNaSala,
   type OpcaoVotoResultado, type Voto,
 } from '../api/salas';
+import { atualizarPontosPartida, type ResultadoPartida } from '../api/player';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MÁQUINA DE ESTADOS
@@ -83,7 +84,7 @@ function avaliarVotosResultado(finVotos: Voto[]): DecisaoResultado {
 async function encerrarPartidaComResultado(
   salaId: number,
   decisao: DecisaoResultado,
-  sala: { timeANome?: string; timeBNome?: string; jogadores: JogadorNaSala[] }
+  sala: { timeANome?: string; timeBNome?: string; modo: string; jogadores: JogadorNaSala[] }
 ): Promise<void> {
   const vencedorLado  = decisao === 'time_a' ? 'time_a' : decisao === 'time_b' ? 'time_b' : 'disputa';
   const vencedorNome  = decisao === 'time_a' ? (sala.timeANome ?? 'Equipe Azul')
@@ -97,6 +98,24 @@ async function encerrarPartidaComResultado(
     vencedorNome,
     sala.jogadores.map((j: JogadorNaSala) => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA, role: j.role })),
   );
+
+  // 🎯 Atualizar M7 Points dos jogadores
+  if (decisao !== 'pendente') {
+    const resultado: ResultadoPartida = {
+      salaId,
+      modo: sala.modo,
+      vencedor: decisao === 'time_a' ? 'time_a' : decisao === 'time_b' ? 'time_b' : 'empate',
+      jogadores: sala.jogadores.map((j: JogadorNaSala) => ({
+        userId: j.id,
+        isTimeA: j.isTimeA,
+        nome: j.nome,
+      })),
+    };
+    await atualizarPontosPartida(resultado).catch(e => {
+      console.error('[encerrarPartidaComResultado] Erro ao atualizar pontos:', e);
+    });
+  }
+
   await encerrarSala(salaId, vencedorDB as any);
   await desvincularJogadores(salaId);
   await liberarCodigoPartida(salaId);

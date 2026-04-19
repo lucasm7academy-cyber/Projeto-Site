@@ -23,6 +23,7 @@ import Admin from "./pages/Admin";
 import AdminCargos from "./pages/AdminCargos";
 import Streamers from "./pages/Streamers";
 import Politicas from "./pages/Politicas";
+import Tutorial from "./pages/Tutorial";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -65,6 +66,7 @@ export default function App() {
           <Route path="/" element={<Login />} />
           <Route path="/reset-password" element={<ResetHandler />} />
           <Route path="/resetpassword" element={<ResetPassword />} />
+          <Route path="/tutorial" element={<PrivateRoute><Tutorial /></PrivateRoute>} />
           
           <Route element={<Layout />}>
             <Route path="/lobby" element={<PrivateRoute><Lobby /></PrivateRoute>} />

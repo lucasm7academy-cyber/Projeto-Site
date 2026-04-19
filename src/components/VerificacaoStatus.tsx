@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useVerificacao } from '../contexts/VerificacaoContext';
 import { Loader2, XCircle, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -42,7 +43,7 @@ export function VerificacaoStatus() {
 
   const mostrar = (verificacaoAtiva && !isCancelado) || falha;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {mostrar && (
         <motion.div
@@ -51,8 +52,8 @@ export function VerificacaoStatus() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 100 }}
           onClick={() => !falha && navigate('/vincular')}
-          className={`fixed bottom-4 right-4 z-[999999] ${!falha ? 'cursor-pointer' : ''}`}
-          style={{ pointerEvents: 'auto' }}
+          className={`fixed bottom-4 right-4 ${!falha ? 'cursor-pointer' : ''}`}
+          style={{ pointerEvents: 'auto', zIndex: 2147483647 }}
         >
           <div className={`bg-black/90 backdrop-blur-lg rounded-xl border shadow-lg p-4 min-w-[280px] ${
             falha
@@ -140,7 +141,8 @@ export function VerificacaoStatus() {
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
 

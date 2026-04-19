@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { buildProfileIconUrl } from '../api/riot';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
@@ -383,8 +384,8 @@ export default function Layout() {
       <div className="flex h-full pt-14 md:pt-16">
         {/* Sidebar Desktop */}
         <aside className={`${sidebarWidths} ${isGamePage ? 'flex' : 'hidden lg:flex'} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex-col z-[50] h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 overflow-hidden`}>
-          {/* Top Section - Profile/Link (Non-scrolling to allow balloon overflow) */}
-          <div className="py-6 px-3 overflow-visible relative z-[60]">
+          {/* Top Section - Profile/Link */}
+          <div className="py-6 px-3 relative z-[60]">
             {contaRiot ? (
               <Link
                 to="/perfil"
@@ -394,9 +395,9 @@ export default function Layout() {
                 <div className="relative mb-3 md:mb-4">
                   <div className="absolute inset-0 rounded-full bg-primary/10 blur-lg transition-all"></div>
                   <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-primary shadow-[0_0_15px_rgba(255,255,0,0.2)] transition-all">
-                    <img 
-                      alt="User Profile Avatar" 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover/profile:scale-110" 
+                    <img
+                      alt="User Profile Avatar"
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover/profile:scale-110"
                       src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
                       onError={(e) => {
                         e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
@@ -409,17 +410,16 @@ export default function Layout() {
                   {contaRiot.riot_id}
                 </h3>
               </Link>
-            ) : (!hideLinkPrompt && location.pathname !== '/vincular') ? (
-              <div className="relative">
-                {/* Poro Prompt Balloon */}
-                <AnimatePresence>
-                  {user && !contaRiot && !loadingUser && (
+            ) : (
+              <>
+                {createPortal(
+                  user && !contaRiot && !loadingUser && (
                     <motion.div
                       initial={{ opacity: 0, x: -20, scale: 0.9 }}
-                      animate={{ 
-                        opacity: 1, 
+                      animate={{
+                        opacity: 1,
                         x: [0, -6, 0],
-                        scale: 1 
+                        scale: 1
                       }}
                       transition={{
                         x: {
@@ -430,11 +430,9 @@ export default function Layout() {
                         opacity: { duration: 0.3 },
                         scale: { duration: 0.3 }
                       }}
-                      exit={{ opacity: 0, x: -20, scale: 0.9 }}
-                      className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 w-52 z-[70]"
+                      className="fixed left-[200px] top-20 w-52 z-[9999]"
                     >
                       <div className="bg-[#1a1b23] border-2 border-primary/50 rounded-2xl p-3 shadow-[0_0_30px_rgba(255,255,0,0.25)] relative flex items-center gap-3">
-                        {/* Poro Image */}
                         <motion.img
                           src="/images/poro1.png"
                           alt="Poro"
@@ -449,8 +447,6 @@ export default function Layout() {
                             ease: "easeInOut"
                           }}
                         />
-
-                        {/* Text with border */}
                         <div className="text-left">
                           <p
                             className="text-[10px] font-black uppercase tracking-tighter text-white leading-tight"
@@ -462,21 +458,19 @@ export default function Layout() {
                             vinculou sua conta.
                           </p>
                         </div>
-
-                        {/* Arrow pointing left */}
                         <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-[#1a1b23] border-l-2 border-b-2 border-primary/50 rotate-45 z-0"></div>
                       </div>
                     </motion.div>
-                  )}
-                </AnimatePresence>
-
+                  ),
+                  document.body
+                )}
                 <Link
                   to="/vincular"
                   onClick={() => {
                     playSound('click');
                     setHideLinkPrompt(true);
                   }}
-                  className="block w-full relative z-10"
+                  className="block w-full"
                 >
                   <motion.div
                     animate={{
@@ -497,8 +491,8 @@ export default function Layout() {
                     <span className="leading-tight text-[10px]">Vincular Conta Riot</span>
                   </motion.div>
                 </Link>
-              </div>
-            ) : null}
+              </>
+            )}
           </div>
 
           {/* Middle Section - Navigation (Scrollable) */}

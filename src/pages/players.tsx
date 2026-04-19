@@ -204,10 +204,43 @@ const LANE_MAP: Record<string, Role> = {
 // ── Carregador Supabase ────────────────────────────────────────────────────
 const PLAYERS_PAGE = 30;
 
+/**
+ * Conta partidas reais que o jogador participou no site
+ */
+async function contarPartidas(userId: string): Promise<{ total: number; vitories: number; defeats: number }> {
+  const { data: resultados } = await supabase
+    .from('resultados_partidas')
+    .select('vencedor, jogadores')
+    .limit(1000);
+
+  if (!resultados) return { total: 0, vitories: 0, defeats: 0 };
+
+  let vitories = 0;
+  let defeats = 0;
+
+  for (const resultado of resultados) {
+    const jogadores = resultado.jogadores as any[];
+    const jogador = jogadores?.find((j: any) => j.id === userId);
+
+    if (!jogador) continue;
+
+    const ehVitoria =
+      (resultado.vencedor === 'time_a' && jogador.isTimeA) ||
+      (resultado.vencedor === 'time_b' && !jogador.isTimeA);
+
+    if (ehVitoria) vitories++;
+    else defeats++;
+  }
+
+  const total = vitories + defeats;
+  return { total, vitories, defeats };
+}
+
 async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jogadores: Jogador[]; temMais: boolean }> {
   const { data: contas, error } = await supabase
     .from('contas_riot')
-    .select('user_id, riot_id, puuid, profile_icon_id, level')
+    .select('user_id, riot_id, puuid, profile_icon_id, level, mp')
+    .order('mp', { ascending: false })
     .range(offset, offset + limit - 1);
 
   if (error) { console.error('[players] erro ao buscar contas_riot:', error); return { jogadores: [], temMais: false }; }
@@ -230,37 +263,45 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
   const membroMap = Object.fromEntries((membros ?? []).map((m: any) => [m.user_id, m]));
   const timeMap   = Object.fromEntries((times  ?? []).map((t: any) => [t.id, t]));
 
-  const jogadores = contas.map((c: any) => {
-    const perfil = perfilMap[c.user_id] ?? {};
-    const membro = membroMap[c.user_id];
-    const time   = membro ? timeMap[membro.time_id] : null;
+  const jogadores = await Promise.all(
+    contas.map(async (c: any) => {
+      const perfil = perfilMap[c.user_id] ?? {};
+      const membro = membroMap[c.user_id];
+      const time   = membro ? timeMap[membro.time_id] : null;
 
-    return {
-      id:               c.user_id,
-      riotId:           c.riot_id ?? 'Jogador',
-      nome:             (c.riot_id ?? 'Jogador').split('#')[0],
-      nivel:            c.level ?? 1,
-      elo:              'Ferro' as EloType,
-      iconeId:          c.profile_icon_id ?? 1,
-      partidas:         0,
-      winRate:          0,
-      titulos:          0,
-      rolePrincipal:    (LANE_MAP[perfil.lane]  ?? 'MID') as Role,
-      roleSecundaria:   (LANE_MAP[perfil.lane2] ?? 'RES') as Role,
-      isVIP:            perfil.is_vip ?? false,
-      isVerified:       true,
-      kda:              0,
-      csPorMinuto:      0,
-      participacaoKill: 0,
-      conquistas:       [],
-      timeTag:          time?.tag          ?? undefined,
-      timeColor:        time?.gradient_from ?? undefined,
-      timeLogo:         time?.logo_url      ?? undefined,
-      timeId:           membro?.time_id     ?? undefined,
-      _puuid:      c.puuid ?? undefined,
-      _carregando: true,
-    } as Jogador & { _puuid?: string; _carregando?: boolean };
-  });
+      // Contar partidas reais
+      const { total, vitories, defeats } = await contarPartidas(c.user_id);
+      const winRate = total > 0 ? Math.round((vitories / total) * 100) : 0;
+
+      return {
+        id:               c.user_id,
+        riotId:           c.riot_id ?? 'Jogador',
+        nome:             (c.riot_id ?? 'Jogador').split('#')[0],
+        nivel:            c.level ?? 1,
+        elo:              'Ferro' as EloType,
+        iconeId:          c.profile_icon_id ?? 1,
+        partidas:         total,
+        winRate:          winRate,
+        titulos:          0,
+        rolePrincipal:    (LANE_MAP[perfil.lane]  ?? 'MID') as Role,
+        roleSecundaria:   (LANE_MAP[perfil.lane2] ?? 'RES') as Role,
+        isVIP:            perfil.is_vip ?? false,
+        isVerified:       true,
+        kda:              0,
+        csPorMinuto:      0,
+        participacaoKill: 0,
+        conquistas:       [],
+        timeTag:          time?.tag          ?? undefined,
+        timeColor:        time?.gradient_from ?? undefined,
+        timeLogo:         time?.logo_url      ?? undefined,
+        timeId:           membro?.time_id     ?? undefined,
+        mp:               c.mp ?? 0,
+        mc:               c.mc ?? 0,
+        _puuid:           c.puuid ?? undefined,
+        _carregando:      true,
+      } as Jogador & { _puuid?: string; _carregando?: boolean };
+    })
+  );
 
   return { jogadores, temMais };
 }
@@ -638,8 +679,9 @@ export default function App() {
                         >
                           {jogador.nivel}
                         </div>
+                        {/* Ranking Badge */}
                       </div>
-                      <div>
+                      <div className="flex-1">
                         <div className="flex items-center gap-1.5">
                           <p className="text-white font-black text-lg tracking-tight truncate max-w-[150px]">{jogador.riotId}</p>
                           {jogador.isVerified && (
@@ -650,10 +692,13 @@ export default function App() {
                           <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${eloStyle.bg} ${eloStyle.text}`}>
                             {jogador.elo}
                           </span>
+                          <span className="text-[9px] text-white/40 font-bold">
+                            Ranking #{index + 1}
+                          </span>
                         </div>
                       </div>
                     </div>
-                    
+
                     {/* Stats */}
                     <div className="grid grid-cols-3 gap-2 mb-4">
                       <div className="text-center p-2 bg-white/[0.02] rounded-xl">
@@ -671,8 +716,8 @@ export default function App() {
                         <p className="text-[8px] text-white/40 uppercase tracking-wider">Win Rate</p>
                       </div>
                       <div className="text-center p-2 bg-white/[0.02] rounded-xl">
-                        <p className="text-white font-black text-sm">{jogador.titulos}</p>
-                        <p className="text-[8px] text-white/40 uppercase tracking-wider">Títulos</p>
+                        <p className="text-white font-black text-sm">{(jogador.mp ?? 0).toLocaleString()}</p>
+                        <p className="text-[8px] text-white/40 uppercase tracking-wider">M7 Points</p>
                       </div>
                     </div>
                     

@@ -33,6 +33,8 @@ export interface Jogador {
   timeColor?: string;
   timeLogo?: string;
   timeId?: string | number;
+  mp?: number; // M7 Points (ranking)
+  mc?: number; // M7 Coins (moeda)
 }
 
 // Configurações que precisam ser exportadas

@@ -323,3 +323,132 @@ export async function buscarPerfilBasico(userId: string): Promise<Omit<PerfilCom
     timeColor,
   };
 }
+
+// ── Sistema de Ranking (M7 Points) ────────────────────────────────────────────
+
+export interface ResultadoPartida {
+  salaId: number;
+  modo: string; // '5v5', 'time_vs_time', 'aram', '1v1'
+  vencedor: 'time_a' | 'time_b' | 'empate';
+  jogadores: { userId: string; isTimeA: boolean; nome: string }[];
+}
+
+const PONTOS_POR_MODO: Record<string, { vitoria: number; derrota: number }> = {
+  '5v5':           { vitoria: 15, derrota: 1 },
+  'time_vs_time':  { vitoria: 20, derrota: 2 },
+  'aram':          { vitoria: 8,  derrota: 1 },
+  '1v1':           { vitoria: 0,  derrota: 0 },
+};
+
+/**
+ * Atualiza MP de todos os jogadores após uma partida.
+ * Calcula vitória/derrota baseado no modo e vencedor.
+ */
+export async function atualizarPontosPartida(resultado: ResultadoPartida): Promise<void> {
+  const pontos = PONTOS_POR_MODO[resultado.modo] ?? { vitoria: 0, derrota: 0 };
+
+  for (const jogador of resultado.jogadores) {
+    const ehVitoria =
+      (resultado.vencedor === 'time_a' && jogador.isTimeA) ||
+      (resultado.vencedor === 'time_b' && !jogador.isTimeA);
+
+    const mpGanho = ehVitoria ? pontos.vitoria : pontos.derrota;
+
+    // Atualizar MP em contas_riot (buscar valor atual + incrementar)
+    const { data: contaAtual } = await supabase
+      .from('contas_riot')
+      .select('mp')
+      .eq('user_id', jogador.userId)
+      .maybeSingle();
+
+    const mpAtual = contaAtual?.mp ?? 0;
+    const novoMP = Math.max(0, mpAtual + mpGanho); // Nunca pode ser negativo
+
+    // Buscar MC de saldos (sincronizar)
+    const { data: saldoData } = await supabase
+      .from('saldos')
+      .select('saldo')
+      .eq('user_id', jogador.userId)
+      .maybeSingle();
+
+    const novoMC = saldoData?.saldo ?? 0;
+
+    await supabase
+      .from('contas_riot')
+      .update({ mp: novoMP, mc: novoMC })
+      .eq('user_id', jogador.userId);
+
+    // Atualizar stats por modo
+    await atualizarStatsPorModo(jogador.userId, resultado.modo, ehVitoria);
+
+    console.log(`[atualizarPontosPartida] ${jogador.nome}: ${ehVitoria ? '✅ Vitória' : '❌ Derrota'} +${mpGanho} MP`);
+  }
+}
+
+/**
+ * Atualiza estatísticas por modo (vitórias, derrotas, winrate).
+ */
+async function atualizarStatsPorModo(userId: string, modo: string, vitoria: boolean): Promise<void> {
+  // Buscar ou criar registro
+  const { data: stats } = await supabase
+    .from('player_stats')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('modo', modo)
+    .maybeSingle();
+
+  if (!stats) {
+    // Criar novo registro
+    await supabase.from('player_stats').insert({
+      user_id: userId,
+      modo,
+      vitories: vitoria ? 1 : 0,
+      defeats: vitoria ? 0 : 1,
+      total_games: 1,
+      winrate: vitoria ? 100 : 0,
+    });
+  } else {
+    // Atualizar registro existente
+    const novasVitorias = stats.vitories + (vitoria ? 1 : 0);
+    const novasDerrotas = stats.defeats + (vitoria ? 0 : 1);
+    const totalJogos = novasVitorias + novasDerrotas;
+    const novoWinrate = totalJogos > 0 ? (novasVitorias / totalJogos) * 100 : 0;
+
+    await supabase
+      .from('player_stats')
+      .update({
+        vitories: novasVitorias,
+        defeats: novasDerrotas,
+        total_games: totalJogos,
+        winrate: novoWinrate,
+      })
+      .eq('user_id', userId)
+      .eq('modo', modo);
+  }
+}
+
+/**
+ * Busca MP e MC de um jogador.
+ */
+export async function buscarPontosJogador(userId: string): Promise<{ mp: number; mc: number } | null> {
+  const { data } = await supabase
+    .from('contas_riot')
+    .select('mp, mc')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  return data ? { mp: data.mp ?? 0, mc: data.mc ?? 0 } : null;
+}
+
+/**
+ * Busca stats por modo.
+ */
+export async function buscarStatsPorModo(userId: string): Promise<any[]> {
+  const { data } = await supabase
+    .from('player_stats')
+    .select('*')
+    .eq('user_id', userId)
+    .order('total_games', { ascending: false });
+
+  return data ?? [];
+}
