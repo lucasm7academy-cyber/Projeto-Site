@@ -738,10 +738,10 @@ export default function Layout() {
         </AnimatePresence>
 
         {/* Main Content */}
-        <main 
+        <main
           className="flex-1 relative overflow-y-auto h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] bg-cover bg-center bg-no-repeat bg-fixed"
-          style={{ 
-            backgroundImage: `url(${getImageUrl('fundoescuro.png')})`,
+          style={{
+            // backgroundImage: `url(${getImageUrl('fundoescuro.png')})`,
           }}
         >
           <div className="absolute inset-0 bg-gradient-to-br from-surface-variant/30 to-background/50 z-0" />
