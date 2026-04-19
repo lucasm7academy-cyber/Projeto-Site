@@ -26,7 +26,10 @@
       "Read(//c/c/Users/78787/Documents/PROJETO SITE/supabase/**)",
       "Read(//c/c/Users/78787/Documents/PROJETO SITE/**)",
       "Bash(grep -n \"stream\\\\|Stream\\\\|STREAM\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\components\\\\\\\\draft\\\\\\\\DraftRoom.tsx\")",
-      "Bash(cd \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\")"
+      "Bash(cd \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\")",
+      "Bash(grep -n \"inscreverDraftRealtime\\\\|sala_streams\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\components\\\\\\\\draft\\\\\\\\DraftRoom.tsx\")",
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ],
     "additionalDirectories": [
       "\\tmp"

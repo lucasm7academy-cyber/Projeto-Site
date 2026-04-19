@@ -18,6 +18,7 @@ import {
   inscreverDraftRealtime,
 } from '../../api/draft';
 import { getTurnOrder, type DraftState, type Champion } from './draftTypes';
+import { StreamModal } from '../StreamModal';
 
 interface DraftRoomProps {
   salaId: number;
@@ -61,6 +62,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const [dotAnimation, setDotAnimation] = useState(0);
   const [copiado, setCopiado] = useState(false);
   const [isStreamModalOpen, setIsStreamModalOpen] = useState(false);
+  const [salaStreamAtiva, setSalaStreamAtiva] = useState<any>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
 
@@ -162,6 +164,69 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
     });
     return () => { if (channel) supabase.removeChannel(channel); };
   }, [salaId, draft?.id, onDraftFinalizado, meuTime, possoJogar, timerFrozen, modo, onPickTimeout, usuarioId]);
+
+  // ============================================================
+  // REALTIME STREAMS
+  // ============================================================
+  useEffect(() => {
+    const loadActiveStream = async () => {
+      try {
+        console.log('[DraftRoom] Carregando stream ativa para sala:', salaId);
+        const { data, error } = await supabase
+          .from('sala_streams')
+          .select('*')
+          .eq('sala_id', salaId)
+          .eq('ativo', true)
+          .maybeSingle();
+
+        if (error) {
+          console.error('[DraftRoom] ❌ Erro ao carregar stream:', error);
+          return;
+        }
+
+        console.log('[DraftRoom] ✅ Stream ativa carregada:', data);
+        setSalaStreamAtiva(data);
+      } catch (err) {
+        console.error('[DraftRoom] ❌ Exception ao carregar stream:', err);
+      }
+    };
+
+    loadActiveStream();
+
+    const subscription = supabase
+      .channel(`sala_streams_${salaId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'sala_streams',
+          filter: `sala_id=eq.${salaId}`,
+        },
+        (payload: any) => {
+          console.log('[DraftRoom] Realtime stream update - event:', payload.event);
+          const eventType = payload.event?.toUpperCase() || payload.eventType?.toUpperCase();
+
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            const newStream = payload.new as any;
+            if (newStream?.ativo) {
+              console.log('[DraftRoom] ✅ Stream ativa para todos:', newStream);
+              setSalaStreamAtiva(newStream);
+            } else {
+              console.log('[DraftRoom] ⚠️ Stream não está ativo');
+            }
+          } else if (eventType === 'DELETE') {
+            console.log('[DraftRoom] ❌ Stream desativada');
+            setSalaStreamAtiva(null);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [salaId]);
 
   // ============================================================
   // ANIMAÇÃO DOS 3 PONTINHOS
@@ -449,8 +514,8 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
           </motion.div>
         )}
 
-        {/* Botão TRANSMITIR (Streamer/Admin/Coach) */}
-        {(cargoUsuario === 'streamer' || cargoUsuario === 'admin' || cargoUsuario === 'coach') && modo === 'time_vs_time' && (
+        {/* Botão TRANSMITIR (Streamer/Admin/Coach) — TODOS OS MODOS */}
+        {(cargoUsuario === 'streamer' || cargoUsuario === 'admin' || cargoUsuario === 'coach') && (
           <motion.button
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -813,6 +878,36 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
             👀 Você está como espectador
           </p>
         </div>
+      )}
+
+      {/* Botão ASSISTIR LIVE (quando há stream ativa) */}
+      {salaStreamAtiva && (
+        <motion.div
+          initial={{ x: 100, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 100, opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="fixed right-4 bottom-4 z-40 md:right-8 md:bottom-8"
+        >
+          <button
+            onClick={() => setIsStreamModalOpen(true)}
+            className="flex items-center gap-3 px-4 py-3 rounded-xl font-black uppercase tracking-wider text-sm transition-all border-2 bg-purple-600/10 border-purple-500/30 text-purple-400 hover:bg-purple-600/20 hover:border-purple-500/50 animate-pulse"
+          >
+            <Eye className="w-5 h-5" />
+            <span className="hidden sm:inline">ASSISTIR LIVE</span>
+            <span className="sm:hidden">🔴</span>
+          </button>
+        </motion.div>
+      )}
+
+      {/* Stream Modal */}
+      {salaStreamAtiva && salaStreamAtiva.twitch_channel && (
+        <StreamModal
+          isOpen={isStreamModalOpen}
+          onClose={() => setIsStreamModalOpen(false)}
+          channel={salaStreamAtiva.twitch_channel}
+          title={`Transmissão do Draft - Código: ${codigoPartida || salaId}`}
+        />
       )}
 
       <style>{`

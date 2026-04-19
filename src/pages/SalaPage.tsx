@@ -481,7 +481,7 @@ function HextechActionBar({
               >
                 {jogadorAtual.confirmado ? 'Você está Pronto!' : 'Confirmar Presença'}
               </motion.button>
-            ) : estado === 'em_partida' && !!jogadorAtual ? (
+            ) : estado === 'em_partida' && jogadorAtual ? (
               <motion.button
                 whileTap={{ scale: 0.98 }}
                 onClick={acaoSolicitarFinalizacao}
@@ -489,10 +489,22 @@ function HextechActionBar({
               >
                 Encerrar Partida
               </motion.button>
+            ) : estado === 'em_partida' && !jogadorAtual ? (
+              <div className="px-[10vmin] py-[2vmin] border border-orange-500/20 bg-orange-500/5 rounded-sm">
+                <span className="text-[1.8vmin] font-black uppercase tracking-none text-orange-400">
+                  Partida em Andamento
+                </span>
+              </div>
+            ) : estado === 'finalizacao' ? (
+              <div className="px-[10vmin] py-[2vmin] border border-yellow-500/20 bg-yellow-500/5 rounded-sm">
+                <span className="text-[1.8vmin] font-black uppercase tracking-none text-yellow-400">
+                  Partida Finalizada
+                </span>
+              </div>
             ) : (
               <div className="px-[10vmin] py-[2vmin] border border-white/5 bg-white/5 rounded-sm">
                 <span className="text-[1.8vmin] font-black uppercase tracking-none text-white">
-                  Jogadores em Preparação
+                  Aguardando Jogadores
                 </span>
               </div>
             )}
