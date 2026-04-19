@@ -454,11 +454,11 @@ export default function App() {
       </AnimatePresence>
 
       {/* Arena de Jogadores Banner */}
-      <div className="space-y-0 rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0a]/20 backdrop-blur-md mb-8">
+      <div className="space-y-0 rounded-2xl border border-white/10 bg-[#0a0a0a]/20 backdrop-blur-md mb-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }} 
+          initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden p-6 group transition-all duration-500"
+          className="relative p-6 group transition-all duration-500"
         >
           {/* Imagem FIXA */}
           <div className="absolute inset-0 z-0">
