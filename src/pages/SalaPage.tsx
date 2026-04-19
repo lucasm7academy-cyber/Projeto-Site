@@ -1615,7 +1615,11 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 md:top-6 md:right-6 pointer-events-auto">
         {/* DEBUG: Log quando código aparece/desaparece */}
         {(() => {
-          console.log('[SalaPage HUD] Estado:', sala.estado, 'Código:', sala.codigoPartida, 'Cargo:', cargoUsuario);
+          if (!sala.codigoPartida) {
+            console.warn('[SalaPage HUD] ⚠️ CÓDIGO DESAPARECEU! Estado:', sala.estado, 'Código:', sala.codigoPartida);
+          } else {
+            console.log('[SalaPage HUD] ✅ CÓDIGO VISÍVEL Estado:', sala.estado, 'Código:', sala.codigoPartida, 'Cargo:', cargoUsuario);
+          }
           return null;
         })()}
 
@@ -1657,6 +1661,32 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             <Tv2 className="w-4 h-4" />
             <span className="hidden sm:inline">Transmitir</span>
           </motion.button>
+        )}
+
+        {/* GARANTIA: Código também visível em "em_partida" com botão maior */}
+        {sala.estado === 'em_partida' && sala.codigoPartida && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#FFB700]/20 border-2 border-[#FFB700]/60 text-[#FFB700] font-black tracking-wider shadow-lg shadow-[#FFB700]/30"
+          >
+            <span className="text-base font-black">#{sala.codigoPartida}</span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(sala.codigoPartida!);
+                setCopiado(true);
+                setTimeout(() => setCopiado(false), 2000);
+              }}
+              className={`flex items-center justify-center w-10 h-10 rounded-full font-black text-sm tracking-wider transition-all border-2 ${
+                copiado
+                  ? 'bg-green-500/40 border-green-500 text-green-300'
+                  : 'bg-[#FFB700]/30 border-[#FFB700] text-[#FFB700] hover:bg-[#FFB700]/50'
+              }`}
+              title="Copiar código"
+            >
+              {copiado ? <Check className="w-6 h-6" /> : <Copy className="w-6 h-6" />}
+            </button>
+          </motion.div>
         )}
       </div>
 
