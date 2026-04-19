@@ -77,7 +77,7 @@ const heroSlides: HeroSlide[] = [
     bgGradient: 'from-yellow-500/20 via-yellow-500/5 to-transparent',
     bgImage: '/images/heroSlide2.png',
     actionText: 'Seja VIP',
-    actionLink: '/vip'
+    actionLink: '/sejavip'
   },
   {
     id: 3,
@@ -89,7 +89,7 @@ const heroSlides: HeroSlide[] = [
     bgGradient: 'from-blue-500/20 via-blue-500/5 to-transparent',
     bgImage: '/images/heroSlide3.png',
     actionText: 'Código de Conduta',
-    actionLink: '/conduta'
+    actionLink: '/políticas'
   }
 ];
 
@@ -576,6 +576,12 @@ const Jogar = () => {
   const nextHero = () => setActiveHero((prev) => (prev + 1) % heroSlides.length);
   const prevHero = () => setActiveHero((prev) => (prev === 0 ? heroSlides.length - 1 : prev - 1));
 
+  // Auto-advance hero slides every 4 seconds
+  useEffect(() => {
+    const interval = setInterval(nextHero, 4000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Scroll do carrossel
   const scrollCarrossel = (direction: 'left' | 'right') => {
     if (gamesRef.current) {
@@ -699,7 +705,9 @@ const Jogar = () => {
               </p>
               
               {currentSlide.actionText && (
-                <button className="px-6 py-3 rounded-xl font-black text-sm uppercase text-black transition-all hover:scale-105"
+                <button
+                  onClick={() => currentSlide.actionLink && navigate(currentSlide.actionLink)}
+                  className="px-6 py-3 rounded-xl font-black text-sm uppercase text-black transition-all hover:scale-105 cursor-pointer"
                   style={{ background: currentSlide.color }}
                 >
                   {currentSlide.actionText} →
@@ -1014,7 +1022,7 @@ const Jogar = () => {
                   <Trophy className="w-4 h-4 text-[#FFB700]" />
                 </div>
                 <h2 className="text-xl font-black text-white uppercase tracking-widest">
-                  Salas Finalizadas
+                  Partidas Finalizadas
                 </h2>
               </div>
 

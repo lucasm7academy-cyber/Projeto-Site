@@ -22,6 +22,7 @@ import SalaPage from "./pages/SalaPage";
 import Admin from "./pages/Admin";
 import AdminCargos from "./pages/AdminCargos";
 import Streamers from "./pages/Streamers";
+import Politicas from "./pages/Politicas";
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
@@ -76,7 +77,8 @@ export default function App() {
             <Route path="/times" element={<PrivateRoute><Equipes /></PrivateRoute>} />
             <Route path="/vincular" element={<PrivateRoute><Vincular /></PrivateRoute>} />
             <Route path="/configuracoes" element={<PrivateRoute><div>Configurações</div></PrivateRoute>} />
-            <Route path="/politicas" element={<PrivateRoute><div>Políticas</div></PrivateRoute>} />
+            <Route path="/políticas" element={<PrivateRoute><Politicas /></PrivateRoute>} />
+            <Route path="/sejavip" element={<PrivateRoute><div>Seja VIP</div></PrivateRoute>} />
             <Route path="/suporte" element={<PrivateRoute><div>Suporte</div></PrivateRoute>} />
             <Route path="/players" element={<PrivateRoute><Players /></PrivateRoute>} />
             <Route path="/streamers" element={<PrivateRoute><Streamers /></PrivateRoute>} />
