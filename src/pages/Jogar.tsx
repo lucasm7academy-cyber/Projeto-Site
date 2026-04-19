@@ -576,9 +576,9 @@ const Jogar = () => {
   const nextHero = () => setActiveHero((prev) => (prev + 1) % heroSlides.length);
   const prevHero = () => setActiveHero((prev) => (prev === 0 ? heroSlides.length - 1 : prev - 1));
 
-  // Auto-advance hero slides every 4 seconds
+  // Auto-advance hero slides every 8 seconds
   useEffect(() => {
-    const interval = setInterval(nextHero, 4000);
+    const interval = setInterval(nextHero, 8000);
     return () => clearInterval(interval);
   }, []);
 
@@ -678,17 +678,35 @@ const Jogar = () => {
         {/* HERO BANNER - SLIDES DE MARKETING */}
         {/* ============================================ */}
         <div className="relative w-full rounded-xl overflow-hidden bg-black border border-white/10 shadow-2xl group">
-          
+
           <div className="relative w-full p-8 md:p-14 flex items-center justify-between min-h-[320px]">
             {currentSlide.bgImage && (
-              <div 
-                className="absolute inset-0 z-0 bg-cover bg-center opacity-50"
+              <motion.div
+                key={`bg-${activeHero}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 0.5 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8 }}
+                className="absolute inset-0 z-0 bg-cover bg-center"
                 style={{ backgroundImage: `url(${currentSlide.bgImage})` }}
               />
             )}
-            <div className={`absolute inset-0 bg-gradient-to-r ${currentSlide.bgGradient} z-0`} />
+            <motion.div
+              key={`gradient-${activeHero}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8 }}
+              className={`absolute inset-0 bg-gradient-to-r ${currentSlide.bgGradient} z-0`}
+            />
 
-            <div className="z-10 max-w-2xl">
+            <motion.div
+              key={`content-${activeHero}`}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="z-10 max-w-2xl">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ background: `${currentSlide.color}20` }}>
                   <SlideIcon className="w-6 h-6" style={{ color: currentSlide.color }} />
@@ -713,7 +731,7 @@ const Jogar = () => {
                   {currentSlide.actionText} →
                 </button>
               )}
-            </div>
+            </motion.div>
           </div>
 
           {/* Hero Navigation */}
