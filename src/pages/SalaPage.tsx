@@ -1614,7 +1614,13 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* HUD FIXO: Código + Botões de Transmissão — SEMPRE VISÍVEL */}
       <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 md:top-6 md:right-6">
-        {/* Código da Partida */}
+        {/* DEBUG: Log quando código aparece/desaparece */}
+        {(() => {
+          console.log('[SalaPage HUD] Estado:', sala.estado, 'Código:', sala.codigoPartida, 'Cargo:', cargoUsuario);
+          return null;
+        })()}
+
+        {/* Código da Partida — SEMPRE VISÍVEL para todos (jogadores, streamers, admins, coach) */}
         {sala.codigoPartida && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
