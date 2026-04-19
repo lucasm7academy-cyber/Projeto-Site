@@ -567,6 +567,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const [cargoUsuario, setCargoUsuario] = useState<'proprietario' | 'admin' | 'streamer' | 'coach' | 'jogador'>('jogador');
   const [salaStreamAtiva, setSalaStreamAtiva] = useState<any>(null);
   const [isStreamModalOpen, setIsStreamModalOpen] = useState(false);
+  const [resultadoPartida, setResultadoPartida] = useState<any>(null);
   const vagasEmAndamento                    = useRef<Set<string>>(new Set());
 
   // Carregar cargo do usuário
@@ -652,6 +653,33 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       subscription.unsubscribe();
     };
   }, [sala?.id]);
+
+  // Carregar resultado da partida quando visualizando e sala encerrada
+  useEffect(() => {
+    if (visualizandoPartida && sala?.estado === 'encerrada' && sala?.id) {
+      const carregarResultado = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('resultados_partidas')
+            .select('*')
+            .eq('sala_id', sala.id)
+            .order('created_at', { ascending: false })
+            .maybeSingle();
+
+          if (error) {
+            console.error('[SalaPage] Erro ao carregar resultado:', error);
+          } else if (data) {
+            console.log('[SalaPage] Resultado carregado:', data);
+            setResultadoPartida(data);
+          }
+        } catch (err) {
+          console.error('[SalaPage] Exception ao carregar resultado:', err);
+        }
+      };
+
+      carregarResultado();
+    }
+  }, [visualizandoPartida, sala?.estado, sala?.id]);
 
   // Carregar draft quando estiver em aguardando_inicio, em_partida ou encerrada
   useEffect(() => {
@@ -1471,65 +1499,69 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
               {/* Time Azul */}
               <div className="flex flex-col gap-[1.5vmin]">
                 <h4 className="text-[1.5vmin] font-black text-blue-400 uppercase tracking-widest">Time Azul</h4>
-                {timeA.map((jogador, idx) => (
-                  <div key={idx} className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-[1.5vmin]">
-                    <p className="text-[1.1vmin] font-black text-blue-300 mb-[0.8vmin]">
-                      {jogador.nome} - {ROLE_CONFIG[jogador.role as Role]?.label}
-                    </p>
-                    {draftFinalizado.blue_picks && draftFinalizado.blue_picks.length > 0 && (
-                      <div className="flex gap-[0.8vmin] flex-wrap">
-                        {draftFinalizado.blue_picks.map((champId: string, pickIdx: number) => {
-                          const champ = champions[champId];
-                          return champ ? (
-                            <div
-                              key={pickIdx}
-                              className="w-[4vmin] h-[4vmin] rounded border border-blue-500/40 bg-blue-500/10 flex items-center justify-center overflow-hidden"
-                              title={champ.name}
-                            >
-                              <img
-                                src={buildChampionIconUrl(champId, versionDDR)}
-                                alt={champ.name}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          ) : null;
-                        })}
+                {resultadoPartida && Array.isArray(resultadoPartida.jogadores)
+                  ? resultadoPartida.jogadores.filter((j: any) => j.isTimeA).map((jogador: any, idx: number) => (
+                      <div key={idx} className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-[1.5vmin]">
+                        <p className="text-[1.1vmin] font-black text-blue-300 mb-[0.8vmin]">
+                          {jogador.nome} - {ROLE_CONFIG[jogador.role as Role]?.label}
+                        </p>
+                        {draftFinalizado.blue_picks && draftFinalizado.blue_picks.length > 0 && (
+                          <div className="flex gap-[0.8vmin] flex-wrap">
+                            {draftFinalizado.blue_picks.map((champId: string, pickIdx: number) => {
+                              const champ = champions[champId];
+                              return champ ? (
+                                <div
+                                  key={pickIdx}
+                                  className="w-[4vmin] h-[4vmin] rounded border border-blue-500/40 bg-blue-500/10 flex items-center justify-center overflow-hidden"
+                                  title={champ.name}
+                                >
+                                  <img
+                                    src={buildChampionIconUrl(champId, versionDDR)}
+                                    alt={champ.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ) : null;
+                            })}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    ))
+                  : null}
               </div>
 
               {/* Time Vermelho */}
               <div className="flex flex-col gap-[1.5vmin]">
                 <h4 className="text-[1.5vmin] font-black text-red-400 uppercase tracking-widest">Time Vermelho</h4>
-                {timeB.map((jogador, idx) => (
-                  <div key={idx} className="bg-red-500/10 border border-red-500/30 rounded-lg p-[1.5vmin]">
-                    <p className="text-[1.1vmin] font-black text-red-300 mb-[0.8vmin]">
-                      {jogador.nome} - {ROLE_CONFIG[jogador.role as Role]?.label}
-                    </p>
-                    {draftFinalizado.red_picks && draftFinalizado.red_picks.length > 0 && (
-                      <div className="flex gap-[0.8vmin] flex-wrap">
-                        {draftFinalizado.red_picks.map((champId: string, pickIdx: number) => {
-                          const champ = champions[champId];
-                          return champ ? (
-                            <div
-                              key={pickIdx}
-                              className="w-[4vmin] h-[4vmin] rounded border border-red-500/40 bg-red-500/10 flex items-center justify-center overflow-hidden"
-                              title={champ.name}
-                            >
-                              <img
-                                src={buildChampionIconUrl(champId, versionDDR)}
-                                alt={champ.name}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                          ) : null;
-                        })}
+                {resultadoPartida && Array.isArray(resultadoPartida.jogadores)
+                  ? resultadoPartida.jogadores.filter((j: any) => !j.isTimeA).map((jogador: any, idx: number) => (
+                      <div key={idx} className="bg-red-500/10 border border-red-500/30 rounded-lg p-[1.5vmin]">
+                        <p className="text-[1.1vmin] font-black text-red-300 mb-[0.8vmin]">
+                          {jogador.nome} - {ROLE_CONFIG[jogador.role as Role]?.label}
+                        </p>
+                        {draftFinalizado.red_picks && draftFinalizado.red_picks.length > 0 && (
+                          <div className="flex gap-[0.8vmin] flex-wrap">
+                            {draftFinalizado.red_picks.map((champId: string, pickIdx: number) => {
+                              const champ = champions[champId];
+                              return champ ? (
+                                <div
+                                  key={pickIdx}
+                                  className="w-[4vmin] h-[4vmin] rounded border border-red-500/40 bg-red-500/10 flex items-center justify-center overflow-hidden"
+                                  title={champ.name}
+                                >
+                                  <img
+                                    src={buildChampionIconUrl(champId, versionDDR)}
+                                    alt={champ.name}
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ) : null;
+                            })}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    ))
+                  : null}
               </div>
             </div>
 
