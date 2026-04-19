@@ -30,7 +30,10 @@
       "Bash(grep -n \"inscreverDraftRealtime\\\\|sala_streams\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\components\\\\\\\\draft\\\\\\\\DraftRoom.tsx\")",
       "Bash(git add *)",
       "Bash(git commit *)",
-      "Bash(grep -n \"HUD FIXO\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\pages\\\\\\\\SalaPage.tsx\")"
+      "Bash(grep -n \"HUD FIXO\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\pages\\\\\\\\SalaPage.tsx\")",
+      "Bash(grep -n \"finalizacao\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\contexts\\\\\\\\SalaRegras.tsx\")",
+      "Bash(grep -n \"buscarSalaVinculadaDoUsuario\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\api\\\\\\\\salas.ts\" -A 30)",
+      "Bash(grep -n \"export.*function encerrarSala\\\\|const encerrarSala\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\api\\\\\\\\salas.ts\" -A 15)"
     ],
     "additionalDirectories": [
       "\\tmp"

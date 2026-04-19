@@ -564,12 +564,38 @@ export function SalaRegrasProvider({
   useEffect(() => {
     if (timerFinalizacao !== 0) return;
     if (!sala || sala.estado !== 'finalizacao' || transicionandoRef.current) return;
-    const finVotos = votos.filter((v: Voto) => v.fase === 'finalizacao');
-    const decisao: DecisaoResultado = finVotos.length > 0 ? avaliarVotosResultado(finVotos) : 'disputa';
-    transicionandoRef.current = true;
-    encerrarPartidaComResultado(salaId, decisao, sala).finally(() => {
-      transicionandoRef.current = false;
-    });
+
+    const fazer = async () => {
+      try {
+        // 1. Remover jogadores que NÃO votaram (5 min timeout)
+        const finVotos = votos.filter((v: Voto) => v.fase === 'finalizacao');
+        const idQuePessoas = new Set(finVotos.map(v => v.userId));
+
+        const jogadoresInativos = sala.jogadores.filter(j => !idQuePessoas.has(j.id));
+        console.log('[SalaRegras] Timeout votação - Removendo', jogadoresInativos.length, 'jogadores inativos');
+
+        for (const jogador of jogadoresInativos) {
+          await supabase
+            .from('sala_jogadores')
+            .delete()
+            .eq('sala_id', salaId)
+            .eq('user_id', jogador.id);
+        }
+
+        // 2. Forçar resultado com votos restantes
+        const decisao: DecisaoResultado = finVotos.length > 0 ? avaliarVotosResultado(finVotos) : 'disputa';
+        console.log('[SalaRegras] Encerando partida por timeout. Decisão:', decisao, 'Votos:', finVotos.length);
+
+        transicionandoRef.current = true;
+        await encerrarPartidaComResultado(salaId, decisao, sala);
+      } catch (erro) {
+        console.error('[SalaRegras] Erro ao forçar resultado:', erro);
+      } finally {
+        transicionandoRef.current = false;
+      }
+    };
+
+    fazer();
   }, [timerFinalizacao, sala?.estado]);
 
   // ── Derivações ─────────────────────────────────────────────────────────────

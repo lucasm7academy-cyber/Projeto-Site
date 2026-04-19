@@ -680,8 +680,8 @@ export async function buscarSalaVinculadaDoUsuario(userId: string): Promise<Sala
   if (!vinculo) return null;
 
   const sala = await buscarSalaCompleta(vinculo.sala_id);
-  // Ignora salas encerradas — o vínculo já não é mais relevante
-  if (!sala || sala.estado === 'encerrada') return null;
+  // Ignora salas encerradas ou em finalizacao — jogador pode estar travado/removido por timeout
+  if (!sala || sala.estado === 'encerrada' || sala.estado === 'finalizacao') return null;
   return sala;
 }
 
