@@ -1047,6 +1047,31 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </div>
       )}
 
+      {/* Botão COPIAR CÓDIGO em "em_partida" — para streamer/admin/coach */}
+      {sala.estado === 'em_partida' && sala.codigoPartida && (cargoUsuario === 'streamer' || cargoUsuario === 'admin' || cargoUsuario === 'coach') && (
+        <div className="fixed bottom-[20vmin] left-1/2 -translate-x-1/2 z-40 pointer-events-auto">
+          <motion.button
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            onClick={() => {
+              navigator.clipboard.writeText(sala.codigoPartida!);
+              setCopiadoCodigo(true);
+              setTimeout(() => setCopiadoCodigo(false), 2000);
+            }}
+            className={`flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all border ${
+              copiadoCodigo
+                ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                : 'bg-[#FFB700]/10 border-[#FFB700]/30 text-[#FFB700] hover:bg-[#FFB700]/20'
+            }`}
+          >
+            {copiadoCodigo
+              ? <><Check className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiado!</>
+              : <><Copy className="w-[1.4vmin] h-[1.4vmin] shrink-0" /> Copiar Código</>
+            }
+          </motion.button>
+        </div>
+      )}
+
       {/* Picks em AGUARDANDO_INICIO ou ABERTA para cargos especiais */}
       {(sala.estado === 'aguardando_inicio' || sala.estado === 'aberta') && !jogadorAtual && cargoUsuario !== 'jogador' && draftFinalizado && (
         <div className="absolute top-[11vmin] left-[5vmin] right-[5vmin] z-40 text-center">
@@ -1623,32 +1648,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           return null;
         })()}
 
-        {/* Código da Partida — SEMPRE VISÍVEL para TODOS (em qualquer estado) */}
-        {sala.codigoPartida && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#FFB700]/20 border-2 border-[#FFB700]/60 text-[#FFB700] font-black tracking-wider shadow-lg shadow-[#FFB700]/30"
-          >
-            <span className="text-base font-black">#{sala.codigoPartida}</span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(sala.codigoPartida!);
-                setCopiado(true);
-                setTimeout(() => setCopiado(false), 2000);
-              }}
-              className={`flex items-center justify-center w-10 h-10 rounded-full font-black text-sm tracking-wider transition-all border-2 ${
-                copiado
-                  ? 'bg-green-500/40 border-green-500 text-green-300'
-                  : 'bg-[#FFB700]/30 border-[#FFB700] text-[#FFB700] hover:bg-[#FFB700]/50'
-              }`}
-              title="Copiar código"
-            >
-              {copiado ? <Check className="w-6 h-6" /> : <Copy className="w-6 h-6" />}
-            </button>
-          </motion.div>
-        )}
-
         {/* Botão TRANSMITIR (Streamer/Admin/Coach) */}
         {(cargoUsuario === 'streamer' || cargoUsuario === 'admin' || cargoUsuario === 'coach') && sala.modo === 'time_vs_time' && (
           <motion.button
@@ -1663,31 +1662,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           </motion.button>
         )}
 
-        {/* GARANTIA: Código também visível em "em_partida" com botão maior */}
-        {sala.estado === 'em_partida' && sala.codigoPartida && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#FFB700]/20 border-2 border-[#FFB700]/60 text-[#FFB700] font-black tracking-wider shadow-lg shadow-[#FFB700]/30"
-          >
-            <span className="text-base font-black">#{sala.codigoPartida}</span>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(sala.codigoPartida!);
-                setCopiado(true);
-                setTimeout(() => setCopiado(false), 2000);
-              }}
-              className={`flex items-center justify-center w-10 h-10 rounded-full font-black text-sm tracking-wider transition-all border-2 ${
-                copiado
-                  ? 'bg-green-500/40 border-green-500 text-green-300'
-                  : 'bg-[#FFB700]/30 border-[#FFB700] text-[#FFB700] hover:bg-[#FFB700]/50'
-              }`}
-              title="Copiar código"
-            >
-              {copiado ? <Check className="w-6 h-6" /> : <Copy className="w-6 h-6" />}
-            </button>
-          </motion.div>
-        )}
       </div>
 
       {/* Botão ASSISTIR em BAIXO (lado direito) — quando há stream ativa */}
