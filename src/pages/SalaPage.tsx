@@ -1583,12 +1583,13 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                 // Check if stream already exists for this user in this room
                 const { data: existingStream } = await supabase
                   .from('sala_streams')
-                  .select('id')
+                  .select('*')
                   .eq('sala_id', sala.id)
                   .eq('user_id', usuarioAtual.id)
                   .maybeSingle();
 
                 let error;
+                let newStreamData: any = null;
                 if (existingStream) {
                   // Update existing stream to active
                   const result = await supabase
@@ -1596,6 +1597,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                     .update({ ativo: true })
                     .eq('id', existingStream.id);
                   error = result.error;
+                  newStreamData = existingStream;
                 } else {
                   // Insert new stream
                   const result = await supabase
@@ -1607,11 +1609,20 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                       ativo: true,
                     });
                   error = result.error;
+                  // Para insert, pega o primeiro item se houver
+                  if (result.data && Array.isArray(result.data)) {
+                    newStreamData = result.data[0];
+                  }
                 }
 
                 if (error) {
                   console.error('Erro ao ativar transmissão:', error);
                   alert('Erro ao ativar transmissão');
+                } else if (newStreamData) {
+                  // Atualizar state imediatamente
+                  setSalaStreamAtiva(newStreamData);
+                  // Abrir modal de transmissão
+                  setIsStreamModalOpen(true);
                 }
               }
             }}

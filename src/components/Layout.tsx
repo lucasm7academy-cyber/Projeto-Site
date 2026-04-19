@@ -252,7 +252,7 @@ export default function Layout() {
                 <Wallet className="text-primary w-3 h-3 md:w-3.5 md:h-3.5" />
               </div>
               <span className="text-xs md:text-sm font-bold text-white tracking-tight">
-                MP {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                MC {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </button>
 
