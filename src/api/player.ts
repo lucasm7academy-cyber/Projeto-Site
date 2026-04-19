@@ -337,7 +337,7 @@ const PONTOS_POR_MODO: Record<string, { vitoria: number; derrota: number }> = {
   '5v5':           { vitoria: 15, derrota: 1 },
   'time_vs_time':  { vitoria: 20, derrota: 2 },
   'aram':          { vitoria: 8,  derrota: 1 },
-  '1v1':           { vitoria: 0,  derrota: 0 },
+  '1v1':           { vitoria: 5,  derrota: 1 },
 };
 
 /**

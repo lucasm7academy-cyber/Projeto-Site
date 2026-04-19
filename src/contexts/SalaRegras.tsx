@@ -235,10 +235,13 @@ export function SalaRegrasProvider({
     // a auto-transição antes do INSERT chegar.
     if (atualizada) {
       setSala(atualizada);
-      if (atualizada.estado === 'encerrada') onEncerrada?.();
+      // Não redireciona automaticamente quando sala encerra
+      // Deixa o usuário ver o resultado e clicar em "Voltar"
+      // if (atualizada.estado === 'encerrada') onEncerrada?.();
     } else {
       // Sala removida do banco (deletada pelo criador) → trata como encerrada.
-      onEncerrada?.();
+      // Deixa usuário ver resultado antes de sair
+      // onEncerrada?.();
     }
   }, [salaId, onEncerrada]);
 
