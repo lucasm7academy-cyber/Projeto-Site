@@ -135,6 +135,20 @@ export async function carregarSalas(): Promise<Sala[]> {
   return data.map(row => mapSala(row, row.sala_jogadores ?? []));
 }
 
+// ── Buscar salas finalizadas (histórico) ──────────────────────────────────────
+
+export async function carregarSalasFinalizadas(): Promise<Sala[]> {
+  const { data, error } = await supabase
+    .from('salas')
+    .select('*, sala_jogadores(*)')
+    .eq('estado', 'encerrada')
+    .order('updated_at', { ascending: false })
+    .limit(50);
+
+  if (error || !data) { console.error('[carregarSalasFinalizadas]', error); return []; }
+  return data.map(row => mapSala(row, row.sala_jogadores ?? []));
+}
+
 // ── Buscar sala completa por ID ───────────────────────────────────────────────
 export async function buscarSalaCompleta(salaId: number): Promise<Sala | null> {
   const { data, error } = await supabase

@@ -54,8 +54,18 @@ export default function Streamers() {
         return;
       }
 
+      // Deduplicate: keep only ONE stream per user_id
+      const seenUsers = new Set<string>();
+      const uniqueSalaStreams = salaStreams.filter((salaStream: any) => {
+        if (seenUsers.has(salaStream.user_id)) {
+          return false; // Skip duplicates
+        }
+        seenUsers.add(salaStream.user_id);
+        return true;
+      });
+
       // Convert sala_streams to TwitchLiveStream format and fetch user profiles + team info
-      const streamCardsPromises = salaStreams.map(async (salaStream: any) => {
+      const streamCardsPromises = uniqueSalaStreams.map(async (salaStream: any) => {
         // Create stream object from sala_streams
         const stream: TwitchLiveStream = {
           id: salaStream.id,

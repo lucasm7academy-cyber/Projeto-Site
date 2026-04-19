@@ -2,7 +2,7 @@
 // NOVA VERSÃO - Design integrado com Hero Slider, Cards de Modo e Carrossel de Salas
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Play, ChevronLeft, ChevronRight, Trophy, Users, Eye, Coins,
@@ -13,7 +13,7 @@ import {
   MODOS_JOGO, OPCOES_ELO, OPCOES_MPOINTS, getModoInfo, getMPointsInfo,
   getMaxJogadoresPorModo, type ModoJogo,
 } from '../components/partidas/salaConfig';
-import { carregarSalas, criarSala, buscarSalaAtivaDoUsuario, type Sala } from '../api/salas';
+import { carregarSalas, carregarSalasFinalizadas, criarSala, buscarSalaAtivaDoUsuario, type Sala } from '../api/salas';
 import { supabase } from '../lib/supabase';
 import { buildProfileIconUrl } from '../api/riot';
 
@@ -396,8 +396,10 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
 
 const Jogar = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [activeHero, setActiveHero] = useState(0);
   const gamesRef = useRef<HTMLDivElement>(null);
+  const finalizadasRef = useRef<HTMLDivElement>(null);
   
   // Estados do usuário
   const [usuarioAtual, setUsuarioAtual] = useState<UsuarioAtual | null>(null);
@@ -411,6 +413,12 @@ const Jogar = () => {
   const [filtroModo, setFiltroModo] = useState<ModoJogo | 'todos'>('todos');
   const [viewerCounts, setViewerCounts] = useState<Record<number, number>>({});
   const [streamsAtivos, setStreamsAtivos] = useState<Record<number, boolean>>({}); // Track active streams per sala
+
+  // Estados das salas finalizadas
+  const [salasFinalizadas, setSalasFinalizadas] = useState<Sala[]>([]);
+  const [loadingSalasFinalizadas, setLoadingSalasFinalizadas] = useState(false);
+  const [buscaFinalizadas, setBuscaFinalizadas] = useState('');
+  const [filtroModoFinalizadas, setFiltroModoFinalizadas] = useState<ModoJogo | 'todos'>('todos');
   
   // Modais
   const [showCriarModal, setShowCriarModal] = useState(false);
@@ -419,6 +427,15 @@ const Jogar = () => {
   const [erroSenha, setErroSenha] = useState('');
   
   const salaVinculadaRef = useRef<Sala | null>(null);
+
+  // Scroll para Salas Finalizadas se view=finalizadas
+  useEffect(() => {
+    if (searchParams.get('view') === 'finalizadas' && finalizadasRef.current) {
+      setTimeout(() => {
+        finalizadasRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 500);
+    }
+  }, [searchParams]);
 
   // Carregar usuário
   useEffect(() => {
@@ -481,6 +498,12 @@ const Jogar = () => {
     setLoadingSalas(false);
   }, []);
 
+  // Carregar salas finalizadas
+  const recarregarSalasFinalizadas = useCallback(async () => {
+    const lista = await carregarSalasFinalizadas();
+    setSalasFinalizadas(lista);
+  }, []);
+
   useEffect(() => {
     const init = async () => {
       if (!usuarioAtual) return;
@@ -516,6 +539,25 @@ const Jogar = () => {
     return () => { supabase.removeChannel(channel); };
   }, [usuarioAtual, navigate, recarregarSalas]);
 
+  // Carregar e monitorar salas finalizadas
+  useEffect(() => {
+    if (!usuarioAtual) return;
+
+    const init = async () => {
+      setLoadingSalasFinalizadas(true);
+      await recarregarSalasFinalizadas();
+      setLoadingSalasFinalizadas(false);
+    };
+    init();
+
+    const channel = supabase
+      .channel('salas_finalizadas_page')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' }, recarregarSalasFinalizadas)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [usuarioAtual, recarregarSalasFinalizadas]);
+
   // Viewer counts via Presence
   useEffect(() => {
     if (salas.length === 0) return;
@@ -548,6 +590,15 @@ const Jogar = () => {
                        sala.descricao.toLowerCase().includes(busca.toLowerCase()) ||
                        sala.codigo.includes(busca.toUpperCase());
     const matchModo = filtroModo === 'todos' || sala.modo === filtroModo;
+    return matchBusca && matchModo;
+  });
+
+  // Filtrar salas finalizadas
+  const salasFinalizadasFiltradas = salasFinalizadas.filter(sala => {
+    const matchBusca = sala.nome.toLowerCase().includes(buscaFinalizadas.toLowerCase()) ||
+                       sala.descricao.toLowerCase().includes(buscaFinalizadas.toLowerCase()) ||
+                       sala.codigo.includes(buscaFinalizadas.toUpperCase());
+    const matchModo = filtroModoFinalizadas === 'todos' || sala.modo === filtroModoFinalizadas;
     return matchBusca && matchModo;
   });
 
@@ -951,6 +1002,207 @@ const Jogar = () => {
             </>
           )}
         </div>
+
+        {/* ============================================ */}
+        {/* SALAS FINALIZADAS */}
+        {/* ============================================ */}
+        {salasFinalizadas.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                  <Trophy className="w-4 h-4 text-[#FFB700]" />
+                </div>
+                <h2 className="text-xl font-black text-white uppercase tracking-widest">
+                  Salas Finalizadas
+                </h2>
+              </div>
+
+              {/* Filtros */}
+              <div className="flex items-center gap-3">
+                <SlidersHorizontal className="w-4 h-4 text-white/30" />
+
+                {/* Filtro Modo */}
+                <select
+                  value={filtroModoFinalizadas}
+                  onChange={(e) => setFiltroModoFinalizadas(e.target.value as ModoJogo | 'todos')}
+                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold uppercase tracking-wider"
+                >
+                  <option value="todos" className="bg-black">Todos Modos</option>
+                  <option value="5v5" className="bg-black">5v5 Clássico</option>
+                  <option value="aram" className="bg-black">ARAM</option>
+                  <option value="1v1" className="bg-black">1v1</option>
+                  <option value="time_vs_time" className="bg-black">Time vs Time</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Barra de Busca */}
+            <div className="relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-white/20" />
+              <input
+                type="text"
+                placeholder="BUSCAR POR NOME OU CÓDIGO (#000001)..."
+                value={buscaFinalizadas}
+                onChange={(e) => setBuscaFinalizadas(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 text-white text-sm placeholder:text-white/20 focus:outline-none focus:border-[#FFB700]/50 transition-all uppercase font-bold tracking-tight"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Carrossel de Salas Finalizadas */}
+        {salasFinalizadas.length > 0 && (
+          <div className="relative group">
+            <div
+              ref={finalizadasRef}
+              className="flex gap-5 overflow-x-auto hide-scrollbar pb-4 snap-x snap-mandatory"
+            >
+              {loadingSalasFinalizadas ? (
+                <div className="w-full text-center py-20">
+                  <div className="animate-spin rounded-full h-10 w-10 border-2 border-[#FFB700] border-t-transparent mx-auto mb-4" />
+                  <p className="text-white/40 font-bold uppercase tracking-widest text-xs">Carregando salas finalizadas...</p>
+                </div>
+              ) : salasFinalizadasFiltradas.length === 0 ? (
+                <div className="w-full text-center py-20 bg-white/[0.02] rounded-2xl border border-dashed border-white/10">
+                  <Trophy className="w-16 h-16 text-white/10 mx-auto mb-4" />
+                  <p className="text-white/30 font-black uppercase tracking-widest">Nenhuma sala finalizada encontrada</p>
+                </div>
+              ) : (
+                salasFinalizadasFiltradas.map((sala) => {
+                  const modoInfo = getModoInfo(sala.modo);
+                  const mpInfo = getMPointsInfo(sala.mpoints);
+
+                  // Definir cor da borda baseado no vencedor
+                  const borderColor = sala.vencedor === 'A'
+                    ? '#3b82f6' // Azul
+                    : sala.vencedor === 'B'
+                    ? '#ef4444' // Vermelho
+                    : '#fbbf24'; // Amarelo (disputa)
+
+                  return (
+                    <div
+                      key={sala.id}
+                      onClick={() => navigate(`/sala/${sala.id}`)}
+                      className="flex-none w-full sm:w-[380px] h-[320px] rounded-xl overflow-hidden relative cursor-pointer transition-all snap-start group/card bg-black"
+                      style={{ border: `2px solid ${borderColor}` }}
+                    >
+                      {/* Background Image - Preto e Branco */}
+                      {modoInfo.bgImage && (
+                        <div
+                          className="absolute inset-0 z-0 bg-cover bg-center opacity-30 group-hover/card:opacity-50 transition-opacity duration-300"
+                          style={{
+                            backgroundImage: `url(${modoInfo.bgImage})`,
+                            filter: 'grayscale(100%)'
+                          }}
+                        />
+                      )}
+                      {/* Background decorativo */}
+                      <div className="absolute inset-0 opacity-50 z-0"
+                        style={{ background: `linear-gradient(135deg, ${modoInfo.cor}40, transparent)`, filter: 'grayscale(100%)' }}
+                      />
+
+                      {/* Conteúdo */}
+                      <div className="relative z-10 p-5 h-full flex flex-col">
+                        {/* Header */}
+                        <div className="flex justify-between items-start mb-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-black text-white/40 border border-white/10 px-2 py-1 rounded bg-black/50">
+                              {sala.codigo}
+                            </span>
+                          </div>
+                          <div className="text-[10px] font-black uppercase px-2.5 py-1.5 rounded border"
+                            style={{
+                              background: sala.vencedor === 'A' ? 'rgba(59, 130, 246, 0.2)' : sala.vencedor === 'B' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255, 183, 0, 0.2)',
+                              borderColor: sala.vencedor === 'A' ? 'rgba(59, 130, 246, 0.3)' : sala.vencedor === 'B' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(255, 183, 0, 0.3)',
+                              color: sala.vencedor === 'A' ? '#60a5fa' : sala.vencedor === 'B' ? '#f87171' : '#fbbf24'
+                            }}
+                          >
+                            {sala.vencedor === 'A' ? '🏆 Time A' : sala.vencedor === 'B' ? '🏆 Time B' : '⚔️ Disputa'}
+                          </div>
+                        </div>
+
+                        {/* Título */}
+                        <h3 className="text-white font-black text-xl uppercase tracking-tight mb-1 line-clamp-1">
+                          {sala.nome}
+                        </h3>
+                        <p className="text-white/40 text-xs uppercase tracking-wider mb-3 line-clamp-2">
+                          {sala.descricao}
+                        </p>
+
+                        {/* Badges */}
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          <span className="px-2 py-1 rounded text-[10px] font-black uppercase"
+                            style={{ background: `${modoInfo.cor}20`, color: modoInfo.cor, border: `1px solid ${modoInfo.cor}40` }}
+                          >
+                            {modoInfo.icone} {modoInfo.nome}
+                          </span>
+                          <span className="px-2 py-1 rounded text-[10px] font-black uppercase flex items-center gap-1"
+                            style={{ background: `${mpInfo.cor}20`, color: mpInfo.cor, border: `1px solid ${mpInfo.cor}40` }}
+                          >
+                            <Coins className="w-3 h-3" />
+                            {sala.mpoints} MP
+                          </span>
+                        </div>
+
+                        {/* Times */}
+                        <div className="text-white/30 text-[10px] font-bold uppercase tracking-wider mb-auto space-y-1">
+                          {sala.timeANome && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-blue-400">{sala.timeANome}</span>
+                              {sala.vencedor === 'A' && <span className="text-yellow-400">✓</span>}
+                            </div>
+                          )}
+                          {sala.timeBNome && (
+                            <div className="flex items-center justify-between">
+                              <span className="text-red-400">{sala.timeBNome}</span>
+                              {sala.vencedor === 'B' && <span className="text-yellow-400">✓</span>}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Botão Ver Resultado */}
+                        <button
+                          onClick={() => navigate(`/sala/${sala.id}`)}
+                          className="mt-auto w-full py-3 rounded-lg font-black text-sm uppercase transition-all flex items-center justify-center gap-2 bg-[#FFB700] hover:bg-[#e0a000] text-black"
+                        >
+                          <Trophy className="w-4 h-4" />
+                          Ver Resultado
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Botões de navegação do carrossel */}
+            {salasFinalizadasFiltradas.length > 2 && (
+              <>
+                <button
+                  onClick={() => {
+                    if (finalizadasRef.current) {
+                      finalizadasRef.current.scrollBy({ left: -450, behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 -ml-5 w-10 h-10 rounded-lg bg-black text-white/60 hover:text-white flex items-center justify-center border border-white/20 hover:border-[#FFB700]/50 transition-all opacity-0 group-hover:opacity-100 z-10 shadow-lg"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (finalizadasRef.current) {
+                      finalizadasRef.current.scrollBy({ left: 450, behavior: 'smooth' });
+                    }
+                  }}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 -mr-5 w-10 h-10 rounded-lg bg-black text-white/60 hover:text-white flex items-center justify-center border border-white/20 hover:border-[#FFB700]/50 transition-all opacity-0 group-hover:opacity-100 z-10 shadow-lg"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ============================================ */}

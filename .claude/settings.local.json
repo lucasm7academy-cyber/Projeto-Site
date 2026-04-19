@@ -33,7 +33,10 @@
       "Bash(grep -n \"HUD FIXO\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\pages\\\\\\\\SalaPage.tsx\")",
       "Bash(grep -n \"finalizacao\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\contexts\\\\\\\\SalaRegras.tsx\")",
       "Bash(grep -n \"buscarSalaVinculadaDoUsuario\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\api\\\\\\\\salas.ts\" -A 30)",
-      "Bash(grep -n \"export.*function encerrarSala\\\\|const encerrarSala\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\api\\\\\\\\salas.ts\" -A 15)"
+      "Bash(grep -n \"export.*function encerrarSala\\\\|const encerrarSala\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\api\\\\\\\\salas.ts\" -A 15)",
+      "Bash(grep -n \"export.*function carregarSalas\\\\|const carregarSalas\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\api\\\\\\\\salas.ts\" -A 20)",
+      "Bash(grep -n \"Salas Disponíveis\\\\|SALAS DISPONÍVEIS\\\\|carregarSalas\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\pages\\\\\\\\Jogar.tsx\")",
+      "Bash(curl -s http://localhost:5173)"
     ],
     "additionalDirectories": [
       "\\tmp"

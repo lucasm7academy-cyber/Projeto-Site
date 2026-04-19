@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   Zap,
   Trophy,
-  LineChart,
   History,
   Headset,
   LogOut,
@@ -151,8 +150,7 @@ export default function Layout() {
     { label: 'Times', icon: Users, path: '/times' },
     { label: 'Players', icon: UserIcon, path: '/players' },
     { label: 'Streamers', icon: Tv2, path: '/streamers' },
-    { label: 'Estatísticas', icon: LineChart, path: '/estatisticas' },
-    { label: 'Histórico', icon: History, path: '/historico' },
+    { label: 'Histórico', icon: History, path: '/jogar?view=finalizadas' },
   ];
 
   const profileMenuItems = [
