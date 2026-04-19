@@ -29,7 +29,8 @@
       "Bash(cd \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\")",
       "Bash(grep -n \"inscreverDraftRealtime\\\\|sala_streams\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\components\\\\\\\\draft\\\\\\\\DraftRoom.tsx\")",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(grep -n \"HUD FIXO\" \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\src\\\\\\\\pages\\\\\\\\SalaPage.tsx\")"
     ],
     "additionalDirectories": [
       "\\tmp"

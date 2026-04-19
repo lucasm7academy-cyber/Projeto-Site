@@ -1612,32 +1612,32 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </motion.div>
       )}
 
-      {/* HUD FIXO: Código + Botões de Transmissão — SEMPRE VISÍVEL */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col gap-3 md:top-6 md:right-6">
+      {/* HUD FIXO: Código + Botões de Transmissão — SEMPRE VISÍVEL NA FRENTE */}
+      <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 md:top-6 md:right-6 pointer-events-auto">
         {/* DEBUG: Log quando código aparece/desaparece */}
         {(() => {
           console.log('[SalaPage HUD] Estado:', sala.estado, 'Código:', sala.codigoPartida, 'Cargo:', cargoUsuario);
           return null;
         })()}
 
-        {/* Código da Partida — SEMPRE VISÍVEL para todos (jogadores, streamers, admins, coach) */}
+        {/* Código da Partida — SEMPRE VISÍVEL para TODOS (em qualquer estado) */}
         {sala.codigoPartida && (
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#FFB700]/10 border border-[#FFB700]/30 text-[#FFB700] font-bold text-sm tracking-wider"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FFB700]/20 border-2 border-[#FFB700]/60 text-[#FFB700] font-black text-sm tracking-wider shadow-lg shadow-[#FFB700]/30"
           >
-            <span className="text-xs">#{sala.codigoPartida}</span>
+            <span className="text-sm font-black">#{sala.codigoPartida}</span>
             <button
               onClick={() => {
                 navigator.clipboard.writeText(sala.codigoPartida!);
                 setCopiado(true);
                 setTimeout(() => setCopiado(false), 2000);
               }}
-              className="hover:opacity-70 transition"
+              className="hover:opacity-70 transition p-1 rounded hover:bg-white/10"
               title="Copiar código"
             >
-              {copiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              {copiado ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
             </button>
           </motion.div>
         )}
