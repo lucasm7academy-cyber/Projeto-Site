@@ -461,14 +461,14 @@ export default function App() {
           className="relative overflow-hidden p-6 group transition-all duration-500"
         >
           {/* Imagem FIXA */}
-          <div className="absolute inset-0 z-0">
-            <img 
+          {/* <div className="absolute inset-0 z-0">
+            <img
               src="/images/fundoryzecortado.png"
-              alt="Arena de Jogadores" 
+              alt="Arena de Jogadores"
               className="w-full h-full object-cover object-center"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/10 via-black/3 to-white/0" />
-          </div>
+          </div> */}
 
           <div className="relative z-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
