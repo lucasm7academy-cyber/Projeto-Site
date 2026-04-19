@@ -380,7 +380,7 @@ export default function Layout() {
       </header>
 
       {/* Layout Principal */}
-      <div className="flex h-full pt-14 md:pt-16 overflow-hidden">
+      <div className="flex h-full pt-14 md:pt-16">
         {/* Sidebar Desktop */}
         <aside className={`${sidebarWidths} ${isGamePage ? 'flex' : 'hidden lg:flex'} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex-col z-[50] h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 overflow-hidden`}>
           {/* Top Section - Profile/Link (Non-scrolling to allow balloon overflow) */}
