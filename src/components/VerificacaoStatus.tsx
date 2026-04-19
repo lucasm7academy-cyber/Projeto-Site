@@ -51,7 +51,8 @@ export function VerificacaoStatus() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: 100 }}
           onClick={() => !falha && navigate('/vincular')}
-          className={`fixed bottom-4 right-4 z-[99999] ${!falha ? 'cursor-pointer' : ''}`}
+          className={`fixed bottom-4 right-4 z-[999999] ${!falha ? 'cursor-pointer' : ''}`}
+          style={{ pointerEvents: 'auto' }}
         >
           <div className={`bg-black/90 backdrop-blur-lg rounded-xl border shadow-lg p-4 min-w-[280px] ${
             falha
