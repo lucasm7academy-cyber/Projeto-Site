@@ -7,6 +7,7 @@ import {
   UserPlus, UserX, Check, Plus, RefreshCw, X, Search, Upload,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { buildProfileIconUrl, buscarElo } from '../api/riot';
 import { useSound } from '../hooks/useSound';
 import { AnimatePresence as AP } from 'motion/react';
@@ -210,7 +211,7 @@ const InvitePlayerModal = ({ team, onClose }: { team: TimeData; onClose: () => v
       if (team.membros.filter(m => m.role === 'RES').length >= 2) { setError('Máximo de 2 reservas atingido'); return; }
     }
     setSending(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCachedUser();
     if (!user) { setSending(false); return; }
     const { error: insertError } = await supabase.from('time_convites').insert({
       time_id: team.id, de_user_id: user.id, para_user_id: selectedPlayer.user_id,
@@ -347,7 +348,7 @@ const RequestEntryModal = ({ team, onClose }: { team: TimeData; onClose: () => v
 
   useEffect(() => {
     const fetchMyAccount = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) return;
       const { data } = await supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle();
       setMyRiotAccount(data);
@@ -363,7 +364,7 @@ const RequestEntryModal = ({ team, onClose }: { team: TimeData; onClose: () => v
     }
     
     setSending(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCachedUser();
     if (!user) { setSending(false); return; }
 
     const { error: insertError } = await supabase.from('time_convites').insert({
@@ -823,7 +824,7 @@ export default function TimePage() {
   // ── carregar ────────────────────────────────────────────────────────────────
   const load = async () => {
     if (!id) return;
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCachedUser();
     const uid = user?.id ?? null;
     setCurrentUserId(uid);
 

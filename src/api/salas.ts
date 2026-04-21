@@ -164,7 +164,6 @@ export async function buscarSalaCompleta(salaId: number): Promise<Sala | null> {
     console.log('[buscarSalaCompleta] Nenhum dado encontrado para sala:', salaId);
     return null;
   }
-  console.log('[buscarSalaCompleta] Dados brutos da sala:', { timeBLogo: data.time_b_logo, timeALogo: data.time_a_logo, timeBNome: data.time_b_nome });
   return mapSala(data, data.sala_jogadores ?? []);
 }
 
@@ -538,21 +537,15 @@ export async function sairDaVaga(salaId: number, userId: string): Promise<void> 
   }
 }
 
-// ── Confirmar/desconfirmar presença (DELETE+INSERT evita UPDATE policy) ───────
+// ── Confirmar/desconfirmar presença ──────────────────────────────────────────
 export async function confirmarPresencaDB(
   salaId: number,
   userId: string,
   confirmado: boolean
 ): Promise<void> {
-  const { data: atual } = await supabase.from('sala_jogadores')
-    .select('*').eq('sala_id', salaId).eq('user_id', userId).maybeSingle();
-  if (!atual) return;
-
-  await supabase.from('sala_jogadores').delete()
+  const { error } = await supabase.from('sala_jogadores').update({ confirmado })
     .eq('sala_id', salaId).eq('user_id', userId);
-
-  const { id: _id, ...semId } = atual;
-  await supabase.from('sala_jogadores').insert({ ...semId, confirmado });
+  if (error) console.error(`[confirmarPresencaDB] Erro:`, error);
 }
 
 // ── Resetar vagas (reset total — remove todos sem vínculo) ───────────────────

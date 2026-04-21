@@ -48,8 +48,8 @@ export const MODOS_JOGO: Record<ModoJogo, {
     nome: 'Time vs Time',
     icone: '🏅',
     descricao: 'Desafio entre times - Vale ranking do clã',
-    maxJogadores: 4,
-    jogadoresPorTime: 2,
+    maxJogadores: 10,
+    jogadoresPorTime: 5,
     tipo: 'time',
     cor: '#a855f7',
     bgImage: '/images/fundoCardTime.png',
@@ -57,7 +57,7 @@ export const MODOS_JOGO: Record<ModoJogo, {
 };
 
 // ============================================
-// M POINTS — Sistema de apostas entre jogadores
+// M COINS — Sistema de apostas entre jogadores
 // ============================================
 
 export interface OpcaoMPoints {
@@ -68,11 +68,11 @@ export interface OpcaoMPoints {
 
 export const OPCOES_MPOINTS: OpcaoMPoints[] = [
   { valor: 0,    label: 'Casual — sem aposta', cor: '#6b7280' },
-  { valor: 100,  label: '100 MP',              cor: '#4ade80' },
-  { valor: 200,  label: '200 MP',              cor: '#22d3ee' },
-  { valor: 500,  label: '500 MP',              cor: '#a78bfa' },
-  { valor: 1000, label: '1.000 MP',            cor: '#fbbf24' },
-  { valor: 2000, label: '2.000 MP',            cor: '#f87171' },
+  { valor: 100,  label: '100 MC',              cor: '#4ade80' },
+  { valor: 200,  label: '200 MC',              cor: '#22d3ee' },
+  { valor: 500,  label: '500 MC',              cor: '#a78bfa' },
+  { valor: 1000, label: '1.000 MC',            cor: '#fbbf24' },
+  { valor: 2000, label: '2.000 MC',            cor: '#f87171' },
 ];
 
 export const getMPointsInfo = (valor: number): OpcaoMPoints =>

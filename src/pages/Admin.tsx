@@ -8,6 +8,7 @@ import {
   ChevronDown, RefreshCw, Ban, Users, Crown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import {
   type CargoAdmin,
   CARGO_LABELS, CARGO_COLORS,
@@ -101,7 +102,7 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
 
   const resolver = async (id: number, decisao: 'time_a' | 'time_b' | 'cancelado') => {
     setResolvendo(id);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCachedUser();
     const vencedorNome = decisao === 'cancelado' ? 'Cancelado'
       : partidas.find(p => p.id === id)?.vencedorNome ?? decisao;
 
@@ -311,7 +312,7 @@ function AbaSaldos({ adminCargo }: { adminCargo: CargoAdmin }) {
 
     if (!error) {
       // Log da operação
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       await supabase.from('admin_logs').insert({
         admin_id:  user?.id,
         acao:      `saldo_${operacao}`,
@@ -547,7 +548,7 @@ export default function Admin() {
 
   useEffect(() => {
     const verificar = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) { setLoading(false); return; }
 
       const { data } = await supabase

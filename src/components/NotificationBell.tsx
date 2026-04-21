@@ -6,6 +6,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSound } from '../hooks/useSound';
 

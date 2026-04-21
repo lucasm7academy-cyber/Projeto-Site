@@ -269,23 +269,23 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
       const restante = Math.max(0, Math.floor(((draft.timer_end || agora) - agora) / 1000));
       setTimer(restante);
 
-      // ✅ VERIFICAR TIMEOUT A CADA SEGUNDO (aqui dentro!)
+      // ✅ AUTO-ACTION QUANDO TIMER REAL CHEGA A 0 (35s no backend)
       if (restante === 0 && !timerFrozen && possoJogar && meuTime) {
         const turnOrder = getTurnOrder(modo);
         const ehMeuTurno = turnOrder[draft.current_turn]?.team === meuTime;
         if (ehMeuTurno) {
-          console.log('[DraftRoom] Timer chegou a 0 - iniciando buffer de 2s');
+          console.log('[DraftRoom] Timer real expirou - executando ação automática');
           setTimerFrozen(true);
           timeoutRef.current = setTimeout(async () => {
             if (draft.current_phase === 'ban') {
-              console.log('[DraftRoom] Timeout: Ban automático em branco');
+              console.log('[DraftRoom] Ban automático em branco');
               await banirCampeao(draft, '', draft.current_team, modo);
             } else {
-              console.log('[DraftRoom] Timeout: Pick não foi feito, cancelando draft');
+              console.log('[DraftRoom] Pick timeout - cancelando draft');
               onPickTimeout?.(usuarioId);
             }
             setTimerFrozen(false);
-          }, 2000);
+          }, 0);
         }
       }
     }, 1000);
@@ -429,15 +429,19 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const renderPickSlot = (championId: string | null, team: 'blue' | 'red', index: number) => {
     const champion = championId ? champions[championId] : null;
     const turnOrder = getTurnOrder(modo);
-    const isActive = draft?.current_turn !== undefined && 
-                     turnOrder[draft.current_turn]?.team === team && 
+    const isActive = draft?.current_turn !== undefined &&
+                     turnOrder[draft.current_turn]?.team === team &&
                      turnOrder[draft.current_turn]?.phase === 'pick' &&
                      draft.current_phase === 'pick';
-    
+
     const isThisSlotActive = isActive && (
-      team === 'blue' ? draft?.blue_picks.filter(p => p === null).length - 1 === index : 
+      team === 'blue' ? draft?.blue_picks.filter(p => p === null).length - 1 === index :
                         draft?.red_picks.filter(p => p === null).length - 1 === index
     );
+
+    // 1v1: Ocultar picks do time adversário durante o draft
+    const isOpponentPickHidden = modo === '1v1' && draft?.status === 'ongoing' &&
+                                  champion && team !== meuTime;
 
     return (
       <div key={index} className="flex flex-col items-center gap-[0.3vmin]">
@@ -446,11 +450,15 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
           ${champion ? 'border-white/20' : 'border-white/10'}
           ${isThisSlotActive ? 'border-[#c89b3c] shadow-[0_0_12px_rgba(200,155,60,0.5)]' : ''}
         `}>
-          {champion ? (
+          {isOpponentPickHidden ? (
+            <div className="w-full h-full flex items-center justify-center opacity-40">
+              <span className="text-[3vmin] font-black text-white/60">?</span>
+            </div>
+          ) : champion ? (
             <>
-              <img 
-                src={buildChampionIconUrl(champion.id, version)} 
-                alt={champion.name} 
+              <img
+                src={buildChampionIconUrl(champion.id, version)}
+                alt={champion.name}
                 className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 referrerPolicy="no-referrer"
               />
@@ -549,21 +557,21 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
         <h1 className="text-[3.5vmin] font-bold tracking-[0.2em] text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.3)] uppercase">
           {draft?.current_phase === 'ban' ? 'FASE DE BANS' : 'FASE DE PICKS'}
         </h1>
-        
+
         {/* TIMER BAR */}
         <div className="relative w-[60vmin] h-[0.5vmin] bg-white/10 mt-[1vmin] overflow-hidden">
-          <motion.div 
+          <motion.div
             className="absolute inset-0 bg-gradient-to-r from-transparent via-[#c89b3c] to-transparent"
             initial={{ scaleX: 1 }}
-            animate={{ scaleX: timer / 30 }}
+            animate={{ scaleX: Math.min(timer, 30) / 30 }}
             transition={{ duration: 1, ease: "linear" }}
             style={{ originX: 0.5 }}
           />
         </div>
 
         {/* TIMER NUMBER */}
-        <div className={`text-[6vmin] font-black mt-[0.5vmin] tabular-nums drop-shadow-lg ${timer <= 10 ? 'text-red-500' : 'text-white'}`}>
-          {timer}
+        <div className={`text-[6vmin] font-black mt-[0.5vmin] tabular-nums drop-shadow-lg ${Math.min(timer, 30) <= 10 ? 'text-red-500' : 'text-white'}`}>
+          {Math.min(timer, 30)}
         </div>
       </div>
 

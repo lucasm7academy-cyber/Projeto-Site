@@ -452,3 +452,77 @@ export async function buscarStatsPorModo(userId: string): Promise<any[]> {
 
   return data ?? [];
 }
+
+// ============================================================
+// PROCESSAR APOSTAS EM M COINS
+// ============================================================
+const TAXA_MC_POR_PARTIDA = 30;
+
+/**
+ * Processa transferência de MC entre jogadores após partida com aposta.
+ * - Perdedores perdem MC da aposta
+ * - Vencedores ganham MC (prêmio total - taxa)
+ * - Taxa fixa de 30 MC registrada em ganhos_plataforma
+ */
+export async function processarApostaPartida(
+  resultado: ResultadoPartida,
+  apostaValor: number,
+  salaId: number
+): Promise<void> {
+  if (apostaValor <= 0) return;
+
+  console.log(`\n💰 [APOSTA] Iniciando processamento...`);
+  console.log(`   Modo: ${resultado.modo} | Aposta: ${apostaValor} MC | Sala: ${salaId}`);
+
+  const vencedores = resultado.jogadores.filter(j =>
+    (resultado.vencedor === 'time_a' && j.isTimeA) ||
+    (resultado.vencedor === 'time_b' && !j.isTimeA)
+  );
+  const perdedores = resultado.jogadores.filter(j =>
+    (resultado.vencedor === 'time_a' && !j.isTimeA) ||
+    (resultado.vencedor === 'time_b' && j.isTimeA)
+  );
+
+  if (vencedores.length === 0 || perdedores.length === 0) {
+    console.warn(`⚠️ [APOSTA] Sem vencedores ou perdedores!`);
+    return;
+  }
+
+  const totalPrêmio = perdedores.length * apostaValor;
+  const prêmioLíquido = totalPrêmio - TAXA_MC_POR_PARTIDA;
+  const prêmioPorVencedor = Math.floor(prêmioLíquido / vencedores.length);
+
+  console.log(`   Total prêmio: ${totalPrêmio} MC | Taxa: ${TAXA_MC_POR_PARTIDA} MC | Por vencedor: ${prêmioPorVencedor} MC`);
+  console.log(`   📉 Debitando ${perdedores.length} perdedores (-${apostaValor} MC cada)...`);
+
+  // Debitar perdedores (atomic SQL update - evita race conditions)
+  for (const j of perdedores) {
+    console.log(`      -${apostaValor} MC: ${j.nome}`);
+    await supabase.rpc('incrementar_saldo', {
+      user_id_param: j.userId,
+      valor_param: -apostaValor
+    });
+  }
+
+  console.log(`   📈 Creditando ${vencedores.length} vencedores (+${prêmioPorVencedor} MC cada)...`);
+
+  // Creditar vencedores (atomic SQL update)
+  for (const j of vencedores) {
+    console.log(`      +${prêmioPorVencedor} MC: ${j.nome}`);
+    await supabase.rpc('incrementar_saldo', {
+      user_id_param: j.userId,
+      valor_param: prêmioPorVencedor
+    });
+  }
+
+  // Registrar taxa na plataforma
+  console.log(`   📊 Registrando taxa na plataforma...`);
+  await supabase.from('ganhos_plataforma').insert({
+    sala_id: salaId,
+    modo: resultado.modo,
+    mc_taxa: TAXA_MC_POR_PARTIDA,
+    mc_total_apostado: totalPrêmio,
+  });
+
+  console.log(`✅ [APOSTA] Concluído! Taxa: ${TAXA_MC_POR_PARTIDA} MC registrada\n`);
+}

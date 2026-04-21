@@ -50,7 +50,7 @@ export async function criarDraft(
     current_phase: 'ban',
     current_team: 'blue',
     current_turn: 0,
-    timer_end: Date.now() + 30000,
+    timer_end: Date.now() + 35000,
     status: 'ongoing',
     fearless_enabled: fearlessEnabled,
     fearless_pool: [],
@@ -127,7 +127,7 @@ export async function banirCampeao(
     current_turn:  nextTurn,
     current_team:  nextInfo?.team  ?? 'blue',
     current_phase: nextInfo?.phase ?? 'pick',
-    timer_end:     Date.now() + 30000,
+    timer_end:     Date.now() + 35000,
   };
 
   if (nextTurn >= turnOrder.length) updates.status = 'finished';
@@ -156,7 +156,7 @@ export async function pickarCampeao(
     current_turn:  nextTurn,
     current_team:  nextInfo?.team  ?? 'blue',
     current_phase: nextInfo?.phase ?? 'ban',
-    timer_end:     Date.now() + 30000,
+    timer_end:     Date.now() + 35000,
   };
 
   if (nextTurn >= turnOrder.length) updates.status = 'finished';

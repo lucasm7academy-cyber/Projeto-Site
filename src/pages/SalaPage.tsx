@@ -3,9 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Crown, UserPlus, Check, ArrowLeft, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Send, Tv2
+  Crown, UserPlus, Check, ArrowLeft, ArrowLeftToLine,ArrowLeftFromLine, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Send, Tv2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { buildProfileIconUrl, buildChampionIconUrl, getDDRVersion } from '../api/riot';
 import {
   buscarSalaCompleta, buscarSalaVinculadaDoUsuario, deletarSala,
@@ -41,7 +42,7 @@ draft_id?: string | null;
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function carregarUsuario(): Promise<UsuarioAtual | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getCachedUser();
   if (!user) return null;
 
   const [{ data: perfil }, { data: riot }, { data: membro }] = await Promise.all([
@@ -76,6 +77,15 @@ async function carregarUsuario(): Promise<UsuarioAtual | null> {
 // ─────────────────────────────────────────────────────────────────────────────
 // COMPONENTE DE PÁGINA
 // ─────────────────────────────────────────────────────────────────────────────
+
+type Modo = "1v1" | "aram" | "5v5"| "time_vs_time";
+
+const coresModo: Record<Modo, string> = {
+  "1v1": "text-red-500",
+  "aram": "text-blue-500",
+  "5v5": "text-green-500",
+  "time_vs_time": "text-purple-500",
+};
 
 export default function SalaPage() {
   const { id } = useParams<{ id: string }>();
@@ -227,11 +237,11 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome, time
             {/* Time A */}
             <div className="flex flex-col items-center justify-center gap-[1.5vmin]">
               <div
-                className="w-[15vmin] h-[15vmin] rounded-xl overflow-hidden border-3 flex-shrink-0"
+                className="w-[17vmin] h-[17vmin] rounded-xl overflow-hidden border-3 flex-shrink-0"
                 style={{
-                  borderColor: timeAColor || '#3b82f6',
-                  backgroundColor: `${timeAColor || '#3b82f6'}15`,
-                  boxShadow: `0 0 15px ${timeAColor || '#3b82f6'}60, inset 0 0 15px ${timeAColor || '#3b82f6'}20`
+                  borderColor: timeAColor || '#3d3d3d',
+                  backgroundColor: `${timeAColor || '#3d3d3d'}15`,
+                  boxShadow: `0 0 15px ${timeAColor || '#3d3d3d'}60, inset 0 0 15px ${timeAColor || '#3d3d3d'}20`
                 }}
               >
                 {timeALogo ? (
@@ -244,10 +254,10 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome, time
               </div>
               {timeANome && (
                 <div className="text-center">
-                  <div className="text-[1vmin] font-black text-white uppercase tracking-widest whitespace-nowrap">
+                  <div className="text-[2vmin] font-black text-white uppercase tracking-widest whitespace-nowrap">
                     {timeANome.slice(0, 12)}
                   </div>
-                  <div className="text-[0.9vmin] font-black uppercase tracking-widest whitespace-nowrap mt-[0.3vmin]" style={{ color: timeAColor || '#60a5fa' }}>
+                  <div className="text-[2vmin] font-black uppercase tracking-widest whitespace-nowrap mt-[0.3vmin]" style={{ color: timeAColor || '#60a5fa' }}>
                     #{timeATag?.slice(0, 6) || 'TIME'}
                   </div>
                 </div>
@@ -259,17 +269,17 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome, time
 
             {/* VS Badge with PNG — Centered vertically with logos */}
             <div className="flex items-center justify-center flex-shrink-0">
-              <img src="/images/vs.png" alt="VS" className="w-[5vmin] h-[5vmin] object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]" />
+              <img src="/images/vs.png" alt="VS" className="w-[15vmin] h-[15vmin] object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.3)]" />
             </div>
 
             {/* Time B */}
             <div className="flex flex-col items-center justify-center gap-[1.5vmin]">
               <div
-                className="w-[15vmin] h-[15vmin] rounded-xl overflow-hidden border-3 flex-shrink-0"
+                className="w-[17vmin] h-[17vmin] rounded-xl overflow-hidden border-3 flex-shrink-0"
                 style={{
-                  borderColor: timeBColor || '#ef4444',
-                  backgroundColor: `${timeBColor || '#ef4444'}15`,
-                  boxShadow: `0 0 15px ${timeBColor || '#ef4444'}60, inset 0 0 15px ${timeBColor || '#ef4444'}20`
+                  borderColor: timeBColor || '#3d3d3d',
+                  backgroundColor: `${timeBColor || '#3d3d3d'}15`,
+                  boxShadow: `0 0 15px ${timeBColor || '#3d3d3d'}60, inset 0 0 15px ${timeBColor || '#3d3d3d'}20`
                 }}
               >
                 {timeBLogo ? (
@@ -282,10 +292,10 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome, time
               </div>
               {timeBNome && (
                 <div className="text-center">
-                  <div className="text-[1vmin] font-black text-white uppercase tracking-widest whitespace-nowrap">
+                  <div className="text-[2vmin] font-black text-white uppercase tracking-widest whitespace-nowrap">
                     {timeBNome.slice(0, 12)}
                   </div>
-                  <div className="text-[0.9vmin] font-black uppercase tracking-widest whitespace-nowrap mt-[0.3vmin]" style={{ color: timeBColor || '#f87171' }}>
+                  <div className="text-[2vmin] font-black uppercase tracking-widest whitespace-nowrap mt-[0.3vmin]" style={{ color: timeBColor || '#f87171' }}>
                     #{timeBTag?.slice(0, 6) || 'TIME'}
                   </div>
                 </div>
@@ -399,6 +409,12 @@ function SalaChat({ salaId, usuarioAtual, jogadores }: {
     setTexto('');
     await supabase.from('sala_chat').insert({ sala_id: salaId, user_id: usuarioAtual.id, nome: usuarioAtual.nome, texto: t });
   };
+  
+  const coresModo = {
+  "1v1": "text-red-500",
+  "2v2": "text-yellow-400",
+  "5v5": "text-blue-500",
+};
 
   const onKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } };
 
@@ -1275,43 +1291,40 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             </div>
           )}
         </div>
-      )}
+      )}  
 
       {/* TOP BAR */}
       <div className="w-full h-[10vmin] flex items-start justify-center pt-[2vmin] z-50">
         <div className="w-full max-w-6xl h-[7vmin] bg-black rounded-xl border border-white/10 flex items-center px-[3vmin] shadow-2xl mx-4 justify-between relative overflow-visible">
           <div className="flex items-center">
-            <button onClick={acaoSairDaSala} className="mr-[3vmin] text-white/40 hover:text-white transition-colors">
-              <ArrowLeft className="w-[2.5vmin] h-[2.5vmin]" />
+            <button onClick={acaoSairDaSala} className="mr-[3vmin] text-red-500 hover:text-green-500 transition-colors">
+              <ArrowLeftFromLine className="w-[2.5vmin] h-[2.5vmin]" />
             </button>
             <div className="flex items-center gap-[2vmin]">
-              <h1 className="text-[2vmin] font-black uppercase tracking-tighter text-white leading-none">{sala.nome}</h1>
-              <div className="flex items-center gap-[1vmin] bg-white/5 px-[1.5vmin] py-[0.5vmin] rounded-sm border border-white/10">
-                <span className="text-[1vmin] font-black text-[#FFB700] tracking-[0.5em]">{sala.codigo}</span>
-                <button onClick={copiarLink} className="text-white/20 hover:text-white/40 transition-colors">
-                  {copiado ? <Check className="w-[1.4vmin] h-[1.4vmin] text-green-500" /> : <Copy className="w-[1.4vmin] h-[1.4vmin]" />}
+              <h1 className="text-[2vmin] font-black tracking-tighter text-white/80">{sala.nome}</h1>
+              <div className="text-[2vmin] font-black text-[#FFB700]">{sala.codigo}</div>
+                <button onClick={copiarLink} className="text-white/40 hover:text-white/90 transition-colors">
+                  {copiado ? <Check className="w-[1.4vmin] h-[1.4vmin] text-green-500" /> : <Copy className="w-[1.7vmin] h-[1.7vmin]" />}
                 </button>
-              </div>
             </div>
           </div>
 
-
+      
           <div className="flex items-center gap-[2vmin]">
+            
             <div className="hidden sm:flex items-center gap-[1vmin] px-[1.5vmin] py-[0.8vmin] bg-white/5 rounded-lg border border-white/5">
-              <div className="flex flex-col items-center">
-                <span className="text-[0.7vmin] font-black text-white/20 uppercase tracking-widest">MODO</span>
-                <span className="text-[1.1vmin] font-black text-white uppercase">{sala.modo}</span>
-              </div>
-            </div>
-            <div className="hidden sm:flex items-center gap-[1vmin] px-[1.5vmin] py-[0.8vmin] bg-white/5 rounded-lg border border-white/5">
-              <div className="flex flex-col items-center">
-                <span className="text-[0.7vmin] font-black text-white/20 uppercase tracking-widest">COINS</span>
-                <span className="text-[1.1vmin] font-black text-[#FFB700] uppercase">{sala.mpoints}</span>
-              </div>
+            <span className="text-[1.5vmin] font-black uppercase">
+              <span className="text-white">MODO: </span>
+              <span className={coresModo[sala.modo as Modo] || "text-white"}>
+                {sala.modo}
+              </span>
+            </span>
+            <span className="text-[1.5vmin] font-black text-white uppercase tracking-widest">MC</span>
+            <span className="text-[1.5vmin] font-black text-[#FFB700] uppercase">{sala.mpoints}</span>
             </div>
             <div className="flex items-center gap-[1vmin] px-[1.5vmin] py-[0.8vmin] bg-white/5 rounded-lg border border-white/5">
-              <Eye className="w-[1.8vmin] h-[1.8vmin] text-[#FFB700]" />
-              <span className="text-[1.4vmin] font-black text-white tabular-nums">{viewers}</span>
+              <Eye className="w-[2vmin] h-[1.8vmin] text-[#FFB700]" />
+              <span className="text-[1.5vmin] font-black text-white tabular-nums">{viewers}</span>
             </div>
           </div>
         </div>
@@ -1319,7 +1332,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* AVISO SEM CONTA RIOT */}
       {semContaRiot && (
-        <div className="w-full z-20 px-4 lg:px-8">
+        <div className="w-100 z-20 px-40 lg:px-8">
           <div className="flex items-center gap-3 px-4 py-2 rounded-lg bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>Vincule sua conta Riot para entrar em uma vaga. Você pode assistir a partida como espectador.</span>
@@ -1334,7 +1347,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           <div className="flex flex-col items-center gap-[3vmin]">
             {/* Vagas lado a lado */}
             <div className="flex gap-[76vmin]">
-              <div className="flex flex-col gap-[1.5vmin] items-start">
+              <div className="flex flex-col gap-[1.2vmin] items-start">
                 {roles.map((role) => renderSlot(role, true))}
               </div>
               <div className="flex flex-col gap-[1.5vmin] items-end">
@@ -1681,16 +1694,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
       {/* HUD FIXO: Código + Botões de Transmissão — SEMPRE VISÍVEL NA FRENTE */}
       <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 md:top-6 md:right-6 pointer-events-auto">
-        {/* DEBUG: Log quando código aparece/desaparece */}
-        {(() => {
-          if (!sala.codigoPartida) {
-            console.warn('[SalaPage HUD] ⚠️ CÓDIGO DESAPARECEU! Estado:', sala.estado, 'Código:', sala.codigoPartida);
-          } else {
-            console.log('[SalaPage HUD] ✅ CÓDIGO VISÍVEL Estado:', sala.estado, 'Código:', sala.codigoPartida, 'Cargo:', cargoUsuario);
-          }
-          return null;
-        })()}
-
         {/* Botão TRANSMITIR (Streamer/Admin/Coach) */}
         {(cargoUsuario === 'streamer' || cargoUsuario === 'admin' || cargoUsuario === 'coach') && sala.modo === 'time_vs_time' && (
           <motion.button

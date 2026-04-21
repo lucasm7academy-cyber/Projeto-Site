@@ -20,6 +20,7 @@ import {
   Mail
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { getDDRVersion, buildProfileIconUrl } from '../api/riot';
 import { sincronizarContaRiot } from '../api/player';
 import { motion, AnimatePresence } from 'motion/react';
@@ -535,7 +536,7 @@ export default function Perfil() {
 
   const carregarDados = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCachedUser();
     setUser(user);
 
     if (user) {
@@ -637,7 +638,7 @@ export default function Perfil() {
 
   const salvarCampo = async (campos: Record<string, string>) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) {
         console.error('Usuário não autenticado');
         return;

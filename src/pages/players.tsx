@@ -423,12 +423,10 @@ export default function App() {
         if (cancelado) break;
         const solo = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
         const eloType: EloType = solo ? (TIER_MAP[solo.tier] ?? 'Ferro') : 'Ferro';
-        const partidas = solo ? (solo.wins + solo.losses) : 0;
-        const winRate  = solo && partidas > 0 ? Math.round((solo.wins / partidas) * 100) : 0;
         setTodosJogadores(prev =>
           prev.map((j: any) =>
             j.id === jogador.id
-              ? { ...j, elo: eloType, partidas, winRate, _carregando: false }
+              ? { ...j, elo: eloType, _carregando: false }
               : j
           )
         );
@@ -616,7 +614,7 @@ export default function App() {
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
           <AnimatePresence>
             {jogadores.map((jogador, index) => {
               const roleConfig = ROLE_CONFIG[jogador.rolePrincipal];

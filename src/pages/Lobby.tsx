@@ -10,6 +10,7 @@ import {
   Swords, Target, Medal, ArrowUpRight, Plus, Edit, Copy, CheckCircle, Tv2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { buildProfileIconUrl } from '../api/riot';
 
 // ============================================
@@ -93,7 +94,7 @@ const Lobby = () => {
       setLoading(true);
       
       // 1. Usuário autenticado
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) {
         navigate('/login');
         return;

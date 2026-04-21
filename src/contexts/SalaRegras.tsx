@@ -13,12 +13,12 @@ import {
   confirmarPresencaDB, resetarConfirmacoes, vincularJogadores,
   registrarVoto, buscarVotos, deletarSala, encerrarSala,
   atribuirCodigoPartida, liberarCodigoPartida,
-  resetarSalaCompleta, criarRequisicaoAdmin,
+  criarRequisicaoAdmin,
   desvincularJogadores, desvincularJogador, salvarResultadoPartida,
   type Sala, type EstadoSala, type JogadorNaSala,
   type OpcaoVotoResultado, type Voto,
 } from '../api/salas';
-import { atualizarPontosPartida, type ResultadoPartida } from '../api/player';
+import { atualizarPontosPartida, processarApostaPartida, type ResultadoPartida } from '../api/player';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MÁQUINA DE ESTADOS
@@ -84,7 +84,7 @@ function avaliarVotosResultado(finVotos: Voto[]): DecisaoResultado {
 async function encerrarPartidaComResultado(
   salaId: number,
   decisao: DecisaoResultado,
-  sala: { timeANome?: string; timeBNome?: string; modo: string; jogadores: JogadorNaSala[] }
+  sala: { timeANome?: string; timeBNome?: string; modo: string; mpoints?: number; jogadores: JogadorNaSala[] }
 ): Promise<void> {
   const vencedorLado  = decisao === 'time_a' ? 'time_a' : decisao === 'time_b' ? 'time_b' : 'disputa';
   const vencedorNome  = decisao === 'time_a' ? (sala.timeANome ?? 'Equipe Azul')
@@ -114,6 +114,14 @@ async function encerrarPartidaComResultado(
     await atualizarPontosPartida(resultado).catch(e => {
       console.error('[encerrarPartidaComResultado] Erro ao atualizar pontos:', e);
     });
+
+    // 💰 Processar aposta em M Coins (se houver)
+    const apostaValor = sala.mpoints ?? 0;
+    if (apostaValor > 0 && decisao !== 'disputa') {
+      await processarApostaPartida(resultado, apostaValor, salaId).catch(e => {
+        console.error('[encerrarPartidaComResultado] Erro ao processar aposta:', e);
+      });
+    }
   }
 
   await encerrarSala(salaId, vencedorDB as any);
@@ -382,7 +390,7 @@ export function SalaRegrasProvider({
 
       if (restante <= 0 && !transicionandoRef.current) {
         clearInterval(timerConfirmacaoRef.current);
-        // Timer expirado: expulsa não-confirmados, reseta pronto dos demais
+        // Timer expirado: volta pra preenchendo e reseta confirmações
         transicionandoRef.current = true;
         const ok = await transicionarEstado(salaId, 'preenchendo');
         if (ok) await resetarConfirmacoes(salaId);
@@ -462,9 +470,12 @@ export function SalaRegrasProvider({
     const total = jogadores.length;
     const max   = sala.maxJogadores;
 
+    console.log(`[Auto-transição] Estado: ${estado} | Total: ${total}/${max}`);
+
     // aberta → preenchendo: primeiro jogador entrou
     // (transição obrigatória antes de chegar em confirmacao)
     if (estado === 'aberta' && total > 0) {
+      console.log(`[Auto-transição] Aberta → Preenchendo (${total} jogadores)`);
       transicionandoRef.current = true;
       transicionarEstado(salaId, 'preenchendo').finally(() => {
         transicionandoRef.current = false;
@@ -474,6 +485,7 @@ export function SalaRegrasProvider({
 
     // preenchendo → confirmacao: sala ficou cheia
     if (estado === 'preenchendo' && total === max) {
+      console.log(`[Auto-transição] Preenchendo → Confirmação (sala cheia!)`);
       transicionandoRef.current = true;
       transicionarEstado(salaId, 'confirmacao').finally(() => {
         transicionandoRef.current = false;
@@ -483,6 +495,7 @@ export function SalaRegrasProvider({
 
     // preenchendo → aberta: sala ficou vazia
     if (estado === 'preenchendo' && total === 0) {
+      console.log(`[Auto-transição] Preenchendo → Aberta (vazia)`);
       transicionandoRef.current = true;
       transicionarEstado(salaId, 'aberta').finally(() => {
         transicionandoRef.current = false;
@@ -493,6 +506,7 @@ export function SalaRegrasProvider({
     // confirmacao → preenchendo: alguém saiu durante confirmação
     // Quem não confirmou é removido da vaga; quem confirmou permanece com pronto resetado.
     if (estado === 'confirmacao' && total < max) {
+      console.log(`[Auto-transição] Confirmação → Preenchendo (alguém saiu)`);
       transicionandoRef.current = true;
       const fazer = async () => {
         const ok = await transicionarEstado(salaId, 'preenchendo');
@@ -505,7 +519,11 @@ export function SalaRegrasProvider({
     // confirmacao → travada: todos confirmaram
     // Após travada, cria o draft e aguarda o draft finalizar para ir a aguardando_inicio.
     // A transição para aguardando_inicio é disparada por acaoDraftFinalizado (via DraftRoom).
-    if (estado === 'confirmacao' && total === max && jogadores.every(j => j.confirmado)) {
+    const todosConfirmaram = jogadores.every(j => j.confirmado);
+    console.log(`[Auto-transição] Confirmacao check: total=${total}/${max}, confirmados=${jogadores.filter(j => j.confirmado).length}, todosConfirmaram=${todosConfirmaram}`);
+
+    if (estado === 'confirmacao' && total === max && todosConfirmaram) {
+      console.log(`[Auto-transição] ✅ CONFIRMAÇÃO → TRAVADA (todos confirmaram!)`);
       transicionandoRef.current = true;
       const fazer = async () => {
         const ok = await transicionarEstado(salaId, 'travada');
@@ -650,6 +668,35 @@ export function SalaRegrasProvider({
     if (!usuarioAtual.contaVinculada) return;
     // Evita duplo-clique ou requisições simultâneas do mesmo cliente
     if (entrandoVagaRef.current) return;
+
+    // Validar saldo MC se houver aposta
+    const apostaValor = sala.mpoints ?? 0;
+    console.log(`\n💳 [ENTRADA] Validando saldo - Aposta: ${apostaValor} MC`);
+    if (apostaValor > 0) {
+      try {
+        const { data } = await supabase
+          .from('saldos')
+          .select('saldo')
+          .eq('user_id', usuarioAtual.id)
+          .maybeSingle();
+        const saldoMC = data?.saldo ?? 0;
+        console.log(`   Seu saldo: ${saldoMC} MC | Necessário: ${apostaValor} MC`);
+        if (saldoMC < apostaValor) {
+          console.log(`   ❌ BLOQUEADO - Saldo insuficiente!`);
+          setErroEntrada(`Saldo insuficiente (${saldoMC} MC). Depósito de ${apostaValor} MC necessário para participar.`);
+          if (erroEntradaTimeoutRef.current) clearTimeout(erroEntradaTimeoutRef.current);
+          erroEntradaTimeoutRef.current = setTimeout(() => {
+            setErroEntrada(null);
+            erroEntradaTimeoutRef.current = undefined;
+          }, 5000);
+          return;
+        }
+        console.log(`   ✅ OK - Entrando na sala...\n`);
+      } catch (e) {
+        console.error('[acaoEntrarVaga] ❌ Erro ao validar saldo:', e);
+      }
+    }
+
     entrandoVagaRef.current = true;
     otimisticoRef.current = true;
     try {
@@ -693,7 +740,7 @@ export function SalaRegrasProvider({
       await confirmarPresencaDB(salaId, usuarioAtual.id, true);
     } finally {
       otimisticoRef.current = false;
-      recarregar();
+      await recarregar();
     }
   }, [sala, salaId, usuarioAtual.id, jogadorAtual, podeExecutar, recarregar]);
 
@@ -706,7 +753,15 @@ export function SalaRegrasProvider({
       descricao,
       jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
     });
-    await resetarSalaCompleta(salaId);
+    // 1. Deletar o draft
+    if (sala.draft_id) {
+      await supabase.from('drafts').delete().eq('id', sala.draft_id);
+    }
+    // 2. Volta pra confirmacao e reseta confirmações
+    await transicionarEstado(salaId, 'confirmacao');
+    await resetarConfirmacoes(salaId);
+    // 3. Limpar draft_id
+    await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
   }, [sala, salaId, usuarioAtual.id, jogadorAtual]);
 
   const acaoVotarResultado = useCallback(async (opcao: OpcaoVotoResultado) => {
@@ -733,54 +788,21 @@ export function SalaRegrasProvider({
     await transicionarEstado(salaId, 'aguardando_inicio');
   }, [sala, salaId]);
 
-  const acaoCancelarDraftPorTimeout = useCallback(async (userIdQueFalhou: string) => {
+  const acaoCancelarDraftPorTimeout = useCallback(async () => {
     if (!sala || !sala.draft_id) return;
 
     try {
-      console.log(`[SalaRegras] Cancelando draft por timeout. Resetando sala completamente.`);
-
       // 1. Deletar o draft
-      const { error: erroDraft } = await supabase
-        .from('drafts')
-        .delete()
-        .eq('id', sala.draft_id);
+      await supabase.from('drafts').delete().eq('id', sala.draft_id);
 
-      if (erroDraft) {
-        console.error('[SalaRegras] Erro ao deletar draft:', erroDraft);
-      } else {
-        console.log('[SalaRegras] Draft deletado com sucesso');
-      }
+      // 2. Volta pra confirmacao e reseta confirmações
+      await transicionarEstado(salaId, 'confirmacao');
+      await resetarConfirmacoes(salaId);
 
-      // 2. Expulsar TODOS os jogadores das vagas
-      const { error: erroExpulsaoTotal } = await supabase
-        .from('sala_jogadores')
-        .delete()
-        .eq('sala_id', salaId);
-
-      if (erroExpulsaoTotal) {
-        console.error('[SalaRegras] Erro ao expulsar todos os jogadores:', erroExpulsaoTotal);
-      } else {
-        console.log('[SalaRegras] Todos os jogadores foram expulsos das vagas');
-      }
-
-      // 3. Limpar draft_id na sala e voltar para 'preenchendo'
-      const { error: erroSala } = await supabase
-        .from('salas')
-        .update({
-          draft_id: null,
-          estado: 'preenchendo'
-        })
-        .eq('id', salaId);
-
-      if (erroSala) {
-        console.error('[SalaRegras] Erro ao atualizar sala:', erroSala);
-      } else {
-        console.log('[SalaRegras] Sala resetada para preenchendo');
-      }
-
-      console.log('[SalaRegras] Draft cancelado e sala resetada com sucesso');
+      // 3. Limpar draft_id da sala
+      await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
     } catch (error) {
-      console.error('[SalaRegras] Erro geral ao cancelar draft por timeout:', error);
+      console.error('[SalaRegras] Erro ao cancelar draft por timeout:', error);
     }
   }, [sala, salaId]);
 

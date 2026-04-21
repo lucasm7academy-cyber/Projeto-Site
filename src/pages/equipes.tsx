@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useSound } from '../hooks/useSound';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { buildProfileIconUrl } from '../api/riot';
 import {
   type TeamCardInfo,
@@ -910,7 +911,7 @@ export default function App() {
     );
 
   const handleCreateTeam = async (newTeamData: Partial<Team>) => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getCachedUser();
     if (!user) return;
 
     const { data: novoTime, error } = await supabase

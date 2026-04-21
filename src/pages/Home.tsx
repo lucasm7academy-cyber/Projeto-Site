@@ -19,6 +19,7 @@ import {
   X
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Layout() {
@@ -34,7 +35,7 @@ export default function Layout() {
     const getUser = async () => {
       if (!supabase) return;
       
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       setUser(user);
       
       if (user) {

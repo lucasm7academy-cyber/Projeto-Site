@@ -7,6 +7,7 @@ import { buscarJogadorCompleto, buscarSugestoes, buildProfileIconUrl } from '../
 import { motion, AnimatePresence } from 'motion/react';
 import { useVerificacao } from '../contexts/VerificacaoContext';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useSound } from '../hooks/useSound';
 
@@ -39,7 +40,7 @@ export default function Vincular() {
     const carregarContaVinculada = async () => {
       if (!supabase) { setCarregandoInicial(false); return; }
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (user) {
         const { data, error } = await supabase
           .from('contas_riot')
@@ -159,7 +160,7 @@ export default function Vincular() {
   useEffect(() => {
     const handleConcluida = async () => {
       if (supabase) {
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getCachedUser();
         if (user) {
           const { data, error } = await supabase
             .from('contas_riot')

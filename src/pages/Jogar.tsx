@@ -15,6 +15,7 @@ import {
 } from '../components/partidas/salaConfig';
 import { carregarSalas, carregarSalasFinalizadas, criarSala, buscarSalaAtivaDoUsuario, type Sala } from '../api/salas';
 import { supabase } from '../lib/supabase';
+import { getCachedUser } from '../contexts/AuthContext';
 import { buildProfileIconUrl } from '../api/riot';
 
 // ============================================
@@ -271,7 +272,7 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
             <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Nome da Sala</label>
             <input
               type="text" value={nome} onChange={(e) => setNome(e.target.value)}
-              placeholder={`Ex: ${MODOS_JOGO[modo].nome} do ${usuarioAtual.nome}`}
+              placeholder={`Ex: Sala de ${usuarioAtual.nome}${usuarioAtual.tag}`}
               className="w-full bg-white/5 border border-white/10 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-white/30"
             />
           </div>
@@ -440,7 +441,7 @@ const Jogar = () => {
   // Carregar usuário
   useEffect(() => {
     const carregarUsuario = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCachedUser();
       if (!user) { setLoadingUser(false); return; }
 
       const [{ data: perfil }, { data: riot }, { data: membro }] = await Promise.all([
