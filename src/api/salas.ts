@@ -484,16 +484,22 @@ export async function entrarNaVaga(
 
 // ── Sair da vaga ──────────────────────────────────────────────────────────────
 export async function sairDaVaga(salaId: number, userId: string): Promise<void> {
+  // 🔒 PROTEÇÃO: nunca remove jogadores vinculados (durante partida/draft)
   // Buscar o jogador para saber qual lado estava (time_a ou time_b)
   const { data: jogador } = await supabase
     .from('sala_jogadores')
-    .select('is_time_a')
+    .select('is_time_a, vinculado')
     .eq('sala_id', salaId)
     .eq('user_id', userId)
-    .eq('vinculado', false)
     .maybeSingle();
 
-  // Remove o jogador da vaga
+  // Se jogador está vinculado (em partida), retorna sem fazer nada
+  if (jogador?.vinculado) {
+    console.log(`[sairDaVaga] Jogador ${userId} está vinculado (em partida) — NÃO removendo`);
+    return;
+  }
+
+  // Remove o jogador da vaga (apenas se vinculado = false)
   const { error: deleteError } = await supabase.from('sala_jogadores').delete()
     .eq('sala_id', salaId).eq('user_id', userId).eq('vinculado', false);
 
