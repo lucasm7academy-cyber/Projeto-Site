@@ -723,6 +723,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     }
   }, [sala?.id, sala?.draft_id, sala?.estado]);
 
+  // Auto-open resultado modal quando partida está encerrada
+  useEffect(() => {
+    if (sala && sala.estado === 'encerrada' && !visualizandoPartida) {
+      setVisualizandoPartida(true);
+    }
+  }, [sala?.estado, visualizandoPartida]);
 
   if (loading || !sala) {
     return (
@@ -752,13 +758,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       </Suspense>
     );
   }
-
-  // Auto-open resultado modal quando partida está encerrada
-  useEffect(() => {
-    if (sala.estado === 'encerrada' && !visualizandoPartida) {
-      setVisualizandoPartida(true);
-    }
-  }, [sala.estado]);
 
   const isX1 = sala.modo === '1v1';
   const roles: Role[] = isX1 ? ['MID'] : ['TOP', 'JG', 'MID', 'ADC', 'SUP'];
