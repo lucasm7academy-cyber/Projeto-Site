@@ -1463,7 +1463,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             <div className="flex items-center justify-between mb-[3vmin]">
               <h3 className="text-[2.5vmin] font-black text-white uppercase tracking-tight">Resultado da Partida</h3>
               <button
-                onClick={() => setVisualizandoPartida(false)}
+                onClick={() => navigate('/jogar')}
                 className="p-[1vmin] hover:bg-white/10 rounded-lg transition-colors"
               >
                 <X className="w-[2vmin] h-[2vmin] text-white/60" />
@@ -1472,8 +1472,22 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
             {/* Resultado */}
             {sala.vencedor && (
-              <div className="mb-[3vmin] p-[2vmin] rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                <p className="text-[1.3vmin] font-black text-yellow-400 uppercase tracking-widest">
+              <div
+                className={`mb-[3vmin] p-[2vmin] rounded-lg border ${
+                  sala.vencedor === 'A'
+                    ? 'bg-blue-500/20 border-blue-500/40'
+                    : sala.vencedor === 'B'
+                    ? 'bg-red-500/20 border-red-500/40'
+                    : 'bg-gray-500/20 border-gray-500/40'
+                }`}
+              >
+                <p className={`text-[1.3vmin] font-black uppercase tracking-widest ${
+                  sala.vencedor === 'A'
+                    ? 'text-blue-300'
+                    : sala.vencedor === 'B'
+                    ? 'text-red-300'
+                    : 'text-gray-300'
+                }`}>
                   🏆 Vencedor: {sala.vencedor === 'A' ? (sala.timeANome ?? 'Equipe Azul') : sala.vencedor === 'B' ? (sala.timeBNome ?? 'Equipe Vermelha') : 'Empate'}
                 </p>
               </div>
@@ -1483,12 +1497,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             <div className="grid grid-cols-2 gap-[3vmin]">
               {/* Time Azul */}
               <div className="flex flex-col gap-[1.5vmin]">
-                <h4 className="text-[1.5vmin] font-black text-blue-400 uppercase tracking-widest">Time Azul</h4>
+                <h4 className="text-[1.5vmin] font-black text-blue-400 uppercase tracking-widest">
+                  {sala.vencedor === 'A' && '🏆 '}{sala.timeANome ?? 'Equipe Azul'}{sala.vencedor === 'A' && ' - Vencedora'}
+                </h4>
                 {resultadoPartida && Array.isArray(resultadoPartida.jogadores)
                   ? resultadoPartida.jogadores.filter((j: any) => j.isTimeA).map((jogador: any, idx: number) => (
                       <div key={idx} className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-[1.5vmin]">
                         <p className="text-[1.1vmin] font-black text-blue-300 mb-[0.8vmin]">
-                          {jogador.nome} - {ROLE_CONFIG[jogador.role as Role]?.label}
+                          {jogador.nome}{jogador.tag && ` #${jogador.tag}`} / {ROLE_CONFIG[jogador.role as Role]?.label}
                         </p>
                         {draftFinalizado.blue_picks && draftFinalizado.blue_picks.length > 0 && (
                           <div className="flex gap-[0.8vmin] flex-wrap">
@@ -1517,12 +1533,14 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
               {/* Time Vermelho */}
               <div className="flex flex-col gap-[1.5vmin]">
-                <h4 className="text-[1.5vmin] font-black text-red-400 uppercase tracking-widest">Time Vermelho</h4>
+                <h4 className="text-[1.5vmin] font-black text-red-400 uppercase tracking-widest">
+                  {sala.vencedor === 'B' && '🏆 '}{sala.timeBNome ?? 'Equipe Vermelha'}{sala.vencedor === 'B' && ' - Vencedora'}
+                </h4>
                 {resultadoPartida && Array.isArray(resultadoPartida.jogadores)
                   ? resultadoPartida.jogadores.filter((j: any) => !j.isTimeA).map((jogador: any, idx: number) => (
                       <div key={idx} className="bg-red-500/10 border border-red-500/30 rounded-lg p-[1.5vmin]">
                         <p className="text-[1.1vmin] font-black text-red-300 mb-[0.8vmin]">
-                          {jogador.nome} - {ROLE_CONFIG[jogador.role as Role]?.label}
+                          {jogador.nome}{jogador.tag && ` #${jogador.tag}`} / {ROLE_CONFIG[jogador.role as Role]?.label}
                         </p>
                         {draftFinalizado.red_picks && draftFinalizado.red_picks.length > 0 && (
                           <div className="flex gap-[0.8vmin] flex-wrap">
@@ -1550,12 +1568,31 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
               </div>
             </div>
 
+            {/* PIX */}
+            {resultadoPartida && Array.isArray(resultadoPartida.jogadores) && (
+              <div className="mt-[3vmin] pt-[3vmin] border-t border-white/10">
+                <h4 className="text-[1.3vmin] font-black text-white/80 uppercase tracking-widest mb-[1.5vmin]">PIX dos Jogadores</h4>
+                <div className="grid grid-cols-1 gap-[1vmin]">
+                  {resultadoPartida.jogadores.map((jogador: any, idx: number) => (
+                    <div key={idx} className="bg-white/5 border border-white/10 rounded-lg p-[1.2vmin]">
+                      <p className="text-[0.95vmin] font-bold text-white/90 mb-[0.3vmin]">
+                        {jogador.nome}{jogador.tag && ` #${jogador.tag}`}
+                      </p>
+                      <p className="text-[0.85vmin] text-white/60 font-mono">
+                        {jogador.pix ? jogador.pix : 'Sem PIX cadastrado'}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-[2vmin] mt-[3vmin]">
               <button
-                onClick={() => setVisualizandoPartida(false)}
+                onClick={() => navigate('/jogar')}
                 className="flex-1 py-[2vmin] rounded-xl bg-white/5 hover:bg-white/10 text-white/60 font-black uppercase tracking-widest text-[1.2vmin] transition-colors"
               >
-                Fechar
+                Voltar para Jogar
               </button>
             </div>
           </motion.div>
