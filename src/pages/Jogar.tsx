@@ -195,7 +195,7 @@ const ModalSenha = ({ nome, onClose, onConfirm, erro }: any) => {
 
 const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial }: any) => {
   const [modo, setModo] = useState<ModoJogo>(modoInicial || '5v5');
-  const [mpoints, setMpoints] = useState(100); // Começa com 100 MP (mínimo)
+  const [mpoints, setMpoints] = useState(0); // MVP: Começa com 0 MC (sem apostas por enquanto)
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [temSenha, setTemSenha] = useState(false);
@@ -281,22 +281,28 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
           <div className="space-y-3">
             <label className="text-white/40 text-[10px] uppercase tracking-widest font-bold">Valor da Partida</label>
             <div className="grid grid-cols-3 gap-2">
-              {OPCOES_MPOINTS.map((op) => (
-                <button
-                  key={op.valor}
-                  onClick={() => setMpoints(op.valor)}
-                  className="p-2.5 rounded-xl text-center transition-all border"
-                  style={
-                    mpoints === op.valor
-                      ? { borderColor: op.cor, background: `${op.cor}18`, color: op.cor }
-                      : { borderColor: 'rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.3)' }
-                  }
-                >
-                  <p className="text-xs font-black uppercase">
-                    💰 {op.valor} MP
-                  </p>
-                </button>
-              ))}
+              {OPCOES_MPOINTS.map((op) => {
+                const isLocked = op.valor > 0; // Apenas valor 0 (casual) está disponível
+                return (
+                  <button
+                    key={op.valor}
+                    onClick={() => !isLocked && setMpoints(op.valor)}
+                    disabled={isLocked}
+                    className={`p-2.5 rounded-xl text-center transition-all border ${isLocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                    style={
+                      mpoints === op.valor && !isLocked
+                        ? { borderColor: op.cor, background: `${op.cor}18`, color: op.cor }
+                        : { borderColor: isLocked ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.05)',
+                            background: isLocked ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.03)',
+                            color: isLocked ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.3)' }
+                    }
+                  >
+                    <p className="text-xs font-black uppercase">
+                      {isLocked ? `🔒 Em breve` : `💰 ${op.valor} MC`}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
