@@ -1,9 +1,6 @@
 {
   "buildCommand": "npm run build",
   "devCommand": "npm run dev",
-  "env": [],
-  "buildOutput": "dist",
-  "cleanUrls": true,
   "rewrites": [
     {
       "source": "/(.*)",
