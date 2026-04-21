@@ -288,7 +288,7 @@ const ModalCriarSala = ({ onClose, onCreate, usuarioAtual, userTeam, modoInicial
                     key={op.valor}
                     onClick={() => !isLocked && setMpoints(op.valor)}
                     disabled={isLocked}
-                    className={`p-2.5 rounded-xl text-center transition-all border ${isLocked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                    className={`p-2.5 rounded-xl text-center transition-all border ${isLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                     style={
                       mpoints === op.valor && !isLocked
                         ? { borderColor: op.cor, background: `${op.cor}18`, color: op.cor }
