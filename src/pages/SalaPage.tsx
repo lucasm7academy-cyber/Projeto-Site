@@ -1568,21 +1568,59 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
               </div>
             </div>
 
-            {/* PIX */}
-            {resultadoPartida && Array.isArray(resultadoPartida.jogadores) && (
+            {/* PICKS dos Campeões */}
+            {draftFinalizado && (draftFinalizado.blue_picks?.length > 0 || draftFinalizado.red_picks?.length > 0) && (
               <div className="mt-[3vmin] pt-[3vmin] border-t border-white/10">
-                <h4 className="text-[1.3vmin] font-black text-white/80 uppercase tracking-widest mb-[1.5vmin]">PIX dos Jogadores</h4>
-                <div className="grid grid-cols-1 gap-[1vmin]">
-                  {resultadoPartida.jogadores.map((jogador: any, idx: number) => (
-                    <div key={idx} className="bg-white/5 border border-white/10 rounded-lg p-[1.2vmin]">
-                      <p className="text-[0.95vmin] font-bold text-white/90 mb-[0.3vmin]">
-                        {jogador.nome}{jogador.tag && ` #${jogador.tag}`}
-                      </p>
-                      <p className="text-[0.85vmin] text-white/60 font-mono">
-                        {jogador.pix ? jogador.pix : 'Sem PIX cadastrado'}
-                      </p>
+                <h4 className="text-[1.3vmin] font-black text-white/80 uppercase tracking-widest mb-[1.5vmin]">Campeões Escolhidos</h4>
+                <div className="grid grid-cols-2 gap-[2vmin]">
+                  {/* Blue Picks */}
+                  {draftFinalizado.blue_picks && draftFinalizado.blue_picks.length > 0 && (
+                    <div>
+                      <p className="text-[0.9vmin] font-bold text-blue-300 mb-[0.8vmin]">Time Azul</p>
+                      <div className="flex gap-[0.8vmin] flex-wrap">
+                        {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
+                          const champ = champions[champId];
+                          return champ ? (
+                            <div
+                              key={idx}
+                              className="w-[6vmin] h-[6vmin] rounded-lg border border-blue-500/40 bg-blue-500/10 flex items-center justify-center overflow-hidden group"
+                              title={champ.name}
+                            >
+                              <img
+                                src={buildChampionIconUrl(champId, versionDDR)}
+                                alt={champ.name}
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                              />
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
                     </div>
-                  ))}
+                  )}
+                  {/* Red Picks */}
+                  {draftFinalizado.red_picks && draftFinalizado.red_picks.length > 0 && (
+                    <div>
+                      <p className="text-[0.9vmin] font-bold text-red-300 mb-[0.8vmin]">Time Vermelho</p>
+                      <div className="flex gap-[0.8vmin] flex-wrap">
+                        {draftFinalizado.red_picks.map((champId: string, idx: number) => {
+                          const champ = champions[champId];
+                          return champ ? (
+                            <div
+                              key={idx}
+                              className="w-[6vmin] h-[6vmin] rounded-lg border border-red-500/40 bg-red-500/10 flex items-center justify-center overflow-hidden group"
+                              title={champ.name}
+                            >
+                              <img
+                                src={buildChampionIconUrl(champId, versionDDR)}
+                                alt={champ.name}
+                                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                              />
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
