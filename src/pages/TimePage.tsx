@@ -1002,6 +1002,8 @@ export default function TimePage() {
           .from('times')
           .update({ dono_id: novoCapitao.user_id })
           .eq('id', time.id);
+        // Recarregar para atualizar userRole do novo capitão
+        await load();
       }
       await supabase
         .from('time_membros')

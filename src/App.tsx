@@ -1,4 +1,4 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { getDDRVersion } from "./api/riot";
 
@@ -8,23 +8,24 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Layout from "./components/Layout";
 import Lobby from "./pages/Lobby";
-import Vincular from "./pages/Vincular";
-import Perfil from "./pages/perfil";
-import Equipes from "./pages/equipes";
+import Jogar from "./pages/Jogar";
+import SalaPage from "./pages/SalaPage";
 import { VerificacaoProvider } from './contexts/VerificacaoContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import VerificacaoStatus from './components/VerificacaoStatus';
 import ResetHandler from "./pages/ResetHandler";
-import Players from "./pages/players";
-import Jogar from "./pages/Jogar";
-import TimePage from "./pages/TimePage";
-import SalaPage from "./pages/SalaPage";
-import Admin from "./pages/Admin";
-import AdminCargos from "./pages/AdminCargos";
-import Streamers from "./pages/Streamers";
-import Politicas from "./pages/Politicas";
-import Tutorial from "./pages/Tutorial";
-import Campeonatos from './pages/campeonatos';
+
+const Vincular = lazy(() => import("./pages/Vincular"));
+const Perfil = lazy(() => import("./pages/perfil"));
+const Equipes = lazy(() => import("./pages/equipes"));
+const Players = lazy(() => import("./pages/players"));
+const TimePage = lazy(() => import("./pages/TimePage"));
+const Admin = lazy(() => import("./pages/Admin"));
+const AdminCargos = lazy(() => import("./pages/AdminCargos"));
+const Streamers = lazy(() => import("./pages/Streamers"));
+const Politicas = lazy(() => import("./pages/Politicas"));
+const Tutorial = lazy(() => import("./pages/Tutorial"));
+const Campeonatos = lazy(() => import('./pages/campeonatos'));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -39,6 +40,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
   }
 
   return children;
+}
+
+function RouteWithSuspense({ element }: { element: React.ReactNode }) {
+  return <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-black text-primary">Carregando...</div>}>{element}</Suspense>;
 }
 
 export default function App() {
@@ -58,21 +63,21 @@ export default function App() {
               <Route path="/jogar" element={<PrivateRoute><Jogar /></PrivateRoute>} />
               <Route path="/estatisticas" element={<PrivateRoute><div>Estatísticas</div></PrivateRoute>} />
               <Route path="/historico" element={<PrivateRoute><div>Histórico</div></PrivateRoute>} />
-              <Route path="/perfil" element={<PrivateRoute><Perfil /></PrivateRoute>} />
+              <Route path="/perfil" element={<PrivateRoute><RouteWithSuspense element={<Perfil />} /></PrivateRoute>} />
               <Route path="/partidas" element={<PrivateRoute><div>Partidas</div></PrivateRoute>} />
-              <Route path="/times" element={<PrivateRoute><Equipes /></PrivateRoute>} />
-              <Route path="/vincular" element={<PrivateRoute><Vincular /></PrivateRoute>} />
+              <Route path="/times" element={<PrivateRoute><RouteWithSuspense element={<Equipes />} /></PrivateRoute>} />
+              <Route path="/vincular" element={<PrivateRoute><RouteWithSuspense element={<Vincular />} /></PrivateRoute>} />
               <Route path="/configuracoes" element={<PrivateRoute><div>Configurações</div></PrivateRoute>} />
-              <Route path="/políticas" element={<PrivateRoute><Politicas /></PrivateRoute>} />
+              <Route path="/políticas" element={<PrivateRoute><RouteWithSuspense element={<Politicas />} /></PrivateRoute>} />
               <Route path="/sejavip" element={<PrivateRoute><div>Seja VIP</div></PrivateRoute>} />
               <Route path="/suporte" element={<PrivateRoute><div>Suporte</div></PrivateRoute>} />
-              <Route path="/players" element={<PrivateRoute><Players /></PrivateRoute>} />
-              <Route path="/campeonatos" element={<PrivateRoute><Campeonatos /></PrivateRoute>} />
-              <Route path="/streamers" element={<PrivateRoute><Streamers /></PrivateRoute>} />
-              <Route path="/times/:id" element={<PrivateRoute><TimePage /></PrivateRoute>} />
+              <Route path="/players" element={<PrivateRoute><RouteWithSuspense element={<Players />} /></PrivateRoute>} />
+              <Route path="/campeonatos" element={<PrivateRoute><RouteWithSuspense element={<Campeonatos />} /></PrivateRoute>} />
+              <Route path="/streamers" element={<PrivateRoute><RouteWithSuspense element={<Streamers />} /></PrivateRoute>} />
+              <Route path="/times/:id" element={<PrivateRoute><RouteWithSuspense element={<TimePage />} /></PrivateRoute>} />
               <Route path="/sala/:id"  element={<PrivateRoute><SalaPage /></PrivateRoute>} />
-              <Route path="/admin"    element={<PrivateRoute><Admin /></PrivateRoute>} />
-              <Route path="/admin/cargos"    element={<PrivateRoute><AdminCargos /></PrivateRoute>} />
+              <Route path="/admin"    element={<PrivateRoute><RouteWithSuspense element={<Admin />} /></PrivateRoute>} />
+              <Route path="/admin/cargos"    element={<PrivateRoute><RouteWithSuspense element={<AdminCargos />} /></PrivateRoute>} />
             </Route>
           </Routes>
         </BrowserRouter>

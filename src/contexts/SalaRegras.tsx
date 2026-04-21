@@ -213,7 +213,7 @@ export function SalaRegrasProvider({
 }: SalaRegrasProviderProps) {
   const [sala, setSala]       = useState<Sala | null>(null);
   const [votos, setVotos]     = useState<Voto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading]             = useState(false);
   const [erro]                = useState<string | null>(null);
   const [erroEntrada, setErroEntrada] = useState<string | null>(null);
   const [timerConfirmacao, setTimerConfirmacao] = useState(TIMER_CONFIRMACAO_S);
@@ -230,28 +230,23 @@ export function SalaRegrasProvider({
   const otimisticoRef       = useRef(false); // true = aguardando DB confirmar update local
   const entrandoVagaRef     = useRef(false); // evita double-click / requisições simultâneas
   const leaveTimeoutsRef    = useRef<Record<string, NodeJS.Timeout>>({}); // timeouts para remoção após leave
+  const recarregarTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined); // debounce Realtime updates
 
   // ── Carregamento e realtime ────────────────────────────────────────────────
 
   const recarregar = useCallback(async () => {
-    console.log('[recarregar] Recarregando sala:', salaId);
     const atualizada = await buscarSalaCompleta(salaId);
-    console.log('[recarregar] Dados recebidos:', { timeBLogo: atualizada?.timeBLogo, timeALogo: atualizada?.timeALogo });
-    // Nota: NÃO reseta otimisticoRef aqui.
-    // Quem gerencia o flag é a função de ação (acaoEntrarVaga, etc.) via try/finally.
-    // Isso garante que o DELETE intermediário do confirmarPresencaDB não dispare
-    // a auto-transição antes do INSERT chegar.
-    if (atualizada) {
-      setSala(atualizada);
-      // Não redireciona automaticamente quando sala encerra
-      // Deixa o usuário ver o resultado e clicar em "Voltar"
-      // if (atualizada.estado === 'encerrada') onEncerrada?.();
-    } else {
-      // Sala removida do banco (deletada pelo criador) → trata como encerrada.
-      // Deixa usuário ver resultado antes de sair
-      // onEncerrada?.();
-    }
-  }, [salaId, onEncerrada]);
+    if (atualizada) setSala(atualizada);
+  }, [salaId]);
+
+  // Debounce Realtime updates — agrupa múltiplas mudanças em uma única query (100ms)
+  const recarregarComDebounce = useCallback(() => {
+    if (recarregarTimeoutRef.current) clearTimeout(recarregarTimeoutRef.current);
+    recarregarTimeoutRef.current = setTimeout(() => {
+      recarregar();
+      recarregarTimeoutRef.current = undefined;
+    }, 100);
+  }, [recarregar]);
 
   const recarregarVotos = useCallback(async (fase: 'aguardando_inicio' | 'finalizacao') => {
     const novosVotos = await buscarVotos(salaId, fase);
@@ -259,21 +254,14 @@ export function SalaRegrasProvider({
   }, [salaId]);
 
   useEffect(() => {
-    setLoading(true);
-    recarregar().finally(() => setLoading(false));
+    recarregar();
 
     const channel = supabase
       .channel(`sala_regras_${salaId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'salas',
-          filter: `id=eq.${salaId}` }, (payload) => {
-            console.log('[Realtime] salas table changed:', payload.eventType);
-            recarregar();
-          })
+          filter: `id=eq.${salaId}` }, () => recarregarComDebounce())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores',
-          filter: `sala_id=eq.${salaId}` }, (payload) => {
-            console.log('[Realtime] sala_jogadores changed:', payload.eventType);
-            recarregar();
-          })
+          filter: `sala_id=eq.${salaId}` }, () => recarregarComDebounce())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_votos',
           filter: `sala_id=eq.${salaId}` }, (payload) => {
             console.log('[Realtime] sala_votos changed:', payload.eventType);

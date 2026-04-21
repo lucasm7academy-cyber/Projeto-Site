@@ -23,13 +23,13 @@ export default function NotificationBell() {
   const carregarNotificacoes = async (userId: string) => {
     const allNotifs: any[] = [];
 
-    // 1. Solicitações pendentes para times que o usuário é capitão
+    // 1. Solicitações pendentes para o usuário (capitão do time)
     const { data: pendentes, error: errPend } = await supabase
       .from('time_convites')
       .select('id, time_id, de_user_id, riot_id, role, mensagem, criado_em')
       .eq('tipo', 'solicitacao')
       .eq('status', 'pendente')
-      .neq('de_user_id', userId)
+      .eq('para_user_id', userId)
       .order('criado_em', { ascending: false });
 
     if (errPend) console.error('Notif pendentes erro:', errPend);

@@ -1,9 +1,9 @@
 // src/pages/SalaPage.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Crown, UserPlus, Check, ArrowLeft, ArrowLeftToLine,ArrowLeftFromLine, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Send, Tv2
+  Crown, UserPlus, Check, ArrowLeft, ArrowLeftToLine,ArrowLeftFromLine, PanelLeftClose, Lock, Sword, X, Eye, AlertTriangle, Trophy, Copy, Send, Tv2
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getCachedUser } from '../contexts/AuthContext';
@@ -16,11 +16,11 @@ import { buscarDraftDaSala } from '../api/draft';
 import { buscarCargoUsuario } from '../api/users';
 import { SalaRegrasProvider, useSalaRegras } from '../contexts/SalaRegras';
 import { getModoInfo, getMPointsInfo, ROLE_CONFIG, type Role } from '../components/partidas/salaConfig';
-import { DraftRoom } from '../components/draft/DraftRoom';  // ✅ NOVO IMPORT
 import { type DraftState, type Champion } from '../components/draft/draftTypes';
 import { StreamModal } from '../components/StreamModal';
 import { StreamerPanel } from '../components/StreamerPanel';
-import { WatchStreamPanel } from '../components/WatchStreamPanel';
+
+const DraftRoom = lazy(() => import('../components/draft/DraftRoom').then(m => ({ default: m.DraftRoom })));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPO DO USUÁRIO
@@ -735,18 +735,20 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   // Quando o draft termina, acaoDraftFinalizado atribui o código e avança para aguardando_inicio.
   if (sala.estado === 'travada' && sala.draft_id) {
     return (
-      <DraftRoom
-        salaId={sala.id}
-        usuarioId={usuarioAtual.id}
-        modo={sala.modo}
-        timeALogo={sala.timeALogo}
-        timeBLogo={sala.timeBLogo}
-        codigoPartida={sala.codigoPartida}
-        cargoUsuario={cargoUsuario}
-        onDraftFinalizado={acaoDraftFinalizado}
-        onPickTimeout={acaoCancelarDraftPorTimeout}
-        onDraftReset={() => acaoCancelarDraftPorTimeout(usuarioAtual.id)}
-      />
+      <Suspense fallback={<div className="w-full h-full bg-black flex items-center justify-center"><div className="text-white">Carregando draft...</div></div>}>
+        <DraftRoom
+          salaId={sala.id}
+          usuarioId={usuarioAtual.id}
+          modo={sala.modo}
+          timeALogo={sala.timeALogo}
+          timeBLogo={sala.timeBLogo}
+          codigoPartida={sala.codigoPartida}
+          cargoUsuario={cargoUsuario}
+          onDraftFinalizado={acaoDraftFinalizado}
+          onPickTimeout={acaoCancelarDraftPorTimeout}
+          onDraftReset={() => acaoCancelarDraftPorTimeout(usuarioAtual.id)}
+        />
+      </Suspense>
     );
   }
 
@@ -791,11 +793,10 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
   const slotWidths: Partial<Record<Role, string>> & Record<string, string> = {
     TOP: 'w-[42vmin]',
-    JG:  'w-[40vmin]',
-    MID: isX1 ? 'w-[42vmin]' : 'w-[38vmin]',
-    ADC: 'w-[40vmin]',
+    JG:  'w-[42vmin]',
+    MID: isX1 ? 'w-[42vmin]' : 'w-[42vmin]',
+    ADC: 'w-[42vmin]',
     SUP: 'w-[42vmin]',
-    RES: 'w-[38vmin]',
   };
 
   const copiarLink = () => {
@@ -1297,7 +1298,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       <div className="w-full h-[10vmin] flex items-start justify-center pt-[2vmin] z-50">
         <div className="w-full max-w-6xl h-[7vmin] bg-black rounded-xl border border-white/10 flex items-center px-[3vmin] shadow-2xl mx-4 justify-between relative overflow-visible">
           <div className="flex items-center">
-            <button onClick={acaoSairDaSala} className="mr-[3vmin] text-red-500 hover:text-green-500 transition-colors">
+            <button onClick={acaoSairDaSala} className="mr-[3vmin] text-yellow-500 hover:text-red-500 transition-colors">
               <ArrowLeftFromLine className="w-[2.5vmin] h-[2.5vmin]" />
             </button>
             <div className="flex items-center gap-[2vmin]">
@@ -1344,9 +1345,9 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] ${isX1 ? 'gap-[68vmin]' : 'gap-[76vmin]'}`}>
         {/* TEAM HEADERS COM VS NO MEIO */}
         {sala.modo === 'time_vs_time' ? (
-          <div className="flex flex-col items-center gap-[3vmin]">
+          <div className="flex flex-col items-center gap-[3vmin] ">
             {/* Vagas lado a lado */}
-            <div className="flex gap-[76vmin]">
+            <div className="flex gap-[90vmin]">
               <div className="flex flex-col gap-[1.2vmin] items-start">
                 {roles.map((role) => renderSlot(role, true))}
               </div>
@@ -1360,20 +1361,18 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           <>
             <div className="flex flex-col gap-[1.5vmin] items-start">
               <div className="relative mb-[1vmin] ml-[0.5vmin] w-[22vmin]">
-                <div className="absolute inset-0 bg-[#3B82F6]/10 skew-x-[-12deg] border-l-2 border-[#3B82F6]" />
+                 <div className="absolute inset-0 bg-[#3B82F6]/0 skew-x-[-12deg] border-l-4 border-[#3B82F6]" />
                 <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col">
-                  <span className="text-[0.8vmin] font-black text-[#3B82F6] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe</span>
-                  <span className="text-[1.6vmin] font-black text-white uppercase tracking-wider leading-none">Azul</span>
+                  <span className="text-[1vmin] font-black text-[#3B82F6] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe Azul</span>
                 </div>
-              </div>
+              </div>                                                                                                                                
               {roles.map((role) => renderSlot(role, true))}
             </div>
             <div className="flex flex-col gap-[1.5vmin] items-end text-right">
               <div className="relative mb-[1vmin] mr-[0.5vmin] w-[22vmin]">
-                <div className="absolute inset-0 bg-[#ef4444]/10 skew-x-[12deg] border-r-2 border-[#ef4444]" />
+                <div className="absolute inset-0 bg-[#ef4444]/0 skew-x-[12deg] border-r-4 border-[#ef4444]" />
                 <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col items-end">
-                  <span className="text-[0.8vmin] font-black text-[#ef4444] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe</span>
-                  <span className="text-[1.6vmin] font-black text-white uppercase tracking-wider leading-none">Vermelha</span>
+                  <span className="text-[1vmin] font-black text-[#ef4444] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe Vermelha</span>
                 </div>
               </div>
               {roles.map((role) => renderSlot(role, false))}
