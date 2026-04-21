@@ -619,7 +619,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         }
 
         console.log('[SalaPage] ✅ Stream ativa carregada:', data);
-        setSalaStreamAtiva(data);
+        setSalaStreamAtiva(data?.ativo ? data : null);
       } catch (err) {
         console.error('[SalaPage] ❌ Exception ao carregar stream:', err);
       }
@@ -647,11 +647,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           if (eventType === 'INSERT' || eventType === 'UPDATE') {
             const newStream = payload.new as any;
             console.log('[SalaPage] INSERT/UPDATE received - newStream:', newStream, 'ativo:', newStream?.ativo);
-            if (newStream?.ativo) {
+            if (newStream?.ativo === true) {
               console.log('[SalaPage] ✅ Ativando stream para todos:', newStream);
               setSalaStreamAtiva(newStream);
             } else {
-              console.log('[SalaPage] ⚠️ Stream não está ativo, ignorando');
+              console.log('[SalaPage] ⚠️ Stream não está ativo, desativando');
+              setSalaStreamAtiva(null);
             }
           } else if (eventType === 'DELETE') {
             console.log('[SalaPage] ❌ DELETE - Desativando stream');
