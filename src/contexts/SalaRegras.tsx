@@ -293,17 +293,21 @@ export function SalaRegrasProvider({
         }
 
         // Limpa jogadores fantasmas: estão no slot mas não estão no canal de presence
-        const { data: slots } = await supabase
-          .from('sala_jogadores')
-          .select('user_id')
-          .eq('sala_id', salaId)
-          .eq('vinculado', false);
-        if (slots) {
-          for (const slot of slots) {
-            // ❌ Se usuário saiu (não está em presentIds) E não tem timeout, remove imediatamente
-            if (!presentIds.has(slot.user_id) && !leaveTimeoutsRef.current[slot.user_id]) {
-              console.log('[SalaRegras] Removendo jogador fantasma:', slot.user_id);
-              sairDaVaga(salaId, slot.user_id).catch(() => {});
+        // ⚠️ Apenas em estados de prévia (preenchendo/confirmacao)
+        // Durante draft/partida, confiamos no timeout para dar chance de reconexão
+        if (sala && ['preenchendo', 'confirmacao'].includes(sala.estado)) {
+          const { data: slots } = await supabase
+            .from('sala_jogadores')
+            .select('user_id')
+            .eq('sala_id', salaId)
+            .eq('vinculado', false);
+          if (slots) {
+            for (const slot of slots) {
+              // ❌ Se usuário saiu (não está em presentIds) E não tem timeout, remove imediatamente
+              if (!presentIds.has(slot.user_id) && !leaveTimeoutsRef.current[slot.user_id]) {
+                console.log('[SalaRegras] Removendo jogador fantasma:', slot.user_id);
+                sairDaVaga(salaId, slot.user_id).catch(() => {});
+              }
             }
           }
         }
@@ -311,6 +315,7 @@ export function SalaRegrasProvider({
       .on('presence', { event: 'leave' }, ({ leftPresences }) => {
         // Quando alguém sai, aguarda 10 segundos antes de remover
         // Isso permite recarga rápida sem ser removido da vaga
+        // ⚠️ NÃO remove durante draft/em_partida/finalizacao — apenas em preenchendo/confirmacao
         for (const p of (leftPresences as unknown as Array<{ user_id: string }>)) {
           if (p.user_id) {
             console.log('[SalaRegras] Presença deixou a sala, aguardando 10s:', p.user_id);
@@ -320,8 +325,15 @@ export function SalaRegrasProvider({
               clearTimeout(leaveTimeoutsRef.current[p.user_id]);
             }
 
-            // Define novo timeout
+            // Define novo timeout — mas SÓ remove se sala NÃO está em draft/partida
             leaveTimeoutsRef.current[p.user_id] = setTimeout(() => {
+              // ✅ Só remove se sala estiver em estados de prévia (preenchendo/confirmacao)
+              // Durante draft/partida, timeout é ignorado — presença vai resolver quando reconnectar
+              if (sala && ['travada', 'aguardando_inicio', 'em_partida', 'finalizacao'].includes(sala.estado)) {
+                console.log('[SalaRegras] Usuário saiu durante', sala.estado, '— NÃO removendo, aguardando reconexão:', p.user_id);
+                return;
+              }
+
               console.log('[SalaRegras] Removendo usuário após 10s de ausência:', p.user_id);
               sairDaVaga(salaId, p.user_id).catch((err) => {
                 console.error('[SalaRegras] Erro ao remover usuário:', err);
