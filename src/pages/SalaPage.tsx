@@ -753,39 +753,12 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     );
   }
 
-  // Mostrar visualização de partida encerrada
-  if (sala.estado === 'encerrada' && !visualizandoPartida) {
-    const nomeVencedor = sala.vencedor === 'A'
-      ? (sala.timeANome ?? 'Equipe Azul')
-      : sala.vencedor === 'B'
-      ? (sala.timeBNome ?? 'Equipe Vermelha')
-      : 'Empate';
-
-    return (
-      <div className="flex-1 bg-[#050505] flex flex-col items-center justify-center">
-        <div className="flex flex-col items-center gap-[4vmin] text-center">
-          <div className="flex flex-col items-center gap-[1vmin]">
-            <p className="text-[2vmin] font-black text-white/80 uppercase tracking-widest">Partida Finalizada</p>
-            <p className="text-[1.2vmin] text-white/40">
-              {sala.vencedor ? `Vencedor: ${nomeVencedor}` : 'Resultado pendente'}
-            </p>
-          </div>
-          <button
-            onClick={() => setVisualizandoPartida(true)}
-            className="px-[4vmin] py-[2vmin] bg-blue-600/20 border border-blue-500/40 text-blue-400 hover:bg-blue-600/30 hover:border-blue-500/60 rounded-lg font-black text-[1.3vmin] uppercase tracking-widest transition-all"
-          >
-            Visualizar Partida
-          </button>
-          <button
-            onClick={acaoSairDaSala}
-            className="px-[4vmin] py-[2vmin] bg-white/5 border border-white/10 text-white/60 hover:bg-white/10 hover:border-white/20 rounded-lg font-black text-[1.2vmin] uppercase tracking-widest transition-all"
-          >
-            Voltar
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Auto-open resultado modal quando partida está encerrada
+  useEffect(() => {
+    if (sala.estado === 'encerrada' && !visualizandoPartida) {
+      setVisualizandoPartida(true);
+    }
+  }, [sala.estado]);
 
   const isX1 = sala.modo === '1v1';
   const roles: Role[] = isX1 ? ['MID'] : ['TOP', 'JG', 'MID', 'ADC', 'SUP'];
