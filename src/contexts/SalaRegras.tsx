@@ -507,10 +507,10 @@ export function SalaRegrasProvider({
     // confirmacao → travada: todos confirmaram
     // Após travada, cria o draft e aguarda o draft finalizar para ir a aguardando_inicio.
     // A transição para aguardando_inicio é disparada por acaoDraftFinalizado (via DraftRoom).
-    const todosConfirmaram = jogadores.every(j => j.confirmado);
+    const todosConfirmaram = jogadores.length > 0 && jogadores.every(j => j.confirmado);
     console.log(`[Auto-transição] Confirmacao check: total=${total}/${max}, confirmados=${jogadores.filter(j => j.confirmado).length}, todosConfirmaram=${todosConfirmaram}`);
 
-    if (estado === 'confirmacao' && total === max && todosConfirmaram) {
+    if (estado === 'confirmacao' && total === max && jogadores.length === max && todosConfirmaram) {
       console.log(`[Auto-transição] ✅ CONFIRMAÇÃO → TRAVADA (todos confirmaram!)`);
       transicionandoRef.current = true;
       const fazer = async () => {
