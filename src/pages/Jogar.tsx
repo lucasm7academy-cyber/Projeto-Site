@@ -628,13 +628,13 @@ const Jogar = () => {
   // Criar sala
   const handleCriarSala = async (dados: any) => {
     if (!usuarioAtual) return;
-    
+
     // Se for Time vs Time, precisa ter um time
     if (dados.modo === 'time_vs_time' && !userTeam) {
       alert('⚠️ Você precisa estar em um time para criar salas Time vs Time!');
       return;
     }
-    
+
     const nova = await criarSala(dados, usuarioAtual);
     if (nova) {
       setShowCriarModal(false);
@@ -832,7 +832,7 @@ const Jogar = () => {
             {/* Filtros */}
             <div className="flex items-center gap-3">
               <SlidersHorizontal className="w-4 h-4 text-white/30" />
-              
+
               {/* Filtro Modo */}
               <select
                 value={filtroModo}

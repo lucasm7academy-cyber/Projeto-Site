@@ -506,7 +506,7 @@ function HextechActionBar({
                 Encerrar Partida
               </motion.button>
             ) : estado === 'em_partida' && !jogadorAtual ? (
-              <div className="px-[10vmin] py-[2vmin] border border-orange-500/20 bg-orange-500/5 rounded-sm">
+              <div className="px-[10vmin] py-[2vmin] border border-red-500/20 bg-red-500 rounded-sm">
                 <span className="text-[1.8vmin] font-black uppercase tracking-none text-orange-400">
                   Partida em Andamento
                 </span>
@@ -520,7 +520,7 @@ function HextechActionBar({
             ) : (
               <div className="px-[10vmin] py-[2vmin] border border-white/5 bg-white/5 rounded-sm">
                 <span className="text-[1.8vmin] font-black uppercase tracking-none text-white">
-                  Aguardando Jogadores
+                  Aguardando Jogadores...
                 </span>
               </div>
             )}
@@ -528,7 +528,7 @@ function HextechActionBar({
             <div className="flex flex-col items-center gap-1 mt-6 max-w-[40vmin]">
               <div className="flex items-center gap-2">
                 <div className={`w-1.5 h-1.5 rounded-full ${['em_partida', 'finalizacao'].includes(estado) ? 'bg-red-400' : estado === 'confirmacao' ? 'bg-yellow-400 animate-pulse' : 'bg-green-500 shadow-[0_0_10px_#22c55e]'} animate-pulse`} />
-                <span className="text-[1vmin] font-black uppercase tracking-[0.3em] text-white/20">
+                <span className="text-[1vmin] font-black uppercase tracking-[0.1em] text-white/20">
                   Status da Sala
                 </span>
               </div>
@@ -1342,7 +1342,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       )}
 
       {/* MIDDLE SECTION */}
-      <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] ${isX1 ? 'gap-[68vmin]' : 'gap-[76vmin]'}`}>
+      <div className={`w-full flex-1 flex items-center justify-center z-20 mt-[-12vh] ${isX1 ? 'gap-[80vmin]' : 'gap-[85vmin]'}`}>
         {/* TEAM HEADERS COM VS NO MEIO */}
         {sala.modo === 'time_vs_time' ? (
           <div className="flex flex-col items-center gap-[3vmin] ">
@@ -1359,20 +1359,20 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         ) : (
           /* OUTROS MODOS - Layout original */
           <>
-            <div className="flex flex-col gap-[1.5vmin] items-start">
+            <div className="flex flex-col gap-[1.2vmin] items-start">
               <div className="relative mb-[1vmin] ml-[0.5vmin] w-[22vmin]">
                  <div className="absolute inset-0 bg-[#3B82F6]/0 skew-x-[-12deg] border-l-4 border-[#3B82F6]" />
                 <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col">
-                  <span className="text-[1vmin] font-black text-[#3B82F6] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe Azul</span>
+                  <span className="text-[1.5vmin] font-black text-[#3B82F6] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Blue-Side</span>
                 </div>
               </div>                                                                                                                                
               {roles.map((role) => renderSlot(role, true))}
             </div>
-            <div className="flex flex-col gap-[1.5vmin] items-end text-right">
+            <div className="flex flex-col gap-[1.2vmin] items-end text-right">
               <div className="relative mb-[1vmin] mr-[0.5vmin] w-[22vmin]">
                 <div className="absolute inset-0 bg-[#ef4444]/0 skew-x-[12deg] border-r-4 border-[#ef4444]" />
                 <div className="relative px-[2vmin] py-[0.5vmin] flex flex-col items-end">
-                  <span className="text-[1vmin] font-black text-[#ef4444] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Equipe Vermelha</span>
+                  <span className="text-[1.5vmin] font-black text-[#ef4444] uppercase tracking-[0.4em] leading-none mb-[0.2vmin]">Red-Side</span>
                 </div>
               </div>
               {roles.map((role) => renderSlot(role, false))}

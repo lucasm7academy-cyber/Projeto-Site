@@ -745,11 +745,12 @@ export function SalaRegrasProvider({
     if (sala.draft_id) {
       await supabase.from('drafts').delete().eq('id', sala.draft_id);
     }
-    // 2. Volta pra confirmacao e reseta confirmações
-    await transicionarEstado(salaId, 'confirmacao');
+    // 2. Volta pra preenchendo (reinicia do zero) e reseta confirmações
+    await transicionarEstado(salaId, 'preenchendo');
     await resetarConfirmacoes(salaId);
-    // 3. Limpar draft_id
+    // 3. Limpar draft_id e votos de resultado
     await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
+    await supabase.from('sala_votos').delete().eq('sala_id', salaId).eq('tipo', 'finalizacao');
   }, [sala, salaId, usuarioAtual.id, jogadorAtual]);
 
   const acaoVotarResultado = useCallback(async (opcao: OpcaoVotoResultado) => {
