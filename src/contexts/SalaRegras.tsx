@@ -231,6 +231,7 @@ export function SalaRegrasProvider({
   const entrandoVagaRef     = useRef(false); // evita double-click / requisições simultâneas
   const leaveTimeoutsRef    = useRef<Record<string, NodeJS.Timeout>>({}); // timeouts para remoção após leave
   const recarregarTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined); // debounce Realtime updates
+  const salaRef             = useRef<Sala | null>(null); // rastreia estado atual para closures (não fica congelado)
 
   // ── Carregamento e realtime ────────────────────────────────────────────────
 
@@ -252,6 +253,11 @@ export function SalaRegrasProvider({
     const novosVotos = await buscarVotos(salaId, fase);
     setVotos(novosVotos);
   }, [salaId]);
+
+  // ── Manter salaRef.current sincronizado para closures de timeout ────────────
+  useEffect(() => {
+    salaRef.current = sala;
+  }, [sala]);
 
   useEffect(() => {
     recarregar();
@@ -329,8 +335,9 @@ export function SalaRegrasProvider({
             leaveTimeoutsRef.current[p.user_id] = setTimeout(() => {
               // ✅ Só remove se sala estiver em estados de prévia (preenchendo/confirmacao)
               // Durante draft/partida, timeout é ignorado — presença vai resolver quando reconnectar
-              if (sala && ['travada', 'aguardando_inicio', 'em_partida', 'finalizacao'].includes(sala.estado)) {
-                console.log('[SalaRegras] Usuário saiu durante', sala.estado, '— NÃO removendo, aguardando reconexão:', p.user_id);
+              // ⚠️ CRÍTICO: usar salaRef.current para pegar o estado ATUAL, não congelado na closure
+              if (salaRef.current && ['travada', 'aguardando_inicio', 'em_partida', 'finalizacao'].includes(salaRef.current.estado)) {
+                console.log('[SalaRegras] Usuário saiu durante', salaRef.current.estado, '— NÃO removendo, aguardando reconexão:', p.user_id);
                 return;
               }
 
