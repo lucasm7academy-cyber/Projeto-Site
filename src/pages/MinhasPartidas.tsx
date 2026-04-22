@@ -30,6 +30,7 @@ export default function MinhasPartidas() {
             modo,
             vencedor,
             created_at,
+            estado,
             time_a_nome,
             time_b_nome,
             sala_jogadores (id, user_id, nome, is_time_a)
@@ -38,16 +39,23 @@ export default function MinhasPartidas() {
           .order('created_at', { ascending: false });
 
         if (error) {
-          console.error('[MinhasPartidas] Erro:', error);
+          console.error('[MinhasPartidas] Erro na query:', error);
           return;
         }
+
+        console.log('[MinhasPartidas] Salas carregadas:', data?.length, 'total');
+        console.log('[MinhasPartidas] User ID:', user?.id);
 
         if (data) {
           // Filtrar apenas partidas que o usuário participou
           const minhasPartidas = data
-            .filter((sala: any) =>
-              sala.sala_jogadores.some((j: any) => j.user_id === user.id)
-            )
+            .filter((sala: any) => {
+              const participa = sala.sala_jogadores?.some((j: any) => j.user_id === user?.id);
+              if (!participa) {
+                console.log('[MinhasPartidas] Sala', sala.id, 'não tem este user. Jogadores:', sala.sala_jogadores?.map((j: any) => j.user_id));
+              }
+              return participa;
+            })
             .map((sala: any) => ({
               id: sala.id,
               modo: sala.modo,
@@ -58,6 +66,7 @@ export default function MinhasPartidas() {
               jogadores: sala.sala_jogadores,
             }));
 
+          console.log('[MinhasPartidas] Partidas do usuário:', minhasPartidas.length);
           setPartidas(minhasPartidas);
         }
       } catch (err) {
