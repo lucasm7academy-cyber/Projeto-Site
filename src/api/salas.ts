@@ -484,8 +484,21 @@ export async function entrarNaVaga(
 
 // ── Sair da vaga ──────────────────────────────────────────────────────────────
 export async function sairDaVaga(salaId: number, userId: string): Promise<void> {
-  // 🔒 PROTEÇÃO: nunca remove jogadores vinculados (durante partida/draft)
-  // Buscar o jogador para saber qual lado estava (time_a ou time_b)
+  // 🔒 PROTEÇÃO: nunca remove jogadores durante partida em andamento
+  // 1. Verificar estado da sala (se em qualquer fase de jogo, bloquear saída)
+  const { data: sala } = await supabase
+    .from('salas')
+    .select('estado')
+    .eq('id', salaId)
+    .maybeSingle();
+
+  const estadosEmPartida = ['confirmacao', 'travada', 'aguardando_inicio', 'em_partida', 'finalizacao'];
+  if (sala && estadosEmPartida.includes(sala.estado)) {
+    console.log(`[sairDaVaga] Sala em estado "${sala.estado}" — NÃO permitindo saída`);
+    return;
+  }
+
+  // 2. Buscar o jogador para saber qual lado estava (time_a ou time_b)
   const { data: jogador } = await supabase
     .from('sala_jogadores')
     .select('is_time_a, vinculado')
