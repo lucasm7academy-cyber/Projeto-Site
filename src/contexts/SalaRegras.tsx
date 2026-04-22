@@ -874,6 +874,7 @@ export function SalaRegrasProvider({
     cancelandoDraftRef.current = true;
     try {
       console.log('[SalaRegras] ⏱️ Timeout de draft do jogador:', userIdQueFalhou);
+      transicionandoRef.current = true;
 
       // 1. Remover o jogador que tirou timeout (DELETE direto ignora vinculado = true, intencional)
       await supabase
@@ -882,21 +883,31 @@ export function SalaRegrasProvider({
         .eq('sala_id', salaId)
         .eq('user_id', userIdQueFalhou);
 
-      // 🔴 2. Deletar QUALQUER draft dessa sala (não confiar em sala.draft_id que pode ser stale)
+      // 2. Desvincullar todos os demais jogadores PRIMEIRO
+      await atualizarVinculacao(salaId, false);
+
+      // 3. Resetar confirmações de todos
+      await supabase.from('sala_jogadores')
+        .update({ confirmado: false })
+        .eq('sala_id', salaId);
+
+      // 4. Deletar QUALQUER draft dessa sala (não confiar em sala.draft_id que pode ser stale)
       await supabase.from('drafts').delete().eq('sala_id', salaId);
 
-      // 3. Limpar draft_id da sala garantidamente
+      // 5. Limpar draft_id da sala garantidamente
       await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
 
-      // 4. Auto-transição (travada → preenchendo) vai cuidar de:
-      //    - Desvinculação dos demais jogadores
-      //    - Reset de confirmações
-      //    - Transição de estado
-      console.log('[SalaRegras] ✅ Draft cancelado - auto-transição vai reagir ao detectar total < max');
+      // 6. Deletar votos da sala
+      await supabase.from('sala_votos').delete().eq('sala_id', salaId);
+
+      // 7. FORÇA transição para preenchendo (não confia na auto-transição)
+      console.log('[SalaRegras] ✅ Draft cancelado - voltando para PREENCHENDO');
+      await transicionarEstado(salaId, 'preenchendo');
     } catch (error) {
       console.error('[SalaRegras] ❌ Erro ao cancelar draft por timeout:', error);
     } finally {
       cancelandoDraftRef.current = false;
+      transicionandoRef.current = false;
     }
   }, [sala, salaId]);
 
