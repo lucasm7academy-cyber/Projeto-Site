@@ -72,6 +72,7 @@ export function useAuthUser() {
 // Cache para evitar múltiplas chamadas concorrentes a getUser()
 let userCache: any = null;
 let userCachePromise: Promise<any> | null = null;
+let abortController: AbortController | null = null;
 let cacheHits = 0;
 let cacheMisses = 0;
 
@@ -83,22 +84,43 @@ export async function getCachedUser() {
     return userCache;
   }
 
-  // Se já está buscando, esperar a promise
+  // Se já está buscando, esperar a promise (evita race condition)
   if (userCachePromise) {
     console.log(`🟡 [getCachedUser] Aguardando promise em andamento...`);
     return userCachePromise;
   }
 
-  // Fazer a busca UMA VEZ
+  // Fazer a busca UMA VEZ com AbortController
   cacheMisses++;
   console.log(`🔴 [getCachedUser] Cache MISS #${cacheMisses} - fazendo fetch...`);
 
+  // Cancelar requisição anterior se ainda estiver em andamento
+  if (abortController) {
+    abortController.abort();
+  }
+  abortController = new AbortController();
+
   userCachePromise = (async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error } = await supabase.auth.getUser();
+
+      // Se foi abortada, não atualizar cache
+      if (abortController?.signal.aborted) {
+        console.log(`⚠️ [getCachedUser] Requisição cancelada`);
+        return null;
+      }
+
+      if (error) throw error;
+
       userCache = user;
       console.log(`✅ [getCachedUser] Fetch concluído - ${user?.email}`);
       return user;
+    } catch (err: any) {
+      // Ignorar AbortError (cancelamento intencional)
+      if (err.name !== 'AbortError') {
+        console.error(`❌ [getCachedUser] Erro:`, err);
+      }
+      return null;
     } finally {
       userCachePromise = null;
     }
