@@ -325,6 +325,9 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
   const membroMap = Object.fromEntries((membros ?? []).map((m: any) => [m.user_id, m]));
   const timeMap   = Object.fromEntries((times  ?? []).map((t: any) => [t.id, t]));
 
+  // 🔍 DEBUG: Verificar is_vip dos perfis
+  console.log('[carregarJogadores] Perfis com is_vip:', (perfis ?? []).slice(0, 5).map((p: any) => ({ id: p.id, is_vip: p.is_vip })));
+
   const jogadores = contas.map((c: any) => {
     const perfil = perfilMap[c.user_id] ?? {};
     const membro = membroMap[c.user_id];
