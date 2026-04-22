@@ -776,28 +776,40 @@ export function SalaRegrasProvider({
 
   const acaoDenunciarNaoIniciou = useCallback(async (motivo: string, descricao?: string) => {
     if (!sala || !jogadorAtual) return;
-    await criarRequisicaoAdmin({
-      sala_id:       salaId,
-      reportado_por: usuarioAtual.id,
-      motivo,
-      descricao,
-      jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
-    });
 
-    // 1. Delete o draft se existir
-    if (sala.draft_id) {
-      await supabase.from('drafts').delete().eq('id', sala.draft_id);
+    // Comportamento diferente por estado
+    if (sala.estado === 'confirmacao') {
+      // Em confirmacao: reset reversível (remove não-confirmers, mantém confirmers)
+      await resetarConfirmacoes(salaId);
+      await transicionarEstado(salaId, 'preenchendo');
+      return;
     }
 
-    // 2. Limpar draft_id e votos
-    await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
-    await supabase.from('sala_votos').delete().eq('sala_id', salaId);
+    if (sala.estado === 'aguardando_inicio') {
+      // Em aguardando_inicio: reset total + denúncia (partida foi denunciada como não iniciou)
+      await criarRequisicaoAdmin({
+        sala_id:       salaId,
+        reportado_por: usuarioAtual.id,
+        motivo,
+        descricao,
+        jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
+      });
 
-    // 3. Reset completo: remove todos e volta vazio (não reutiliza sala)
-    await deletarJogadoresDaSala(salaId);
+      // 1. Delete o draft se existir
+      if (sala.draft_id) {
+        await supabase.from('drafts').delete().eq('id', sala.draft_id);
+      }
 
-    // 4. Volta pra preenchendo vazia para reiniciar do zero
-    await transicionarEstado(salaId, 'preenchendo');
+      // 2. Limpar draft_id e votos completamente
+      await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
+      await supabase.from('sala_votos').delete().eq('sala_id', salaId);
+
+      // 3. Reset total: remove todos
+      await deletarJogadoresDaSala(salaId);
+
+      // 4. Volta pra preenchendo vazia
+      await transicionarEstado(salaId, 'preenchendo');
+    }
   }, [sala, salaId, usuarioAtual.id, jogadorAtual]);
 
   const acaoVotarResultado = useCallback(async (opcao: OpcaoVotoResultado) => {
