@@ -151,7 +151,7 @@ export default function Layout() {
     { label: 'Times', icon: Users, path: '/times' },
     { label: 'Players', icon: UserIcon, path: '/players' },
     { label: 'Streamers', icon: Tv2, path: '/streamers' },
-    { label: 'Histórico', icon: History, path: '/jogar?view=finalizadas' },
+    { label: 'Histórico', icon: History, path: '/partidas' },
   ];
 
   const profileMenuItems = [

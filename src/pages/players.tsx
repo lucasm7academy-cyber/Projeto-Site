@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useSound } from '../hooks/useSound';
 import { supabase } from '../lib/supabase';
+import { buscarElo } from '../api/riot';
 import {
   PlayerDetailModal,
   type Jogador,
@@ -235,6 +236,43 @@ async function contarPartidas(userId: string): Promise<{ total: number; vitories
   return { total, vitories, defeats };
 }
 
+// ✅ Atualizar elos de jogadores que precisam (sem tier ou > 24h)
+async function atualizarElosNecessarios(contas: any[]): Promise<void> {
+  const agora = Date.now();
+  const umDiaMs = 24 * 60 * 60 * 1000;
+
+  for (const conta of contas) {
+    // Verificar se precisa atualizar
+    const eloMuitoAntigo = !conta.last_elo_update || (agora - new Date(conta.last_elo_update).getTime()) > umDiaMs;
+    const semElo = !conta.tier;
+
+    if (!eloMuitoAntigo && !semElo) continue; // Elo recente e válido
+
+    try {
+      // Buscar elo da Riot API
+      const ranqueadas = await buscarElo(conta.puuid);
+      const soloEntry = ranqueadas?.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
+
+      if (soloEntry) {
+        // Salvar no banco
+        await supabase
+          .from('contas_riot')
+          .update({
+            tier: soloEntry.tier ?? 'IRON',
+            rank: soloEntry.rank ?? 'IV',
+            lp: soloEntry.leaguePoints ?? 0,
+            last_elo_update: new Date().toISOString(),
+          })
+          .eq('user_id', conta.user_id);
+
+        console.log(`[atualizarElos] ${conta.riot_id} atualizado: ${soloEntry.tier} ${soloEntry.rank}`);
+      }
+    } catch (err: any) {
+      console.warn(`[atualizarElos] Erro ao buscar elo de ${conta.riot_id}:`, err?.message);
+    }
+  }
+}
+
 async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jogadores: Jogador[]; temMais: boolean }> {
   // ✅ NOVO: Incluir tier, rank, lp, last_elo_update do cache
   const { data: contas, error } = await supabase
@@ -333,6 +371,9 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
       _eloTempoAtual:   eloTempoAtualizacao,  // ← Mostrar idade do cache
     } as Jogador & { _puuid?: string; _eloTempoAtual?: string };
   });
+
+  // ✅ Atualizar elos em background (não bloqueia o retorno)
+  atualizarElosNecessarios(contas).catch(err => console.error('[carregarJogadores] Erro ao atualizar elos:', err));
 
   return { jogadores, temMais };
 }
@@ -652,22 +693,24 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* VIP Banner Fita Diagonal Direita - Ajustada para a Quina */}
-                    <div className="absolute top-0 right-0 w-16 h-16 overflow-hidden pointer-events-none z-10">
-                      <div
-                        className="absolute w-24 h-8 bg-gradient-to-r from-[#FFB800] to-[#FFD700] flex items-center justify-center font-black text-black text-[11px] tracking-widest shadow-lg"
-                        style={{
-                          top: '12px',
-                          right: '-32px',
-                          transform: 'rotate(45deg)',
-                          boxShadow: '0 2px 8px rgba(255, 184, 0, 0.5)',
-                          letterSpacing: '0.15em',
-                          paddingRight: '4px'
-                        }}
-                      >
-                        VIP
+                    {/* VIP Banner Fita Diagonal Direita - Apenas para VIP */}
+                    {jogador.isVIP && (
+                      <div className="absolute top-0 right-0 w-16 h-16 overflow-hidden pointer-events-none z-10">
+                        <div
+                          className="absolute w-24 h-8 bg-gradient-to-r from-[#FFB800] to-[#FFD700] flex items-center justify-center font-black text-black text-[11px] tracking-widest shadow-lg"
+                          style={{
+                            top: '12px',
+                            right: '-32px',
+                            transform: 'rotate(45deg)',
+                            boxShadow: '0 2px 8px rgba(255, 184, 0, 0.5)',
+                            letterSpacing: '0.15em',
+                            paddingRight: '4px'
+                          }}
+                        >
+                          VIP
+                        </div>
                       </div>
-                    </div>
+                    )}
                     
                     {/* Ícone e Info */}
                     <div className="flex items-center gap-4 mb-4">
