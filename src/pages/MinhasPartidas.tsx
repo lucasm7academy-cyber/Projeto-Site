@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { ArrowRight } from 'lucide-react';
 
@@ -14,6 +15,7 @@ interface Partida {
 
 export default function MinhasPartidas() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [partidas, setPartidas] = useState<Partida[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -129,7 +131,8 @@ export default function MinhasPartidas() {
               return (
                 <div
                   key={partida.id}
-                  className={`rounded-xl border p-[2vmin] transition-all hover:shadow-lg ${
+                  onClick={() => navigate(`/sala/${partida.id}`)}
+                  className={`rounded-xl border p-[2vmin] transition-all hover:shadow-lg cursor-pointer ${
                     vitoria
                       ? 'bg-yellow-500/15 border-yellow-500/40 hover:bg-yellow-500/20'
                       : 'bg-white/5 border-white/10 hover:bg-white/8'
