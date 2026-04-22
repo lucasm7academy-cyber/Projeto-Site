@@ -26,6 +26,7 @@ const Streamers = lazy(() => import("./pages/Streamers"));
 const Politicas = lazy(() => import("./pages/Politicas"));
 const Tutorial = lazy(() => import("./pages/Tutorial"));
 const Campeonatos = lazy(() => import('./pages/campeonatos'));
+const MinhasPartidas = lazy(() => import("./pages/MinhasPartidas"));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuth();
@@ -64,7 +65,7 @@ export default function App() {
               <Route path="/estatisticas" element={<PrivateRoute><div>Estatísticas</div></PrivateRoute>} />
               <Route path="/historico" element={<PrivateRoute><div>Histórico</div></PrivateRoute>} />
               <Route path="/perfil" element={<PrivateRoute><RouteWithSuspense element={<Perfil />} /></PrivateRoute>} />
-              <Route path="/partidas" element={<PrivateRoute><div>Partidas</div></PrivateRoute>} />
+              <Route path="/partidas" element={<PrivateRoute><RouteWithSuspense element={<MinhasPartidas />} /></PrivateRoute>} />
               <Route path="/times" element={<PrivateRoute><RouteWithSuspense element={<Equipes />} /></PrivateRoute>} />
               <Route path="/vincular" element={<PrivateRoute><RouteWithSuspense element={<Vincular />} /></PrivateRoute>} />
               <Route path="/configuracoes" element={<PrivateRoute><div>Configurações</div></PrivateRoute>} />

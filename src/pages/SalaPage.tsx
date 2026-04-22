@@ -1504,28 +1504,8 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                   ? resultadoPartida.jogadores.filter((j: any) => j.isTimeA).map((jogador: any, idx: number) => (
                       <div key={idx} className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-[1.5vmin]">
                         <p className="text-[1.1vmin] font-black text-blue-300 mb-[0.8vmin]">
-                          {jogador.nome}{jogador.tag && ` #${jogador.tag}`} / {ROLE_CONFIG[jogador.role as Role]?.label}
+                          {jogador.nome}{jogador.tag && `#${jogador.tag}`} / {ROLE_CONFIG[jogador.role as Role]?.label}
                         </p>
-                        {draftFinalizado.blue_picks && draftFinalizado.blue_picks.length > 0 && (
-                          <div className="flex gap-[0.8vmin] flex-wrap">
-                            {draftFinalizado.blue_picks.map((champId: string, pickIdx: number) => {
-                              const champ = champions[champId];
-                              return champ ? (
-                                <div
-                                  key={pickIdx}
-                                  className="w-[4vmin] h-[4vmin] rounded border border-blue-500/40 bg-blue-500/10 flex items-center justify-center overflow-hidden"
-                                  title={champ.name}
-                                >
-                                  <img
-                                    src={buildChampionIconUrl(champId, versionDDR)}
-                                    alt={champ.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                              ) : null;
-                            })}
-                          </div>
-                        )}
                       </div>
                     ))
                   : null}
@@ -1540,28 +1520,8 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                   ? resultadoPartida.jogadores.filter((j: any) => !j.isTimeA).map((jogador: any, idx: number) => (
                       <div key={idx} className="bg-red-500/10 border border-red-500/30 rounded-lg p-[1.5vmin]">
                         <p className="text-[1.1vmin] font-black text-red-300 mb-[0.8vmin]">
-                          {jogador.nome}{jogador.tag && ` #${jogador.tag}`} / {ROLE_CONFIG[jogador.role as Role]?.label}
+                          {jogador.nome}{jogador.tag && `#${jogador.tag}`} / {ROLE_CONFIG[jogador.role as Role]?.label}
                         </p>
-                        {draftFinalizado.red_picks && draftFinalizado.red_picks.length > 0 && (
-                          <div className="flex gap-[0.8vmin] flex-wrap">
-                            {draftFinalizado.red_picks.map((champId: string, pickIdx: number) => {
-                              const champ = champions[champId];
-                              return champ ? (
-                                <div
-                                  key={pickIdx}
-                                  className="w-[4vmin] h-[4vmin] rounded border border-red-500/40 bg-red-500/10 flex items-center justify-center overflow-hidden"
-                                  title={champ.name}
-                                >
-                                  <img
-                                    src={buildChampionIconUrl(champId, versionDDR)}
-                                    alt={champ.name}
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                              ) : null;
-                            })}
-                          </div>
-                        )}
                       </div>
                     ))
                   : null}
