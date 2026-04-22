@@ -45,11 +45,10 @@ async function carregarUsuario(): Promise<UsuarioAtual | null> {
   const user = await getCachedUser();
   if (!user) return null;
 
-  const [{ data: perfil }, { data: riot }, { data: membro }] = await Promise.all([
-    supabase.from('profiles').select('*').eq('id', user.id).maybeSingle(),
-    supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle(),
-    supabase.from('time_membros').select('time_id, role').eq('user_id', user.id).maybeSingle(),
-  ]);
+  // Fetch sequencialmente para evitar contenção de locks de auth
+  const { data: perfil } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+  const { data: riot } = await supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle();
+  const { data: membro } = await supabase.from('time_membros').select('time_id, role').eq('user_id', user.id).maybeSingle();
 
   const riotAny = riot as any;
   const riotId: string = riotAny?.riot_id ?? '';
