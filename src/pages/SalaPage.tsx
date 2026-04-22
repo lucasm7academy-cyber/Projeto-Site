@@ -574,6 +574,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const [motivoDenuncia, setMotivoDenuncia] = useState('');
   const [descricaoDenuncia, setDescricaoDenuncia] = useState('');
   const [enviandoDenuncia, setEnviandoDenuncia]   = useState(false);
+  const [showConfirmarCancelamento, setShowConfirmarCancelamento] = useState(false);
   const [visualizandoPartida, setVisualizandoPartida] = useState(false);
   const [cargoUsuario, setCargoUsuario] = useState<'proprietario' | 'admin' | 'streamer' | 'coach' | 'jogador'>('jogador');
   const [salaStreamAtiva, setSalaStreamAtiva] = useState<any>(null);
@@ -920,7 +921,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           {/* Separador + botão de denúncia */}
           <div className="w-[20vmin] h-px bg-white/10 my-[2.5vmin]" />
           <button
-            onClick={() => acaoCancelarPartida()}
+            onClick={() => setShowConfirmarCancelamento(true)}
             className="flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg border border-red-500/20 text-red-400/60 hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/5 font-black text-[1.1vmin] uppercase tracking-widest transition-all"
           >
             <X className="w-[1.4vmin] h-[1.4vmin]" />
@@ -1505,6 +1506,52 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           title={`Transmissão da Sala ${sala.codigoPartida || sala.id}`}
         />
       )}
+
+      {/* Modal de Confirmação - Cancelar Partida */}
+      <AnimatePresence>
+        {showConfirmarCancelamento && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#0d0d0d] border border-red-500/30 rounded-2xl p-8 max-w-md w-full shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+                <h3 className="text-2xl font-black text-white uppercase">Cancelar Partida?</h3>
+              </div>
+
+              <p className="text-white/70 mb-8 text-sm">
+                Tem certeza que deseja <strong>cancelar esta partida</strong>? Todos os jogadores serão desvinculados e a partida será encerrada.
+              </p>
+
+              <div className="flex gap-4">
+                <button
+                  onClick={() => setShowConfirmarCancelamento(false)}
+                  className="flex-1 py-3 rounded-lg bg-white/5 hover:bg-white/10 text-white font-black uppercase tracking-widest transition-all"
+                >
+                  Não, Voltar
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowConfirmarCancelamento(false);
+                    await acaoCancelarPartida();
+                  }}
+                  className="flex-1 py-3 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 font-black uppercase tracking-widest transition-all"
+                >
+                  Sim, Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Side Vignettes */}
       <div className="absolute inset-y-0 left-0 w-[20vmin] bg-gradient-to-r from-black via-black/60 to-transparent z-5 pointer-events-none" />
