@@ -1455,7 +1455,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       )}
 
       {/* Modal de Visualização de Partida Encerrada */}
-      {visualizandoPartida && sala.estado === 'encerrada' && draftFinalizado && (
+      {visualizandoPartida && sala.estado === 'encerrada' && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-[2vmin] overflow-auto">
           <motion.div
             initial={{ scale: 0.95, opacity: 0, y: 20 }}
