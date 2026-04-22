@@ -116,6 +116,23 @@ export async function buscarPerfilCompleto(userId: string): Promise<PerfilComple
   const soloEntry = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
   const flexEntry = ranqueadas.find((r: any) => r.queueType === 'RANKED_FLEX_SR');
 
+  // ✅ NOVO: Atualizar cache de elo em contas_riot (24h cache)
+  if (soloEntry) {
+    try {
+      await supabase
+        .from('contas_riot')
+        .update({
+          tier: soloEntry.tier ?? 'IRON',
+          rank: soloEntry.rank ?? 'IV',
+          lp: soloEntry.leaguePoints ?? 0,
+          last_elo_update: new Date().toISOString(),
+        })
+        .eq('user_id', userId);
+    } catch (err: any) {
+      console.warn('[buscarPerfilCompleto] Erro ao atualizar cache elo:', err?.message);
+    }
+  }
+
   const topChampions: CampeaoMaestria[] = (topChampionsRaw ?? []).map((c: any) => ({
     championKey: c.championKey ?? 'Unknown',
     championId:  c.championId,

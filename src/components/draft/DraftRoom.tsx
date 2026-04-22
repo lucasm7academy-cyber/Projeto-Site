@@ -64,6 +64,9 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const [salaStreamAtiva, setSalaStreamAtiva] = useState<any>(null);
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
+  const timerStartTimeRef = useRef<number | null>(null);
+  const timerDurationRef = useRef<number>(42);
+  const draftRef = useRef<DraftState | null>(null);
 
   // ============================================================
   // INITIALIZATION (só roda uma vez)
@@ -117,6 +120,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
           draftAtual = await criarDraft(salaId, modo === 'time_vs_time');
         }
 
+        draftRef.current = draftAtual;  // ✅ Set ref immediately
         setDraft(draftAtual);
 
         if (draftAtual?.status === 'finished') {
@@ -193,6 +197,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
         }
       }
 
+      draftRef.current = novoDraft;  // ✅ Atualizar ref sempre que draft muda
       setDraft(novoDraft);
       if (novoDraft.status === 'finished') onDraftFinalizado?.(novoDraft);
     });
@@ -296,36 +301,49 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   }, [draft?.current_turn, draft?.blue_bans, draft?.blue_picks, draft?.red_bans, draft?.red_picks, modo, onDraftReset]);
 
   // ============================================================
-  // TIMER
+  // TIMER — ROBUSTO CONTRA REALTIME UPDATES
   // ============================================================
+  // ✅ FIX: Usa refs para rastrear tempo decorrido independentemente de draft.timer_end
+  // Evita pulos de timer quando realtime atualiza draft com novos valores de timer_end
   useEffect(() => {
-    if (!draft || draft.status !== 'ongoing') return;
+    // ✅ Setup interval sem early return - deixa os checks acontecerem dentro
     const interval = setInterval(() => {
-      const agora = Date.now();
-      const restante = Math.max(0, Math.floor(((draft.timer_end || agora) - agora) / 1000));
+      const currentDraft = draftRef.current;
+      if (!currentDraft || currentDraft.status !== 'ongoing') return;
+
+      // Se não foi inicializado ainda, inicializar agora
+      if (timerStartTimeRef.current === null) {
+        timerStartTimeRef.current = Date.now();
+      }
+
+      const elapsed = Math.floor((Date.now() - timerStartTimeRef.current) / 1000);
+      const restante = Math.max(0, timerDurationRef.current - elapsed);
       setTimer(restante);
 
-      // ✅ AUTO-ACTION QUANDO TIMER REAL CHEGA A 0 (35s no backend)
+      // ✅ AUTO-ACTION QUANDO TIMER REAL CHEGA A 0
       // Nota: Timeout de pick é tratado via Realtime (mais confiável)
       // Aqui apenas fazemos ban automático em branco se aplicável
-      if (restante === 0 && !timerFrozen && possoJogar && meuTime && draft.current_phase === 'ban') {
+      if (restante === 0 && !timerFrozen && possoJogar && meuTime && currentDraft.current_phase === 'ban') {
         const turnOrder = getTurnOrder(modo);
-        const ehMeuTurno = turnOrder[draft.current_turn]?.team === meuTime;
+        const ehMeuTurno = turnOrder[currentDraft.current_turn]?.team === meuTime;
         if (ehMeuTurno) {
-          console.log('[DraftRoom] Ban automático por timeout');
+          console.log('[DraftRoom] ⏱️ Ban automático por timeout (42s real)');
           setTimerFrozen(true);
           timeoutRef.current = setTimeout(async () => {
-            await banirCampeao(draft, '', draft.current_team, modo);
+            if (draftRef.current) {
+              await banirCampeao(draftRef.current, '', draftRef.current.current_team, modo);
+            }
             setTimerFrozen(false);
           }, 0);
         }
       }
     }, 1000);
+
     return () => clearInterval(interval);
-  }, [draft, timerFrozen, possoJogar, meuTime, onPickTimeout, usuarioId, modo]);
+  }, []);  // ✅ Sem dependencies! Interval roda uma vez e continua
 
   // ============================================================
-  // LIMPAR TIMEOUT QUANDO TURNO AVANÇA
+  // LIMPAR TIMEOUT QUANDO TURNO AVANÇA + RESETAR TIMER
   // ============================================================
   useEffect(() => {
     // Quando o turno muda (novo draft chega), resetar timerFrozen
@@ -334,6 +352,11 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
       clearTimeout(timeoutRef.current);
       timeoutRef.current = null;
     }
+
+    // ✅ Resetar o timer de contagem regressiva para este novo turno
+    timerStartTimeRef.current = Date.now();
+    timerDurationRef.current = 42;  // Sempre 42 segundos por turno
+    setTimer(42);  // Reset visual ao 42
   }, [draft?.current_turn]);
 
   // ============================================================

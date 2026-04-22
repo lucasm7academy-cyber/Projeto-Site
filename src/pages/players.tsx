@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { useSound } from '../hooks/useSound';
 import { supabase } from '../lib/supabase';
-import { buscarElo } from '../api/riot';
 import {
   PlayerDetailModal,
   type Jogador,
@@ -237,9 +236,10 @@ async function contarPartidas(userId: string): Promise<{ total: number; vitories
 }
 
 async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jogadores: Jogador[]; temMais: boolean }> {
+  // ✅ NOVO: Incluir tier, rank, lp, last_elo_update do cache
   const { data: contas, error } = await supabase
     .from('contas_riot')
-    .select('user_id, riot_id, puuid, profile_icon_id, level, mp')
+    .select('user_id, riot_id, puuid, profile_icon_id, level, mp, tier, rank, lp, last_elo_update')
     .order('mp', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -273,12 +273,21 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
       const { total, vitories, defeats } = await contarPartidas(c.user_id);
       const winRate = total > 0 ? Math.round((vitories / total) * 100) : 0;
 
+      // ✅ CACHE: Elo vem do banco (tier), não de busca sequencial da Riot API
+      const eloType: EloType = c.tier ? (TIER_MAP[c.tier] ?? 'Ferro') : 'Ferro';
+      const eloIdadeMs = c.last_elo_update ? Date.now() - new Date(c.last_elo_update).getTime() : null;
+      const eloTempoAtualizacao = eloIdadeMs
+        ? eloIdadeMs < 3600000 ? '< 1h'
+        : eloIdadeMs < 86400000 ? '< 24h'
+        : '> 24h'
+        : 'nunca';
+
       return {
         id:               c.user_id,
         riotId:           c.riot_id ?? 'Jogador',
         nome:             (c.riot_id ?? 'Jogador').split('#')[0],
         nivel:            c.level ?? 1,
-        elo:              'Ferro' as EloType,
+        elo:              eloType,
         iconeId:          c.profile_icon_id ?? 1,
         partidas:         total,
         winRate:          winRate,
@@ -298,8 +307,8 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
         mp:               c.mp ?? 0,
         mc:               c.mc ?? 0,
         _puuid:           c.puuid ?? undefined,
-        _carregando:      true,
-      } as Jogador & { _puuid?: string; _carregando?: boolean };
+        _eloTempoAtual:   eloTempoAtualizacao,  // ← Mostrar idade do cache
+      } as Jogador & { _puuid?: string; _eloTempoAtual?: string };
     })
   );
 
@@ -324,7 +333,6 @@ export default function App() {
   const [popup, setPopup] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
 
   const offsetRef        = useRef(0);
-  const eloProcessedRef  = useRef(0);
   const sentinelRef      = useRef<HTMLDivElement>(null);
   const fetchingRef      = useRef(false);
   const temMaisRef       = useRef(true);
@@ -394,48 +402,10 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
 
-  // Busca elo em background apenas para os jogadores novos (não reprocessa os já feitos)
-  useEffect(() => {
-    if (todosJogadores.length === 0) return;
-    const novos = todosJogadores.slice(eloProcessedRef.current);
-    if (novos.length === 0) return;
-    eloProcessedRef.current = todosJogadores.length;
-
-    let cancelado = false;
-    const atualizar = async () => {
-      for (const jogador of novos) {
-        if (cancelado) break;
-        const puuid = (jogador as any)._puuid;
-        if (!puuid) {
-          setTodosJogadores(prev =>
-            prev.map((j: any) => j.id === jogador.id ? { ...j, _carregando: false } : j)
-          );
-          continue;
-        }
-        let ranqueadas: any[] = [];
-        try {
-          ranqueadas = await buscarElo(puuid);
-        } catch {
-          await new Promise(r => setTimeout(r, 3000));
-          if (cancelado) break;
-          try { ranqueadas = await buscarElo(puuid); } catch { ranqueadas = []; }
-        }
-        if (cancelado) break;
-        const solo = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
-        const eloType: EloType = solo ? (TIER_MAP[solo.tier] ?? 'Ferro') : 'Ferro';
-        setTodosJogadores(prev =>
-          prev.map((j: any) =>
-            j.id === jogador.id
-              ? { ...j, elo: eloType, _carregando: false }
-              : j
-          )
-        );
-        await new Promise(r => setTimeout(r, 700));
-      }
-    };
-    atualizar();
-    return () => { cancelado = true; };
-  }, [todosJogadores.length]);
+  // ✅ DESABILITADO: Elo agora vem do cache (contas_riot.tier)
+  // Não precisa mais buscar da Riot API sequencialmente (16+ segundos)
+  // O elo é atualizado quando jogador entra em seu perfil
+  // useEffect(() => { ... }, [todosJogadores.length]);
 
   useEffect(() => {
     if (popup) {
