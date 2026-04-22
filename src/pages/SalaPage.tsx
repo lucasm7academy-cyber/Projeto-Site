@@ -1279,7 +1279,9 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
             {sala.vencedor && (
               <div
                 className={`mb-[3vmin] p-[2vmin] rounded-lg border ${
-                  sala.vencedor === 'A'
+                  sala.vencedor === 'cancelada'
+                    ? 'bg-yellow-500/20 border-yellow-500/40'
+                    : sala.vencedor === 'A'
                     ? 'bg-blue-500/20 border-blue-500/40'
                     : sala.vencedor === 'B'
                     ? 'bg-red-500/20 border-red-500/40'
@@ -1287,18 +1289,24 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                 }`}
               >
                 <p className={`text-[1.3vmin] font-black uppercase tracking-widest ${
-                  sala.vencedor === 'A'
+                  sala.vencedor === 'cancelada'
+                    ? 'text-yellow-300'
+                    : sala.vencedor === 'A'
                     ? 'text-blue-300'
                     : sala.vencedor === 'B'
                     ? 'text-red-300'
                     : 'text-gray-300'
                 }`}>
-                  🏆 Vencedor: {sala.vencedor === 'A' ? (sala.timeANome ?? 'Equipe Azul') : sala.vencedor === 'B' ? (sala.timeBNome ?? 'Equipe Vermelha') : 'Empate'}
+                  {sala.vencedor === 'cancelada'
+                    ? `⚠️ Partida Cancelada por ${resultadoPartida?.jogadores?.[0]?.nome || 'Jogador'}${resultadoPartida?.jogadores?.[0]?.tag ? '#' + resultadoPartida.jogadores[0].tag : ''}`
+                    : `🏆 Vencedor: ${sala.vencedor === 'A' ? (sala.timeANome ?? 'Equipe Azul') : sala.vencedor === 'B' ? (sala.timeBNome ?? 'Equipe Vermelha') : 'Empate'}`
+                  }
                 </p>
               </div>
             )}
 
-            {/* Jogadores e Picks */}
+            {/* Jogadores e Picks - Esconder se partida foi cancelada */}
+            {sala.vencedor !== 'cancelada' && (
             <div className="grid grid-cols-2 gap-[3vmin]">
               {/* Time Azul */}
               <div className="flex flex-col gap-[1.5vmin]">
@@ -1332,6 +1340,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
                   : null}
               </div>
             </div>
+            )}
 
             {/* ❌ DEPRECATED: Exibição de picks foi removida (draft descontinuado) */}
 

@@ -72,7 +72,7 @@ export interface Sala {
   codigoPartida?: string;
   confirmacaoExpiresAt?: Date;
   aguardandoInicioExpiresAt?: Date;
-  vencedor?: 'A' | 'B' | 'empate' | null;
+  vencedor?: 'A' | 'B' | 'empate' | 'cancelada' | null;
   createdAt: Date;
 }
 
