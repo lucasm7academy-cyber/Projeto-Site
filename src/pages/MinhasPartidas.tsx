@@ -7,9 +7,8 @@ interface Partida {
   id: number;
   modo: string;
   vencedor: string | null;
+  vencedor_nome?: string;
   created_at: string;
-  timeANome?: string;
-  timeBNome?: string;
   jogadores: Array<{ id: string; nome: string; isTimeA: boolean }>;
 }
 
@@ -23,19 +22,10 @@ export default function MinhasPartidas() {
 
     const carregarPartidas = async () => {
       try {
+        // Buscar de resultados_partidas (onde os dados são preservados)
         const { data, error } = await supabase
-          .from('salas')
-          .select(`
-            id,
-            modo,
-            vencedor,
-            created_at,
-            estado,
-            time_a_nome,
-            time_b_nome,
-            sala_jogadores (id, user_id, nome, is_time_a)
-          `)
-          .eq('estado', 'encerrada')
+          .from('resultados_partidas')
+          .select('*')
           .order('created_at', { ascending: false });
 
         if (error) {
@@ -43,27 +33,27 @@ export default function MinhasPartidas() {
           return;
         }
 
-        console.log('[MinhasPartidas] Salas carregadas:', data?.length, 'total');
+        console.log('[MinhasPartidas] Resultados carregados:', data?.length, 'total');
         console.log('[MinhasPartidas] User ID:', user?.id);
 
         if (data) {
           // Filtrar apenas partidas que o usuário participou
           const minhasPartidas = data
-            .filter((sala: any) => {
-              const participa = sala.sala_jogadores?.some((j: any) => j.user_id === user?.id);
+            .filter((resultado: any) => {
+              const jogadores = Array.isArray(resultado.jogadores) ? resultado.jogadores : [];
+              const participa = jogadores.some((j: any) => j.id === user?.id);
               if (!participa) {
-                console.log('[MinhasPartidas] Sala', sala.id, 'não tem este user. Jogadores:', sala.sala_jogadores?.map((j: any) => j.user_id));
+                console.log('[MinhasPartidas] Resultado', resultado.sala_id, 'não tem este user');
               }
               return participa;
             })
-            .map((sala: any) => ({
-              id: sala.id,
-              modo: sala.modo,
-              vencedor: sala.vencedor,
-              created_at: sala.created_at,
-              timeANome: sala.time_a_nome,
-              timeBNome: sala.time_b_nome,
-              jogadores: sala.sala_jogadores,
+            .map((resultado: any) => ({
+              id: resultado.sala_id,
+              modo: resultado.modo,
+              vencedor: resultado.vencedor,
+              vencedor_nome: resultado.vencedor_nome,
+              created_at: resultado.created_at,
+              jogadores: Array.isArray(resultado.jogadores) ? resultado.jogadores : [],
             }));
 
           console.log('[MinhasPartidas] Partidas do usuário:', minhasPartidas.length);
@@ -80,11 +70,11 @@ export default function MinhasPartidas() {
   }, [user]);
 
   const isVitoria = (partida: Partida, userId: string): boolean => {
-    const jogador = partida.jogadores.find((j) => j.user_id === userId);
+    const jogador = partida.jogadores.find((j) => j.id === userId);
     if (!jogador || !partida.vencedor) return false;
 
     const venceuTimeA = partida.vencedor === 'A';
-    return jogador.is_time_a === venceuTimeA;
+    return jogador.isTimeA === venceuTimeA;
   };
 
   const getModoLabel = (modo: string): string => {
@@ -133,13 +123,8 @@ export default function MinhasPartidas() {
           <div className="space-y-[2vmin]">
             {partidas.map((partida) => {
               const vitoria = isVitoria(partida, user!.id);
-              const jogador = partida.jogadores.find((j) => j.user_id === user!.id);
-              const nomeTimeVencedor =
-                partida.vencedor === 'A'
-                  ? partida.timeANome || 'Time Azul'
-                  : partida.vencedor === 'B'
-                  ? partida.timeBNome || 'Time Vermelho'
-                  : 'Empate';
+              const jogador = partida.jogadores.find((j) => j.id === user!.id);
+              const nomeTimeVencedor = partida.vencedor_nome || 'Empate';
 
               return (
                 <div
