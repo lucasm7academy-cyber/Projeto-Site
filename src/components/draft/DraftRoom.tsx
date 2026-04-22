@@ -614,7 +614,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
         <div className="w-[25vmin] flex flex-col items-center gap-[1.5vmin] pointer-events-auto">
           {/* NOME DO JOGADOR EM CIMA */}
           <div className="text-center w-full truncate px-[1vmin]">
-            <span className="text-[2vmin] font-bold text-white/90 uppercase tracking-widest drop-shadow-md">
+            <span className="text-[2vmin] font-bold text-white/90 tracking-widest drop-shadow-md">
               {jogadorAtual.blue}
             </span>
           </div>
@@ -624,10 +624,10 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
               initial={false}
               animate={draft?.current_team === 'blue' ? (
                 draft.current_phase === 'ban' ? {
-                  boxShadow: ["0 0 20px rgba(239,68,68,0.3)", "0 0 60px rgba(239,68,68,0.9)", "0 0 20px rgba(239,68,68,0.3)"],
+                  boxShadow: ["0 0 20px rgba(239,68,68,0.3)", "0 0 30px rgba(239,68,68,0.9)", "0 0 15px rgba(239,68,68,0.3)"],
                   borderColor: ["#ef4444", "#f87171", "#ef4444"]
                 } : {
-                  boxShadow: ["0 0 30px rgba(255,215,0,0.5)", "0 0 70px rgba(255,215,0,0.95)", "0 0 30px rgba(255,215,0,0.5)"],
+                  boxShadow: ["0 0 10px rgba(255,215,0,0.5)", "0 0 10px rgba(255,215,0,0.95)", "0 0 10px rgba(255,215,0,0.5)"],
                   borderColor: ["#FFD700", "#FFC300", "#FFD700"]
                 }
               ) : {
@@ -692,7 +692,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
         <div className="w-[25vmin] flex flex-col items-center gap-[1.5vmin] pointer-events-auto">
           {/* NOME DO JOGADOR EM CIMA */}
           <div className="text-center w-full truncate px-[1vmin]">
-            <span className="text-[2vmin] font-bold text-white/90 uppercase tracking-widest drop-shadow-md">
+            <span className="text-[2vmin] font-bold text-white/90  tracking-widest drop-shadow-md">
               {jogadorAtual.red}
             </span>
           </div>
@@ -705,7 +705,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
                   boxShadow: ["0 0 20px rgba(239,68,68,0.3)", "0 0 60px rgba(239,68,68,0.9)", "0 0 20px rgba(239,68,68,0.3)"],
                   borderColor: ["#ef4444", "#f87171", "#ef4444"]
                 } : {
-                  boxShadow: ["0 0 30px rgba(255,215,0,0.5)", "0 0 70px rgba(255,215,0,0.95)", "0 0 30px rgba(255,215,0,0.5)"],
+                  boxShadow: ["0 0 10px rgba(255,215)", "0 0 20px rgba(255,215,0)", "0 0 10px rgba(255,215)"],
                   borderColor: ["#FFD700", "#FFC300", "#FFD700"]
                 }
               ) : {
