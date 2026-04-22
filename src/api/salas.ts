@@ -807,12 +807,22 @@ export async function criarRequisicaoAdmin(req: RequisicaoAdmin): Promise<void> 
   });
 }
 
-// ── Desvincula todos os jogadores de uma sala (libera para nova partida) ──────
-export async function desvincularJogadores(salaId: number): Promise<void> {
+// ── DESVINCULA todos os jogadores (set vinculado=false) ──────────────────────
+// Usado quando voltando de travada para preenchendo (keeps players in room)
+export async function atualizarVinculacao(salaId: number, vinculado: boolean): Promise<void> {
+  await supabase.from('sala_jogadores')
+    .update({ vinculado })
+    .eq('sala_id', salaId);
+}
+
+// ── DELETA todos os jogadores da sala (reset completo) ──────────────────────
+// Usado ao encerrar partida ou fazer reset total
+export async function deletarJogadoresDaSala(salaId: number): Promise<void> {
   await supabase.from('sala_jogadores').delete().eq('sala_id', salaId);
 }
 
-// ── Desvincula um jogador específico (libera para nova partida imediatamente) ─
+// ── DELETA um jogador específico da sala ──────────────────────────────────────
+// Usado por timeout durante draft ou remoção individual
 export async function desvincularJogador(salaId: number, userId: string): Promise<void> {
   await supabase.from('sala_jogadores').delete()
     .eq('sala_id', salaId).eq('user_id', userId);

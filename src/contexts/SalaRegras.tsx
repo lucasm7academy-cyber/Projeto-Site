@@ -14,7 +14,7 @@ import {
   registrarVoto, buscarVotos, deletarSala, encerrarSala,
   atribuirCodigoPartida, liberarCodigoPartida,
   criarRequisicaoAdmin,
-  desvincularJogadores, desvincularJogador, salvarResultadoPartida,
+  atualizarVinculacao, deletarJogadoresDaSala, desvincularJogador, salvarResultadoPartida,
   type Sala, type EstadoSala, type JogadorNaSala,
   type OpcaoVotoResultado, type Voto,
 } from '../api/salas';
@@ -125,7 +125,7 @@ async function encerrarPartidaComResultado(
   }
 
   await encerrarSala(salaId, vencedorDB as any);
-  await desvincularJogadores(salaId);
+  await deletarJogadoresDaSala(salaId);
   await liberarCodigoPartida(salaId);
 }
 
@@ -559,7 +559,7 @@ export function SalaRegrasProvider({
                 current_phase: 'ban',
                 current_team: 'blue',
                 current_turn: 0,
-                timer_end: Date.now() + 30000,
+                timer_end: Date.now() + 35000,
                 status: 'ongoing',
                 fearless_enabled: sala!.modo === 'time_vs_time',
                 fearless_pool: [],
@@ -589,8 +589,9 @@ export function SalaRegrasProvider({
       return;
     }
 
-    // aguardando_inicio: nenhuma transição automática aqui.
-    // A transição para em_partida é feita pelo timerCancelamento quando zera.
+    // aguardando_inicio: transição para em_partida controlada por timerCancelamento (3 min)
+    // Se ninguém denunciar "partida não iniciou" em 3 min, força em_partida automaticamente.
+    // Handler no useEffect de timerCancelamento (linhas 430-440).
 
     // travada → preenchendo: jogador foi removido por timeout (ex: durante draft)
     // Se jogador tirou timeout, é removido; auto-transição detecta falta de jogador e volta
@@ -598,13 +599,15 @@ export function SalaRegrasProvider({
       console.log(`[Auto-transição] ⚠️ TRAVADA → PREENCHENDO (jogador saiu durante draft, total=${total}/${max})`);
       transicionandoRef.current = true;
       const fazer = async () => {
-        // 1. Desvincula quem sobrou (libera para resetarConfirmacoes funcionar)
-        await desvincularJogadores(salaId);
-        // 2. Reseta confirmações de quem sobrou
-        await resetarConfirmacoes(salaId);
-        // 3. Limpa draft_id da sala
+        // 1. Desvincula quem sobrou (set vinculado=false) e reseta confirmações
+        await atualizarVinculacao(salaId, false);
+        await supabase.from('sala_jogadores')
+          .update({ confirmado: false })
+          .eq('sala_id', salaId);
+        // 2. Limpa draft_id, votos e votações antigas
         await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
-        // 4. Volta pra preenchendo para buscar novo jogador
+        await supabase.from('sala_votos').delete().eq('sala_id', salaId);
+        // 3. Volta pra preenchendo para buscar novo jogador
         await transicionarEstado(salaId, 'preenchendo');
       };
       fazer().finally(() => { transicionandoRef.current = false; });
@@ -636,9 +639,9 @@ export function SalaRegrasProvider({
       try {
         // 1. Remover jogadores que NÃO votaram (5 min timeout)
         const finVotos = votos.filter((v: Voto) => v.fase === 'finalizacao');
-        const idQuePessoas = new Set(finVotos.map(v => v.userId));
+        const idsPessoas = new Set(finVotos.map(v => v.userId));
 
-        const jogadoresInativos = sala.jogadores.filter(j => !idQuePessoas.has(j.id));
+        const jogadoresInativos = sala.jogadores.filter(j => !idsPessoas.has(j.id));
         console.log('[SalaRegras] Timeout votação - Removendo', jogadoresInativos.length, 'jogadores inativos');
 
         for (const jogador of jogadoresInativos) {
@@ -781,30 +784,26 @@ export function SalaRegrasProvider({
       jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
     });
 
-    // 1. Desvincula todos os jogadores (libera-os para resetarConfirmacoes funcionar)
-    await desvincularJogadores(salaId);
-
-    // 2. Deletar o draft se existir
+    // 1. Delete o draft se existir
     if (sala.draft_id) {
       await supabase.from('drafts').delete().eq('id', sala.draft_id);
     }
 
-    // 3. Limpar draft_id e votos
+    // 2. Limpar draft_id e votos
     await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
-    await supabase.from('sala_votos').delete().eq('sala_id', salaId).eq('tipo', 'finalizacao');
+    await supabase.from('sala_votos').delete().eq('sala_id', salaId);
 
-    // 4. Reseta confirmações (agora funciona porque todos estão desvinculados)
-    await resetarConfirmacoes(salaId);
+    // 3. Reset completo: remove todos e volta vazio (não reutiliza sala)
+    await deletarJogadoresDaSala(salaId);
 
-    // 5. Volta pra preenchendo para reiniciar do zero
+    // 4. Volta pra preenchendo vazia para reiniciar do zero
     await transicionarEstado(salaId, 'preenchendo');
   }, [sala, salaId, usuarioAtual.id, jogadorAtual]);
 
   const acaoVotarResultado = useCallback(async (opcao: OpcaoVotoResultado) => {
     if (!sala || !podeExecutar('votar_resultado') || !jogadorAtual) return;
     await registrarVoto(salaId, usuarioAtual.id, 'finalizacao', opcao, jogadorAtual.isTimeA);
-    // Libera o jogador imediatamente após votar — pode entrar em nova sala
-    await desvincularJogador(salaId, usuarioAtual.id);
+    // NÃO desvincula aqui — deixa encerrarPartidaComResultado cuidar do cleanup
     recarregarVotos('finalizacao');
   }, [sala, salaId, usuarioAtual.id, jogadorAtual, podeExecutar, recarregarVotos]);
 

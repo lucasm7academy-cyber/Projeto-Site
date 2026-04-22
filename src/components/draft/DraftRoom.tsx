@@ -306,20 +306,16 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
       setTimer(restante);
 
       // ✅ AUTO-ACTION QUANDO TIMER REAL CHEGA A 0 (35s no backend)
-      if (restante === 0 && !timerFrozen && possoJogar && meuTime) {
+      // Nota: Timeout de pick é tratado via Realtime (mais confiável)
+      // Aqui apenas fazemos ban automático em branco se aplicável
+      if (restante === 0 && !timerFrozen && possoJogar && meuTime && draft.current_phase === 'ban') {
         const turnOrder = getTurnOrder(modo);
         const ehMeuTurno = turnOrder[draft.current_turn]?.team === meuTime;
         if (ehMeuTurno) {
-          console.log('[DraftRoom] Timer real expirou - executando ação automática');
+          console.log('[DraftRoom] Ban automático por timeout');
           setTimerFrozen(true);
           timeoutRef.current = setTimeout(async () => {
-            if (draft.current_phase === 'ban') {
-              console.log('[DraftRoom] Ban automático em branco');
-              await banirCampeao(draft, '', draft.current_team, modo);
-            } else {
-              console.log('[DraftRoom] Pick timeout - cancelando draft');
-              onPickTimeout?.(usuarioId);
-            }
+            await banirCampeao(draft, '', draft.current_team, modo);
             setTimerFrozen(false);
           }, 0);
         }
