@@ -77,12 +77,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
 
     const inicializar = async () => {
       try {
-        const permissao = await podeControlarDraft(salaId, usuarioId, modo) as any;
-        setMeuTime(permissao.team);
-        setPossoJogar(permissao.pode);
-        setNomeJogador(permissao.nome || 'Jogador');
-
-        // Buscar TODOS os jogadores da sala
+        // Buscar TODOS os jogadores da sala PRIMEIRO
         try {
           const { data: jogadores, error } = await (supabase as any)
             .from('sala_jogadores')
@@ -97,6 +92,20 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
           if (jogadores && jogadores.length > 0) {
             console.log('[DraftRoom] Jogadores carregados:', jogadores.length);
             setJogadoresDaSala(jogadores);
+
+            // ✅ Determinar time do usuário ATUAL a partir dos dados já carregados
+            const meuJogador = jogadores.find((j: any) => j.user_id === usuarioId);
+            if (meuJogador) {
+              setMeuTime(meuJogador.is_time_a ? 'blue' : 'red');
+              setPossoJogar(true);
+              setNomeJogador(meuJogador.nome || 'Jogador');
+            } else {
+              // Não é jogador, tenta ver se é criador (espectador com privilégio)
+              const permissao = await podeControlarDraft(salaId, usuarioId) as any;
+              setMeuTime(permissao.team);
+              setPossoJogar(permissao.pode);
+              setNomeJogador(permissao.nome || 'Jogador');
+            }
           }
         } catch (error) {
           console.error('[DraftRoom] Exception ao buscar jogadores:', error);

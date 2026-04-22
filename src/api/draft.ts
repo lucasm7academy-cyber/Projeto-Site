@@ -170,16 +170,14 @@ export async function pickarCampeao(
 // Role que controla o draft conforme o modo
 export async function podeControlarDraft(
   salaId: number,
-  userId: string,
-  modo: string
+  userId: string
 ): Promise<{ pode: boolean; team: 'blue' | 'red' | null; nome: string }> {
   
   const { data: jogadorSala, error } = await supabase
     .from('sala_jogadores')
     .select('role, is_time_a')
     .eq('sala_id', salaId)
-    .eq('user_id', userId)
-    .eq('role', modo === '1v1' ? 'MID' : 'JG');
+    .eq('user_id', userId);
 
   if (error || !jogadorSala || jogadorSala.length === 0) {
     const { data: sala } = await supabase
