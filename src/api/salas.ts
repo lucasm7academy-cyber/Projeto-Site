@@ -776,16 +776,34 @@ export async function atribuirCodigoPartida(salaId: number, modo: string): Promi
 
 /** Libera o código quando a partida encerra (reciclagem na fila). */
 export async function liberarCodigoPartida(salaId: number): Promise<void> {
-  // ✅ RPC move código de volta para a fila (em_uso = false)
-  // Depois será reutilizado quando todos os outros forem usados
-  const { error } = await supabase.rpc('liberar_codigo_partida', { p_sala_id: salaId });
+  try {
+    // ✅ RPC move código de volta para a fila (em_uso = false)
+    const { error } = await supabase.rpc('liberar_codigo_partida', { p_sala_id: salaId });
 
-  if (error) {
+    if (!error) {
+      console.log('[liberarCodigoPartida] ✅ Código liberado via RPC para sala:', salaId);
+      return;
+    }
+
     console.warn('[liberarCodigoPartida] RPC falhou:', error.message);
-    // Fallback: apenas limpa o campo (perderá a reciclagem, mas funciona)
-    await supabase.from('salas').update({ codigo_partida: null }).eq('id', salaId);
-  } else {
-    console.log('[liberarCodigoPartida] Código reciclado para sala:', salaId);
+  } catch (err: any) {
+    console.warn('[liberarCodigoPartida] Erro ao chamar RPC:', err?.message);
+  }
+
+  // ✅ FALLBACK: Buscar código da sala e liberar diretamente
+  const { data: sala } = await supabase.from('salas')
+    .select('codigo_partida').eq('id', salaId).maybeSingle();
+
+  if (sala?.codigo_partida) {
+    const { error } = await supabase.from('codigos_partida')
+      .update({ em_uso: false, sala_id: null })
+      .eq('codigo', sala.codigo_partida);
+
+    if (!error) {
+      console.log('[liberarCodigoPartida] ✅ Código liberado (fallback direto):', sala.codigo_partida);
+    } else {
+      console.error('[liberarCodigoPartida] ❌ Fallback falhou:', error.message);
+    }
   }
 }
 
