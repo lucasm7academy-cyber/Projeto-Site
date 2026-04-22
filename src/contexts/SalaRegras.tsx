@@ -29,7 +29,7 @@ export const TRANSICOES_VALIDAS: Record<EstadoSala, EstadoSala[]> = {
   aberta:             ['preenchendo', 'encerrada'],
   preenchendo:        ['aberta', 'confirmacao', 'encerrada'],
   confirmacao:        ['preenchendo', 'travada'],
-  travada:            ['aguardando_inicio'],
+  travada:            ['aguardando_inicio', 'preenchendo'], // ← Permite volta ao preenchimento se jogador sair durante draft
   aguardando_inicio:  ['em_partida', 'preenchendo'],
   em_partida:         ['finalizacao'],
   finalizacao:        ['encerrada'],
@@ -232,6 +232,7 @@ export function SalaRegrasProvider({
   const leaveTimeoutsRef    = useRef<Record<string, NodeJS.Timeout>>({}); // timeouts para remoção após leave
   const recarregarTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined); // debounce Realtime updates
   const salaRef             = useRef<Sala | null>(null); // rastreia estado atual para closures (não fica congelado)
+  const cancelandoDraftRef  = useRef(false); // evita múltiplas chamadas simultâneas de acaoCancelarDraftPorTimeout
 
   // ── Carregamento e realtime ────────────────────────────────────────────────
 
@@ -591,6 +592,25 @@ export function SalaRegrasProvider({
     // aguardando_inicio: nenhuma transição automática aqui.
     // A transição para em_partida é feita pelo timerCancelamento quando zera.
 
+    // travada → preenchendo: jogador foi removido por timeout (ex: durante draft)
+    // Se jogador tirou timeout, é removido; auto-transição detecta falta de jogador e volta
+    if (estado === 'travada' && total < max) {
+      console.log(`[Auto-transição] ⚠️ TRAVADA → PREENCHENDO (jogador saiu durante draft, total=${total}/${max})`);
+      transicionandoRef.current = true;
+      const fazer = async () => {
+        // 1. Desvincula quem sobrou (libera para resetarConfirmacoes funcionar)
+        await desvincularJogadores(salaId);
+        // 2. Reseta confirmações de quem sobrou
+        await resetarConfirmacoes(salaId);
+        // 3. Limpa draft_id da sala
+        await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
+        // 4. Volta pra preenchendo para buscar novo jogador
+        await transicionarEstado(salaId, 'preenchendo');
+      };
+      fazer().finally(() => { transicionandoRef.current = false; });
+      return;
+    }
+
     // finalizacao: avalia quando todos os jogadores votaram
     if (estado === 'finalizacao') {
       const finVotos = votos.filter((v: Voto) => v.fase === 'finalizacao');
@@ -760,16 +780,24 @@ export function SalaRegrasProvider({
       descricao,
       jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
     });
-    // 1. Deletar o draft
+
+    // 1. Desvincula todos os jogadores (libera-os para resetarConfirmacoes funcionar)
+    await desvincularJogadores(salaId);
+
+    // 2. Deletar o draft se existir
     if (sala.draft_id) {
       await supabase.from('drafts').delete().eq('id', sala.draft_id);
     }
-    // 2. Volta pra preenchendo (reinicia do zero) e reseta confirmações
-    await transicionarEstado(salaId, 'preenchendo');
-    await resetarConfirmacoes(salaId);
-    // 3. Limpar draft_id e votos de resultado
+
+    // 3. Limpar draft_id e votos
     await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
     await supabase.from('sala_votos').delete().eq('sala_id', salaId).eq('tipo', 'finalizacao');
+
+    // 4. Reseta confirmações (agora funciona porque todos estão desvinculados)
+    await resetarConfirmacoes(salaId);
+
+    // 5. Volta pra preenchendo para reiniciar do zero
+    await transicionarEstado(salaId, 'preenchendo');
   }, [sala, salaId, usuarioAtual.id, jogadorAtual]);
 
   const acaoVotarResultado = useCallback(async (opcao: OpcaoVotoResultado) => {
@@ -796,21 +824,41 @@ export function SalaRegrasProvider({
     await transicionarEstado(salaId, 'aguardando_inicio');
   }, [sala, salaId]);
 
-  const acaoCancelarDraftPorTimeout = useCallback(async () => {
+  const acaoCancelarDraftPorTimeout = useCallback(async (userIdQueFalhou: string) => {
+    // Guard: evita múltiplas chamadas simultâneas
+    if (cancelandoDraftRef.current) {
+      console.log('[SalaRegras] ⚠️ Cancelamento de draft já em andamento, ignorando chamada duplicada');
+      return;
+    }
+
     if (!sala || !sala.draft_id) return;
 
+    cancelandoDraftRef.current = true;
     try {
-      // 1. Deletar o draft
-      await supabase.from('drafts').delete().eq('id', sala.draft_id);
+      console.log('[SalaRegras] ⏱️ Timeout de draft do jogador:', userIdQueFalhou);
 
-      // 2. Volta pra confirmacao e reseta confirmações
-      await transicionarEstado(salaId, 'confirmacao');
-      await resetarConfirmacoes(salaId);
+      // 1. Remover o jogador que tirou timeout (DELETE direto ignora vinculado = true, intencional)
+      await supabase
+        .from('sala_jogadores')
+        .delete()
+        .eq('sala_id', salaId)
+        .eq('user_id', userIdQueFalhou);
+
+      // 2. Deletar o draft
+      await supabase.from('drafts').delete().eq('id', sala.draft_id);
 
       // 3. Limpar draft_id da sala
       await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
+
+      // 4. Auto-transição (travada → preenchendo) vai cuidar de:
+      //    - Desvinculação dos demais jogadores
+      //    - Reset de confirmações
+      //    - Transição de estado
+      console.log('[SalaRegras] ✅ Draft cancelado - auto-transição vai reagir ao detectar total < max');
     } catch (error) {
-      console.error('[SalaRegras] Erro ao cancelar draft por timeout:', error);
+      console.error('[SalaRegras] ❌ Erro ao cancelar draft por timeout:', error);
+    } finally {
+      cancelandoDraftRef.current = false;
     }
   }, [sala, salaId]);
 
