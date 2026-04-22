@@ -802,19 +802,20 @@ export function SalaRegrasProvider({
           jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
         });
 
-        // 1. Delete o draft se existir
-        if (sala.draft_id) {
-          await supabase.from('drafts').delete().eq('id', sala.draft_id);
-        }
+        // 🔴 RESET COMPLETO: Garantir limpeza TOTAL, sem dados residuais
+        // 1. Deletar QUALQUER draft dessa sala (não confiar em sala.draft_id que pode ser stale)
+        await supabase.from('drafts').delete().eq('sala_id', salaId);
 
-        // 2. Limpar draft_id e votos completamente
+        // 2. Garantir draft_id é null na sala
         await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
+
+        // 3. Deletar TODOS os votos (confirmacao + aguardando_inicio)
         await supabase.from('sala_votos').delete().eq('sala_id', salaId);
 
-        // 3. Reset total: remove todos
+        // 4. Deletar TODOS os jogadores
         await deletarJogadoresDaSala(salaId);
 
-        // 4. Volta pra preenchendo vazia
+        // 5. Volta pra preenchendo completamente vazia e limpa
         await transicionarEstado(salaId, 'preenchendo');
       } finally {
         transicionandoRef.current = false;
@@ -852,7 +853,7 @@ export function SalaRegrasProvider({
       return;
     }
 
-    if (!sala || !sala.draft_id) return;
+    if (!sala) return;
 
     cancelandoDraftRef.current = true;
     try {
@@ -865,10 +866,10 @@ export function SalaRegrasProvider({
         .eq('sala_id', salaId)
         .eq('user_id', userIdQueFalhou);
 
-      // 2. Deletar o draft
-      await supabase.from('drafts').delete().eq('id', sala.draft_id);
+      // 🔴 2. Deletar QUALQUER draft dessa sala (não confiar em sala.draft_id que pode ser stale)
+      await supabase.from('drafts').delete().eq('sala_id', salaId);
 
-      // 3. Limpar draft_id da sala
+      // 3. Limpar draft_id da sala garantidamente
       await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
 
       // 4. Auto-transição (travada → preenchendo) vai cuidar de:

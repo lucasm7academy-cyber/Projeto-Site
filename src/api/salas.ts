@@ -779,12 +779,9 @@ export async function resetarSalaCompleta(salaId: number): Promise<void> {
   await supabase.from('sala_votos').delete().eq('sala_id', salaId);
   // Libera o código se havia um atribuído
   await liberarCodigoPartida(salaId);
-  // Deleta o draft se houver
-  const { data: sala } = await supabase.from('salas').select('draft_id').eq('id', salaId).single();
-  if (sala?.draft_id) {
-    await supabase.from('drafts').delete().eq('id', sala.draft_id);
-  }
-  // Volta para aberta
+  // 🔴 RESET COMPLETO: Deletar QUALQUER draft dessa sala (não confiar em draft_id que pode ser stale)
+  await supabase.from('drafts').delete().eq('sala_id', salaId);
+  // Volta para aberta completamente vazia e limpa
   await supabase.from('salas').update({
     estado: 'aberta',
     codigo_partida: null,
