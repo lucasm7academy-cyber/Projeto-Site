@@ -355,8 +355,8 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
 
     // ✅ Resetar o timer de contagem regressiva para este novo turno
     timerStartTimeRef.current = Date.now();
-    timerDurationRef.current = 42;  // Sempre 42 segundos por turno
-    setTimer(42);  // Reset visual ao 42
+    timerDurationRef.current = 42;  // 30s visual + 12s buffer invisível
+    setTimer(30);  // Mostrar visual apenas 30s (buffer invisível nos bastidores)
   }, [draft?.current_turn]);
 
   // ============================================================
