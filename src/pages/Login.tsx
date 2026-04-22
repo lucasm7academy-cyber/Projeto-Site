@@ -314,10 +314,10 @@ export default function Login() {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-        className="relative z-10 w-full md:max-w-[95vw] lg:max-w-[90vw] xl:max-w-5xl 2xl:max-w-6xl flex flex-col md:flex-row rounded-none md:rounded-3xl lg:rounded-[2.5rem] overflow-hidden shadow-[0_0_100px_-20px_rgba(0,0,0,0.5)] md:max-h-[95vh] lg:max-h-[90vh]"
+        className="relative z-10 w-full max-h-[100vh] sm:max-h-[95vh] md:max-w-[95vw] lg:max-w-[90vw] xl:max-w-5xl 2xl:max-w-6xl flex flex-col md:flex-row rounded-none md:rounded-3xl lg:rounded-[2.5rem] overflow-hidden shadow-[0_0_100px_-20px_rgba(0,0,0,0.5)] md:max-h-[95vh] lg:max-h-[90vh]"
       >
         {/* Left Side - Form Section */}
-        <div className="flex-1 bg-white p-5 sm:p-6 md:p-8 lg:px-10 xl:px-14 flex flex-col relative overflow-y-auto order-2 md:order-1">
+        <div className="flex-1 bg-white p-4 sm:p-6 md:p-8 lg:px-10 xl:px-14 flex flex-col relative overflow-y-auto max-h-[calc(100vh-2rem)] sm:max-h-[calc(95vh-2rem)] md:max-h-none order-2 md:order-1">
           {/* Subtle Background Elements */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] translate-x-1/2 -translate-y-1/2 pointer-events-none" />
           
