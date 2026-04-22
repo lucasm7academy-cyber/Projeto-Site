@@ -28,9 +28,9 @@ import { atualizarPontosPartida, processarApostaPartida, type ResultadoPartida }
 export const TRANSICOES_VALIDAS: Record<EstadoSala, EstadoSala[]> = {
   aberta:             ['preenchendo', 'encerrada'],
   preenchendo:        ['aberta', 'confirmacao', 'encerrada'],
-  confirmacao:        ['preenchendo', 'travada'],
+  confirmacao:        ['preenchendo', 'travada', 'aguardando_inicio'],
   travada:            ['aguardando_inicio', 'preenchendo'], // ← Permite volta ao preenchimento se jogador sair durante draft
-  aguardando_inicio:  ['em_partida', 'preenchendo'],
+  aguardando_inicio:  ['em_partida', 'preenchendo', 'encerrada'],
   em_partida:         ['finalizacao'],
   finalizacao:        ['encerrada'],
   encerrada:          [],
@@ -178,8 +178,7 @@ interface SalaRegrasContextType {
   acaoDenunciarNaoIniciou:      (motivo: string, descricao?: string) => Promise<void>;
   acaoVotarResultado:           (opcao: OpcaoVotoResultado) => Promise<void>;
   acaoSolicitarFinalizacao:     () => Promise<void>;
-  acaoDraftFinalizado:          () => Promise<void>;
-  acaoCancelarDraftPorTimeout:  (userIdQueFalhou: string) => Promise<void>;
+  acaoCancelarPartida:          () => Promise<void>;
   acaoApagarSala:               () => Promise<void>;
   acaoSairDaSala:               () => void;
 }
@@ -424,7 +423,8 @@ export function SalaRegrasProvider({
       if (sala.aguardandoInicioExpiresAt) {
         return Math.max(0, Math.round((sala.aguardandoInicioExpiresAt.getTime() - Date.now()) / 1000));
       }
-      return TIMER_CANCELAMENTO_S;
+      // Fallback: 3 min para 1v1, 5 min para outros modos
+      return sala.modo === '1v1' ? 180 : 300;
     };
 
     setTimerCancelamento(calcRestante());
@@ -533,59 +533,19 @@ export function SalaRegrasProvider({
     console.log(`[Auto-transição] Confirmacao check: total=${total}/${max}, confirmados=${jogadores.filter(j => j.confirmado).length}, todosConfirmaram=${todosConfirmaram}`);
 
     if (estado === 'confirmacao' && total === max && jogadores.length === max && todosConfirmaram) {
-      console.log(`[Auto-transição] ✅ CONFIRMAÇÃO → TRAVADA (todos confirmaram!)`);
+      console.log(`[Auto-transição] ✅ CONFIRMAÇÃO → AGUARDANDO_INICIO (pulando draft)`);
       transicionandoRef.current = true;
       const fazer = async () => {
-        const ok = await transicionarEstado(salaId, 'travada');
-        if (ok) {
-          await vincularJogadores(salaId);
+        // ✅ Pular draft completamente — ir direto para aguardando_inicio
+        await vincularJogadores(salaId);
+        await atribuirCodigoPartida(salaId, sala!.modo);
+        await transicionarEstado(salaId, 'aguardando_inicio');
 
-          // Verificar se já existe draft antes de criar
-          const { data: draftExistente } = await supabase
-            .from('drafts')
-            .select('id')
-            .eq('sala_id', salaId)
-            .maybeSingle();
-
-          let draftId = draftExistente?.id;
-
-          if (!draftId) {
-            const { data: novoDraft } = await supabase
-              .from('drafts')
-              .insert({
-                sala_id: salaId,
-                blue_bans: [],
-                blue_picks: [],
-                red_bans: [],
-                red_picks: [],
-                current_phase: 'ban',
-                current_team: 'blue',
-                current_turn: 0,
-                timer_end: Date.now() + 42000,  // 30s visual + 12s invisível (5s rede + 7s buffer extra)
-                status: 'ongoing',
-                fearless_enabled: sala!.modo === 'time_vs_time',
-                fearless_pool: [],
-              })
-              .select('id')
-              .single();
-
-            draftId = novoDraft?.id;
-          }
-
-          if (draftId) {
-            // Vincula o draft_id à sala — a UI detecta isso e mostra o DraftRoom
-            await supabase
-              .from('salas')
-              .update({ draft_id: draftId })
-              .eq('id', salaId);
-            // STOP: não transiciona para aguardando_inicio aqui.
-            // acaoDraftFinalizado fará isso quando o draft terminar.
-          } else {
-            // Draft não pôde ser criado — avança sem draft
-            await atribuirCodigoPartida(salaId, sala!.modo);
-            await transicionarEstado(salaId, 'aguardando_inicio');
-          }
-        }
+        // Corrigir expires_at com tempo correto por modo (transicionarEstado seta sempre 3min)
+        const duracaoMs = sala!.modo === '1v1' ? 3 * 60 * 1000 : 5 * 60 * 1000;
+        await supabase.from('salas')
+          .update({ aguardando_inicio_expires_at: new Date(Date.now() + duracaoMs).toISOString() })
+          .eq('id', salaId);
       };
       fazer().finally(() => { transicionandoRef.current = false; });
       return;
@@ -856,60 +816,78 @@ export function SalaRegrasProvider({
     }
   }, [sala, salaId, podeExecutar, jogadorAtual]);
 
+  const acaoCancelarPartida = useCallback(async () => {
+    if (!sala || !jogadorAtual || transicionandoRef.current) return;
+    transicionandoRef.current = true;
+    try {
+      // Salvar resultado como cancelada (sem MP/MC)
+      const jogadores = sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA, role: j.role }));
+      await salvarResultadoPartida(salaId, 'cancelada', 'cancelada', jogadores);
+      // Encerrar sala e limpar
+      await encerrarSala(salaId, undefined);
+      await deletarJogadoresDaSala(salaId);
+      await liberarCodigoPartida(salaId);
+    } finally {
+      transicionandoRef.current = false;
+    }
+  }, [sala, salaId, jogadorAtual]);
+
+  // ❌ DEPRECATED: Draft foi descontinuado — deixando comentado para uso futuro
   const acaoDraftFinalizado = useCallback(async () => {
     if (!sala) return;
     await atribuirCodigoPartida(salaId, sala.modo);
     await transicionarEstado(salaId, 'aguardando_inicio');
   }, [sala, salaId]);
 
-  const acaoCancelarDraftPorTimeout = useCallback(async (userIdQueFalhou: string) => {
-    // Guard: evita múltiplas chamadas simultâneas
-    if (cancelandoDraftRef.current) {
-      console.log('[SalaRegras] ⚠️ Cancelamento de draft já em andamento, ignorando chamada duplicada');
-      return;
-    }
-
-    if (!sala) return;
-
-    cancelandoDraftRef.current = true;
-    try {
-      console.log('[SalaRegras] ⏱️ Timeout de draft do jogador:', userIdQueFalhou);
-      transicionandoRef.current = true;
-
-      // 1. Remover o jogador que tirou timeout (DELETE direto ignora vinculado = true, intencional)
-      await supabase
-        .from('sala_jogadores')
-        .delete()
-        .eq('sala_id', salaId)
-        .eq('user_id', userIdQueFalhou);
-
-      // 2. Desvincullar todos os demais jogadores PRIMEIRO
-      await atualizarVinculacao(salaId, false);
-
-      // 3. Resetar confirmações de todos
-      await supabase.from('sala_jogadores')
-        .update({ confirmado: false })
-        .eq('sala_id', salaId);
-
-      // 4. Deletar QUALQUER draft dessa sala (não confiar em sala.draft_id que pode ser stale)
-      await supabase.from('drafts').delete().eq('sala_id', salaId);
-
-      // 5. Limpar draft_id da sala garantidamente
-      await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
-
-      // 6. Deletar votos da sala
-      await supabase.from('sala_votos').delete().eq('sala_id', salaId);
-
-      // 7. FORÇA transição para preenchendo (não confia na auto-transição)
-      console.log('[SalaRegras] ✅ Draft cancelado - voltando para PREENCHENDO');
-      await transicionarEstado(salaId, 'preenchendo');
-    } catch (error) {
-      console.error('[SalaRegras] ❌ Erro ao cancelar draft por timeout:', error);
-    } finally {
-      cancelandoDraftRef.current = false;
-      transicionandoRef.current = false;
-    }
-  }, [sala, salaId]);
+  // ❌ DEPRECATED: Draft foi descontinuado — função não é mais chamada
+  // const acaoCancelarDraftPorTimeout = useCallback(async (userIdQueFalhou: string) => {
+  //   // Guard: evita múltiplas chamadas simultâneas
+  //   if (cancelandoDraftRef.current) {
+  //     console.log('[SalaRegras] ⚠️ Cancelamento de draft já em andamento, ignorando chamada duplicada');
+  //     return;
+  //   }
+  //
+  //   if (!sala) return;
+  //
+  //   cancelandoDraftRef.current = true;
+  //   try {
+  //     console.log('[SalaRegras] ⏱️ Timeout de draft do jogador:', userIdQueFalhou);
+  //     transicionandoRef.current = true;
+  //
+  //     // 1. Remover o jogador que tirou timeout (DELETE direto ignora vinculado = true, intencional)
+  //     await supabase
+  //       .from('sala_jogadores')
+  //       .delete()
+  //       .eq('sala_id', salaId)
+  //       .eq('user_id', userIdQueFalhou);
+  //
+  //     // 2. Desvincullar todos os demais jogadores PRIMEIRO
+  //     await atualizarVinculacao(salaId, false);
+  //
+  //     // 3. Resetar confirmações de todos
+  //     await supabase.from('sala_jogadores')
+  //       .update({ confirmado: false })
+  //       .eq('sala_id', salaId);
+  //
+  //     // 4. Deletar QUALQUER draft dessa sala (não confiar em sala.draft_id que pode ser stale)
+  //     await supabase.from('drafts').delete().eq('sala_id', salaId);
+  //
+  //     // 5. Limpar draft_id da sala garantidamente
+  //     await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
+  //
+  //     // 6. Deletar votos da sala
+  //     await supabase.from('sala_votos').delete().eq('sala_id', salaId);
+  //
+  //     // 7. FORÇA transição para preenchendo (não confia na auto-transição)
+  //     console.log('[SalaRegras] ✅ Draft cancelado - voltando para PREENCHENDO');
+  //     await transicionarEstado(salaId, 'preenchendo');
+  //   } catch (error) {
+  //     console.error('[SalaRegras] ❌ Erro ao cancelar draft por timeout:', error);
+  //   } finally {
+  //     cancelandoDraftRef.current = false;
+  //     transicionandoRef.current = false;
+  //   }
+  // }, [sala, salaId]);
 
   const acaoApagarSala = useCallback(async () => {
     if (!sala) return;
@@ -955,8 +933,7 @@ export function SalaRegrasProvider({
     acaoDenunciarNaoIniciou,
     acaoVotarResultado,
     acaoSolicitarFinalizacao,
-    acaoDraftFinalizado,
-    acaoCancelarDraftPorTimeout,
+    acaoCancelarPartida,
     acaoApagarSala,
     acaoSairDaSala,
   };

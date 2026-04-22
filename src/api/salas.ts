@@ -848,7 +848,7 @@ export async function desvincularJogador(salaId: number, userId: string): Promis
 // ── Salvar resultado da partida para auditoria ────────────────────────────────
 export async function salvarResultadoPartida(
   salaId: number,
-  vencedor: 'time_a' | 'time_b' | 'disputa',
+  vencedor: 'time_a' | 'time_b' | 'disputa' | 'cancelada',
   vencedorNome: string,
   jogadores: { id: string; nome: string; isTimeA: boolean; role: string }[]
 ): Promise<void> {

@@ -1,5 +1,5 @@
 // src/pages/SalaPage.tsx
-import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -7,20 +7,19 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getCachedUser } from '../contexts/AuthContext';
-import { buildProfileIconUrl, buildChampionIconUrl, getDDRVersion } from '../api/riot';
+import { buildProfileIconUrl } from '../api/riot';
 import {
   buscarSalaCompleta, buscarSalaVinculadaDoUsuario, deletarSala,
   type Sala, type JogadorNaSala, type OpcaoVotoResultado,
 } from '../api/salas';
-import { buscarDraftDaSala } from '../api/draft';
 import { buscarCargoUsuario } from '../api/users';
 import { SalaRegrasProvider, useSalaRegras } from '../contexts/SalaRegras';
 import { getModoInfo, getMPointsInfo, ROLE_CONFIG, type Role } from '../components/partidas/salaConfig';
-import { type DraftState, type Champion } from '../components/draft/draftTypes';
 import { StreamModal } from '../components/StreamModal';
 import { StreamerPanel } from '../components/StreamerPanel';
 
-const DraftRoom = lazy(() => import('../components/draft/DraftRoom').then(m => ({ default: m.DraftRoom })));
+// ❌ DEPRECATED: Draft foi descontinuado — não renderizando mais
+// const DraftRoom = lazy(() => import('../components/draft/DraftRoom').then(m => ({ default: m.DraftRoom })));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TIPO DO USUÁRIO
@@ -565,7 +564,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     podeExecutar,
     acaoEntrarVaga, acaoSairVaga, acaoConfirmarPresenca,
     acaoDenunciarNaoIniciou, acaoVotarResultado, acaoSolicitarFinalizacao,
-    acaoDraftFinalizado, acaoCancelarDraftPorTimeout, acaoApagarSala, acaoSairDaSala,
+    acaoCancelarPartida, acaoApagarSala, acaoSairDaSala,
   } = useSalaRegras();
 
   const [copiado, setCopiado]               = useState(false);
@@ -575,9 +574,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const [motivoDenuncia, setMotivoDenuncia] = useState('');
   const [descricaoDenuncia, setDescricaoDenuncia] = useState('');
   const [enviandoDenuncia, setEnviandoDenuncia]   = useState(false);
-  const [draftFinalizado, setDraftFinalizado] = useState<DraftState | null>(null);
-  const [champions, setChampions] = useState<Record<string, Champion>>({});
-  const [versionDDR, setVersionDDR] = useState('15.8.1');
   const [visualizandoPartida, setVisualizandoPartida] = useState(false);
   const [cargoUsuario, setCargoUsuario] = useState<'proprietario' | 'admin' | 'streamer' | 'coach' | 'jogador'>('jogador');
   const [salaStreamAtiva, setSalaStreamAtiva] = useState<any>(null);
@@ -697,30 +693,8 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     }
   }, [visualizandoPartida, sala?.estado, sala?.id]);
 
-  // Carregar draft quando estiver em aguardando_inicio, em_partida ou encerrada
-  useEffect(() => {
-    if (sala && (sala.estado === 'aguardando_inicio' || sala.estado === 'em_partida' || sala.estado === 'encerrada') && sala.draft_id) {
-      const carregarDraft = async () => {
-        const draft = await buscarDraftDaSala(sala.id);
-        if (draft) {
-          setDraftFinalizado(draft);
-          // Carregar champions
-          try {
-            const version = await getDDRVersion();
-            setVersionDDR(version);
-            const response = await fetch(
-              `https://ddragon.leagueoflegends.com/cdn/${version}/data/pt_BR/champion.json`
-            );
-            const data = await response.json();
-            setChampions(data.data);
-          } catch (error) {
-            console.error('Erro ao carregar champions:', error);
-          }
-        }
-      };
-      carregarDraft();
-    }
-  }, [sala?.id, sala?.draft_id, sala?.estado]);
+  // ❌ DEPRECATED: Draft foi descontinuado — não carregando mais
+  // useEffect para carregar draft foi removido
 
   // Auto-open resultado modal quando partida está encerrada
   useEffect(() => {
@@ -739,26 +713,8 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
     );
   }
 
-  // Mostra o DraftRoom enquanto a sala está em 'travada' e tem draft associado.
-  // Quando o draft termina, acaoDraftFinalizado atribui o código e avança para aguardando_inicio.
-  if (sala.estado === 'travada' && sala.draft_id) {
-    return (
-      <Suspense fallback={<div className="w-full h-full bg-black flex items-center justify-center"><div className="text-white">Carregando draft...</div></div>}>
-        <DraftRoom
-          salaId={sala.id}
-          usuarioId={usuarioAtual.id}
-          modo={sala.modo}
-          timeALogo={sala.timeALogo}
-          timeBLogo={sala.timeBLogo}
-          codigoPartida={sala.codigoPartida}
-          cargoUsuario={cargoUsuario}
-          onDraftFinalizado={acaoDraftFinalizado}
-          onPickTimeout={acaoCancelarDraftPorTimeout}
-          onDraftReset={() => acaoCancelarDraftPorTimeout(usuarioAtual.id)}
-        />
-      </Suspense>
-    );
-  }
+  // ❌ DEPRECATED: Draft foi descontinuado — não renderizando mais
+  // O fluxo agora é: confirmacao → aguardando_inicio (sem draft intermediário)
 
   const isX1 = sala.modo === '1v1';
   const roles: Role[] = isX1 ? ['MID'] : ['TOP', 'JG', 'MID', 'ADC', 'SUP'];
@@ -921,57 +877,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </div>
       )}
 
-      {/* Picks em AGUARDANDO_INICIO ou ABERTA — acima do overlay */}
-      {sala.estado === 'aguardando_inicio' && jogadorAtual && draftFinalizado && (
-        <div className="absolute top-[14vmin] left-1/2 -translate-x-1/2 w-[85vmin] z-50 text-center">
-          <div className="grid grid-cols-2 gap-[4vmin]">
-            {/* Time Azul */}
-            <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[0.8vmin]">Picks</span>
-              <div className="flex flex-wrap gap-[1vmin] justify-center">
-                {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
-                  const champ = champions[champId];
-                  return champ ? (
-                    <div
-                      key={idx}
-                      className="w-[6vmin] h-[6vmin] rounded-lg border border-blue-500/50 bg-blue-500/15 flex items-center justify-center overflow-hidden hover:border-blue-500/80 transition-colors"
-                      title={champ.name}
-                    >
-                      <img
-                        src={buildChampionIconUrl(champId, versionDDR)}
-                        alt={champ.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            </div>
-            {/* Time Vermelho */}
-            <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-red-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
-              <div className="flex flex-wrap gap-[1vmin] justify-center">
-                {draftFinalizado.red_picks.map((champId: string, idx: number) => {
-                  const champ = champions[champId];
-                  return champ ? (
-                    <div
-                      key={idx}
-                      className="w-[6vmin] h-[6vmin] rounded-lg border border-red-500/50 bg-red-500/15 flex items-center justify-center overflow-hidden hover:border-red-500/80 transition-colors"
-                      title={champ.name}
-                    >
-                      <img
-                        src={buildChampionIconUrl(champId, versionDDR)}
-                        alt={champ.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ❌ DEPRECATED: Exibição de picks foi removida (draft descontinuado) */}
 
       {/* Blur overlay (atrás) — z-20 */}
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
@@ -982,7 +888,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       {sala.estado === 'aguardando_inicio' && jogadorAtual && (
         <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
-            Draft Finalizado!
+            Partida Confirmada!
           </p>
           <p className="text-[1.2vmin] text-white/30 uppercase tracking-widest mb-[2vmin]">
             {cargoUsuario === 'jogador' ? 'Aguardando partida...' : 'Entre na sala usando o código abaixo'}
@@ -1014,11 +920,11 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           {/* Separador + botão de denúncia */}
           <div className="w-[20vmin] h-px bg-white/10 my-[2.5vmin]" />
           <button
-            onClick={() => setShowDenuncia(true)}
+            onClick={() => acaoCancelarPartida()}
             className="flex items-center gap-[1vmin] px-[3vmin] py-[1.2vmin] rounded-lg border border-red-500/20 text-red-400/60 hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/5 font-black text-[1.1vmin] uppercase tracking-widest transition-all"
           >
-            <AlertTriangle className="w-[1.4vmin] h-[1.4vmin]" />
-            Partida não iniciou
+            <X className="w-[1.4vmin] h-[1.4vmin]" />
+            Cancelar Partida
           </button>
           <span className="text-[0.9vmin] text-white/20 font-bold uppercase tracking-widest mt-[1vmin]">
             {formatTime(timerCancelamento)} restantes
@@ -1035,7 +941,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
       {sala.estado === 'aguardando_inicio' && !jogadorAtual && cargoUsuario !== 'jogador' && (
         <div className="absolute top-[40%] left-1/2 -translate-x-1/2 -translate-y-1/2 w-[75vmin] h-[75vmin] rounded-full flex flex-col items-center justify-center z-50 p-[8vmin] text-center pointer-events-auto">
           <p className="text-[1.4vmin] font-black text-white/40 uppercase tracking-[0.5em] mb-[1.5vmin]">
-            Draft Finalizado!
+            Partida Confirmada!
           </p>
           <p className="text-[1.2vmin] text-white/30 uppercase tracking-widest mb-[2vmin]">
             Entre na sala usando o código abaixo
@@ -1091,109 +997,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
         </div>
       )}
 
-      {/* Picks em AGUARDANDO_INICIO ou ABERTA para cargos especiais */}
-      {(sala.estado === 'aguardando_inicio' || sala.estado === 'aberta') && !jogadorAtual && cargoUsuario !== 'jogador' && draftFinalizado && (
-        <div className="absolute top-[11vmin] left-[5vmin] right-[5vmin] z-40 text-center">
-          <div className="grid grid-cols-2 gap-[4vmin]">
-            {/* Time Azul */}
-            <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[0.8vmin]">Picks</span>
-              <div className="flex flex-wrap gap-[1vmin] justify-center">
-                {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
-                  const champ = champions[champId];
-                  return champ ? (
-                    <div
-                      key={idx}
-                      className="w-[6vmin] h-[6vmin] rounded-lg border border-blue-500/50 bg-blue-500/15 flex items-center justify-center overflow-hidden hover:border-blue-500/80 transition-colors"
-                      title={champ.name}
-                    >
-                      <img
-                        src={buildChampionIconUrl(champId, versionDDR)}
-                        alt={champ.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            </div>
-            {/* Time Vermelho */}
-            <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-red-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
-              <div className="flex flex-wrap gap-[1vmin] justify-center">
-                {draftFinalizado.red_picks.map((champId: string, idx: number) => {
-                  const champ = champions[champId];
-                  return champ ? (
-                    <div
-                      key={idx}
-                      className="w-[6vmin] h-[6vmin] rounded-lg border border-red-500/50 bg-red-500/15 flex items-center justify-center overflow-hidden hover:border-red-500/80 transition-colors"
-                      title={champ.name}
-                    >
-                      <img
-                        src={buildChampionIconUrl(champId, versionDDR)}
-                        alt={champ.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Picks em EM_PARTIDA — mostra os picks selecionados durante o draft */}
-      {sala.estado === 'em_partida' && draftFinalizado && (
-        <div className="absolute top-[11vmin] left-[5vmin] right-[5vmin] z-40 text-center">
-          <div className="grid grid-cols-2 gap-[4vmin]">
-            {/* Time Azul */}
-            <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-blue-400 uppercase tracking-widest mb-[0.8vmin]">Picks</span>
-              <div className="flex flex-wrap gap-[1vmin] justify-center">
-                {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
-                  const champ = champions[champId];
-                  return champ ? (
-                    <div
-                      key={idx}
-                      className="w-[6vmin] h-[6vmin] rounded-lg border border-blue-500/50 bg-blue-500/15 flex items-center justify-center overflow-hidden hover:border-blue-500/80 transition-colors"
-                      title={champ.name}
-                    >
-                      <img
-                        src={buildChampionIconUrl(champId, versionDDR)}
-                        alt={champ.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            </div>
-            {/* Time Vermelho */}
-            <div className="flex flex-col items-center">
-              <span className="text-[1.2vmin] font-black text-red-400 uppercase tracking-widest mb-[1.5vmin]">Picks</span>
-              <div className="flex flex-wrap gap-[1vmin] justify-center">
-                {draftFinalizado.red_picks.map((champId: string, idx: number) => {
-                  const champ = champions[champId];
-                  return champ ? (
-                    <div
-                      key={idx}
-                      className="w-[6vmin] h-[6vmin] rounded-lg border border-red-500/50 bg-red-500/15 flex items-center justify-center overflow-hidden hover:border-red-500/80 transition-colors"
-                      title={champ.name}
-                    >
-                      <img
-                        src={buildChampionIconUrl(champId, versionDDR)}
-                        alt={champ.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  ) : null;
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Overlay de Votação de Resultado */}
       {/* Blur overlay de Finalização (atrás) — z-20 */}
@@ -1529,62 +1333,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
               </div>
             </div>
 
-            {/* PICKS dos Campeões */}
-            {draftFinalizado && (draftFinalizado.blue_picks?.length > 0 || draftFinalizado.red_picks?.length > 0) && (
-              <div className="mt-[3vmin] pt-[3vmin] border-t border-white/10">
-                <h4 className="text-[1.3vmin] font-black text-white/80 uppercase tracking-widest mb-[1.5vmin]">Campeões Escolhidos</h4>
-                <div className="grid grid-cols-2 gap-[2vmin]">
-                  {/* Blue Picks */}
-                  {draftFinalizado.blue_picks && draftFinalizado.blue_picks.length > 0 && (
-                    <div>
-                      <p className="text-[0.9vmin] font-bold text-blue-300 mb-[0.8vmin]">Time Azul</p>
-                      <div className="flex gap-[0.8vmin] flex-wrap">
-                        {draftFinalizado.blue_picks.map((champId: string, idx: number) => {
-                          const champ = champions[champId];
-                          return champ ? (
-                            <div
-                              key={idx}
-                              className="w-[6vmin] h-[6vmin] rounded-lg border border-blue-500/40 bg-blue-500/10 flex items-center justify-center overflow-hidden group"
-                              title={champ.name}
-                            >
-                              <img
-                                src={buildChampionIconUrl(champId, versionDDR)}
-                                alt={champ.name}
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                              />
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
-                    </div>
-                  )}
-                  {/* Red Picks */}
-                  {draftFinalizado.red_picks && draftFinalizado.red_picks.length > 0 && (
-                    <div>
-                      <p className="text-[0.9vmin] font-bold text-red-300 mb-[0.8vmin]">Time Vermelho</p>
-                      <div className="flex gap-[0.8vmin] flex-wrap">
-                        {draftFinalizado.red_picks.map((champId: string, idx: number) => {
-                          const champ = champions[champId];
-                          return champ ? (
-                            <div
-                              key={idx}
-                              className="w-[6vmin] h-[6vmin] rounded-lg border border-red-500/40 bg-red-500/10 flex items-center justify-center overflow-hidden group"
-                              title={champ.name}
-                            >
-                              <img
-                                src={buildChampionIconUrl(champId, versionDDR)}
-                                alt={champ.name}
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform"
-                              />
-                            </div>
-                          ) : null;
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* ❌ DEPRECATED: Exibição de picks foi removida (draft descontinuado) */}
 
             <div className="flex gap-[2vmin] mt-[3vmin]">
               <button
