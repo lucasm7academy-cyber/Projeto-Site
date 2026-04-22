@@ -362,7 +362,7 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
       titulos:          0,
       rolePrincipal:    (LANE_MAP[perfil.lane]  ?? 'MID') as Role,
       roleSecundaria:   (LANE_MAP[perfil.lane2] ?? 'RES') as Role,
-      isVIP:            perfil.is_vip ?? false,
+      isVIP:            perfil?.is_vip ?? false,
       isVerified:       true,
       kda:              0,
       csPorMinuto:      0,
