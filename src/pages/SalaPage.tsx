@@ -725,7 +725,9 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
   // Auto-open resultado modal quando partida está encerrada
   useEffect(() => {
+    console.log('[SalaPage] Auto-open check - Estado:', sala?.estado, 'Visualizando:', visualizandoPartida);
     if (sala && sala.estado === 'encerrada' && !visualizandoPartida) {
+      console.log('[SalaPage] ✅ Abrindo modal de resultado automaticamente!');
       setVisualizandoPartida(true);
     }
   }, [sala?.estado, visualizandoPartida]);
