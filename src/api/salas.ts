@@ -493,8 +493,15 @@ export async function sairDaVaga(salaId: number, userId: string): Promise<void> 
     .eq('user_id', userId)
     .maybeSingle();
 
+  // 🔴 BUG FIX #3: Se jogador não existe ou foi deletado, retorna silenciosamente
+  // Evita race condition durante resetarConfirmacoes
+  if (!jogador) {
+    console.log(`[sairDaVaga] Jogador ${userId} não encontrado ou já foi deletado`);
+    return;
+  }
+
   // Se jogador está vinculado (em partida), retorna sem fazer nada
-  if (jogador?.vinculado) {
+  if (jogador.vinculado) {
     console.log(`[sairDaVaga] Jogador ${userId} está vinculado (em partida) — NÃO removendo`);
     return;
   }

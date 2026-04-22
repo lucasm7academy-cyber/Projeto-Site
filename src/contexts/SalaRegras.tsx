@@ -396,7 +396,9 @@ export function SalaRegrasProvider({
       const restante = calcRestante();
       setTimerConfirmacao(restante);
 
-      if (restante <= 0 && !transicionandoRef.current) {
+      // 🔴 BUG FIX #1: Verificar estado antes de fazer transição
+      // Protege contra timer disparar DEPOIS de sala já ter transitado pra travada
+      if (restante <= 0 && !transicionandoRef.current && sala?.estado === 'confirmacao') {
         clearInterval(timerConfirmacaoRef.current);
         // Timer expirado: volta pra preenchendo e reseta confirmações
         transicionandoRef.current = true;
@@ -559,7 +561,7 @@ export function SalaRegrasProvider({
                 current_phase: 'ban',
                 current_team: 'blue',
                 current_turn: 0,
-                timer_end: Date.now() + 35000,
+                timer_end: Date.now() + 42000,  // 30s visual + 12s invisível (5s rede + 7s buffer extra)
                 status: 'ongoing',
                 fearless_enabled: sala!.modo === 'time_vs_time',
                 fearless_pool: [],
@@ -777,6 +779,9 @@ export function SalaRegrasProvider({
   const acaoDenunciarNaoIniciou = useCallback(async (motivo: string, descricao?: string) => {
     if (!sala || !jogadorAtual) return;
 
+    // 🔴 BUG FIX #2: Proteger contra race condition com timerCancelamento
+    if (transicionandoRef.current) return;
+
     // Comportamento diferente por estado
     if (sala.estado === 'confirmacao') {
       // Em confirmacao: reset reversível (remove não-confirmers, mantém confirmers)
@@ -787,28 +792,33 @@ export function SalaRegrasProvider({
 
     if (sala.estado === 'aguardando_inicio') {
       // Em aguardando_inicio: reset total + denúncia (partida foi denunciada como não iniciou)
-      await criarRequisicaoAdmin({
-        sala_id:       salaId,
-        reportado_por: usuarioAtual.id,
-        motivo,
-        descricao,
-        jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
-      });
+      transicionandoRef.current = true;
+      try {
+        await criarRequisicaoAdmin({
+          sala_id:       salaId,
+          reportado_por: usuarioAtual.id,
+          motivo,
+          descricao,
+          jogadores:     sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA })),
+        });
 
-      // 1. Delete o draft se existir
-      if (sala.draft_id) {
-        await supabase.from('drafts').delete().eq('id', sala.draft_id);
+        // 1. Delete o draft se existir
+        if (sala.draft_id) {
+          await supabase.from('drafts').delete().eq('id', sala.draft_id);
+        }
+
+        // 2. Limpar draft_id e votos completamente
+        await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
+        await supabase.from('sala_votos').delete().eq('sala_id', salaId);
+
+        // 3. Reset total: remove todos
+        await deletarJogadoresDaSala(salaId);
+
+        // 4. Volta pra preenchendo vazia
+        await transicionarEstado(salaId, 'preenchendo');
+      } finally {
+        transicionandoRef.current = false;
       }
-
-      // 2. Limpar draft_id e votos completamente
-      await supabase.from('salas').update({ draft_id: null }).eq('id', salaId);
-      await supabase.from('sala_votos').delete().eq('sala_id', salaId);
-
-      // 3. Reset total: remove todos
-      await deletarJogadoresDaSala(salaId);
-
-      // 4. Volta pra preenchendo vazia
-      await transicionarEstado(salaId, 'preenchendo');
     }
   }, [sala, salaId, usuarioAtual.id, jogadorAtual]);
 
