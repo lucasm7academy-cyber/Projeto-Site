@@ -677,11 +677,15 @@ export async function deletarSala(salaId: number): Promise<void> {
 
 // ── Encerrar sala (estado encerrada + limpeza) ────────────────────────────────
 export async function encerrarSala(salaId: number, vencedor?: 'A' | 'B' | 'empate'): Promise<void> {
+  // 1. Atualizar estado da sala para 'encerrada'
   await supabase.from('salas').update({
     estado:    'encerrada',
     vencedor:  vencedor ?? null,
     updated_at: new Date().toISOString(),
   }).eq('id', salaId);
+
+  // 2. ✅ DESVINCULAÇÃO: Deletar todos os jogadores para liberar para próximas salas
+  await deletarJogadoresDaSala(salaId);
 }
 
 // ── Buscar sala ativa do usuário (qualquer slot, vinculado ou não) ────────────
