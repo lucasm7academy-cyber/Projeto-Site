@@ -65,7 +65,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initializedRef = useRef(false);
   const timerStartTimeRef = useRef<number | null>(null);
-  const timerDurationRef = useRef<number>(42);
+  const timerDurationRef = useRef<number>(37);
   const draftRef = useRef<DraftState | null>(null);
 
   // ============================================================
@@ -318,23 +318,27 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
 
       const elapsed = Math.floor((Date.now() - timerStartTimeRef.current) / 1000);
       const restante = Math.max(0, timerDurationRef.current - elapsed);
-      setTimer(restante);
+      setTimer(Math.min(restante, 30));  // Mostrar max 30s (7s de buffer invisível)
 
-      // ✅ AUTO-ACTION QUANDO TIMER REAL CHEGA A 0
-      // Nota: Timeout de pick é tratado via Realtime (mais confiável)
-      // Aqui apenas fazemos ban automático em branco se aplicável
-      if (restante === 0 && !timerFrozen && possoJogar && meuTime && currentDraft.current_phase === 'ban') {
+      // ✅ AUTO-ACTION QUANDO TIMER REAL CHEGA A 0 (37s total passaram)
+      if (restante === 0 && !timerFrozen && possoJogar && meuTime) {
         const turnOrder = getTurnOrder(modo);
         const ehMeuTurno = turnOrder[currentDraft.current_turn]?.team === meuTime;
         if (ehMeuTurno) {
-          console.log('[DraftRoom] ⏱️ Ban automático por timeout (42s real)');
-          setTimerFrozen(true);
-          timeoutRef.current = setTimeout(async () => {
-            if (draftRef.current) {
-              await banirCampeao(draftRef.current, '', draftRef.current.current_team, modo);
-            }
-            setTimerFrozen(false);
-          }, 0);
+          if (currentDraft.current_phase === 'ban') {
+            console.log('[DraftRoom] ⏱️ Ban automático em branco');
+            setTimerFrozen(true);
+            timeoutRef.current = setTimeout(async () => {
+              if (draftRef.current) {
+                await banirCampeao(draftRef.current, '', draftRef.current.current_team, modo);
+              }
+              setTimerFrozen(false);
+            }, 0);
+          } else if (currentDraft.current_phase === 'pick') {
+            console.log('[DraftRoom] ⏱️ Pick timeout - cancelando draft');
+            setTimerFrozen(true);
+            onPickTimeout?.(usuarioId);
+          }
         }
       }
     }, 1000);
@@ -355,7 +359,7 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
 
     // ✅ Resetar o timer de contagem regressiva para este novo turno
     timerStartTimeRef.current = Date.now();
-    timerDurationRef.current = 42;  // 30s visual + 12s buffer invisível
+    timerDurationRef.current = 37;  // 30s visual + 7s buffer invisível
     setTimer(30);  // Mostrar visual apenas 30s (buffer invisível nos bastidores)
   }, [draft?.current_turn]);
 
