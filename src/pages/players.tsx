@@ -326,7 +326,11 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
   const timeMap   = Object.fromEntries((times  ?? []).map((t: any) => [t.id, t]));
 
   // 🔍 DEBUG: Verificar is_vip dos perfis
-  console.log('[carregarJogadores] Perfis com is_vip:', (perfis ?? []).slice(0, 5).map((p: any) => ({ id: p.id, is_vip: p.is_vip })));
+  console.log('[carregarJogadores] TODOS Perfis:', perfis);
+  console.log('[carregarJogadores] Contas e seus is_vip:', contas.map((c: any) => {
+    const perfil = perfilMap[c.user_id];
+    return { user_id: c.user_id, riot_id: c.riot_id, is_vip: perfil?.is_vip };
+  }));
 
   const jogadores = contas.map((c: any) => {
     const perfil = perfilMap[c.user_id] ?? {};
@@ -696,7 +700,7 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* VIP Banner Fita Diagonal Direita - Apenas para VIP */}
+                    {/* VIP Banner Fita Diagonal Direita - Mostrar para TODOS verem quem é VIP */}
                     {jogador.isVIP && (
                       <div className="absolute top-0 right-0 w-16 h-16 overflow-hidden pointer-events-none z-10">
                         <div
