@@ -736,53 +736,53 @@ export async function buscarSalaPorCodigo(codigo: string): Promise<Sala | null> 
  *  3) Se também falhar (RLS), usa código aleatório de emergência
  */
 export async function atribuirCodigoPartida(salaId: number, modo: string): Promise<string | null> {
-  // Tentativa 1: RPC com pool de códigos
+  // ✅ Tentativa 1: RPC com fila FIFO atômica (transação com LOCK)
+  // Garante que dois clientes NUNCA recebem o mesmo código
   const { data: rpcData, error: rpcErr } = await supabase
     .rpc('atribuir_codigo_partida', { p_sala_id: Number(salaId), p_modo: modo });
-  if (!rpcErr && rpcData) return rpcData as string;
+
+  if (!rpcErr && rpcData) {
+    console.log('[atribuirCodigoPartida] Código atribuído via RPC:', rpcData);
+    // Salva o código na sala
+    await supabase.from('salas')
+      .update({ codigo_partida: rpcData })
+      .eq('id', salaId);
+    return rpcData as string;
+  }
 
   console.warn('[atribuirCodigoPartida] RPC falhou:', rpcErr?.message);
 
-  // Tentativa 2: query direta à tabela codigos_partida (sem colunas opcionais)
-  const { data: rows, error: rowsErr } = await supabase
-    .from('codigos_partida')
-    .select('id, codigo')
-    .eq('modo', modo)
-    .order('id', { ascending: true })
-    .limit(1);
+  // ❌ FALLBACK REMOVIDO: não usar query direta
+  // A query direta tem race condition e pode atribuir o mesmo código a duas salas
+  // Se o RPC falhou, usa código aleatório de emergência
 
-  console.warn('[atribuirCodigoPartida] busca direta — modo:', modo, '| rows:', rows, '| erro:', rowsErr?.message);
-
-  if (rows && rows.length > 0) {
-    const escolhido = rows[0] as { id: number; codigo: string };
-
-    // Tenta marcar como em uso (coluna pode não existir — ignora erro)
-    await supabase.from('codigos_partida')
-      .update({ em_uso: true, sala_id: salaId })
-      .eq('id', escolhido.id);
-
-    // Salva o código na sala
-    const { error: e2 } = await supabase.from('salas')
-      .update({ codigo_partida: escolhido.codigo }).eq('id', salaId);
-    if (!e2) return escolhido.codigo;
-    console.warn('[atribuirCodigoPartida] update sala falhou:', e2.message);
-  }
-
-  // Tentativa 3: código aleatório de emergência (RLS não permite acesso à tabela)
+  // Tentativa 2: código aleatório de emergência
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const codigo = Array.from({ length: 5 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  await supabase.from('salas').update({ codigo_partida: codigo }).eq('id', salaId);
-  console.error('[atribuirCodigoPartida] EMERGÊNCIA — RLS bloqueia codigos_partida ou tabela vazia para modo:', modo);
-  return codigo;
+  const codigoEmergencia = Array.from({ length: 5 }, () =>
+    chars[Math.floor(Math.random() * chars.length)]
+  ).join('');
+
+  await supabase.from('salas')
+    .update({ codigo_partida: codigoEmergencia })
+    .eq('id', salaId);
+
+  console.error('[atribuirCodigoPartida] Código de emergência gerado (RPC indisponível para modo %s):', modo, codigoEmergencia);
+  return codigoEmergencia;
 }
 
-/** Libera o código quando a partida encerra. */
+/** Libera o código quando a partida encerra (reciclagem na fila). */
 export async function liberarCodigoPartida(salaId: number): Promise<void> {
-  // Tentativa 1: RPC de liberação
+  // ✅ RPC move código de volta para a fila (em_uso = false)
+  // Depois será reutilizado quando todos os outros forem usados
   const { error } = await supabase.rpc('liberar_codigo_partida', { p_sala_id: salaId });
-  if (!error) return;
-  // Tentativa 2: limpa direto no campo
-  await supabase.from('salas').update({ codigo_partida: null }).eq('id', salaId);
+
+  if (error) {
+    console.warn('[liberarCodigoPartida] RPC falhou:', error.message);
+    // Fallback: apenas limpa o campo (perderá a reciclagem, mas funciona)
+    await supabase.from('salas').update({ codigo_partida: null }).eq('id', salaId);
+  } else {
+    console.log('[liberarCodigoPartida] Código reciclado para sala:', salaId);
+  }
 }
 
 // ── Reset completo de sala (cancela partida, desvincula todos) ────────────────
