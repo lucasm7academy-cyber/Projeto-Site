@@ -320,10 +320,16 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
       const restante = Math.max(0, timerDurationRef.current - elapsed);
       setTimer(Math.min(restante, 30));  // Mostrar max 30s (7s de buffer invisível)
 
+      // DEBUG: Log a cada 5 segundos
+      if (elapsed % 5 === 0) {
+        console.log(`[DraftRoom] Timer: ${restante}s restante (elapsed=${elapsed}), frozen=${timerFrozen}, pode=${possoJogar}, time=${meuTime}, fase=${currentDraft.current_phase}`);
+      }
+
       // ✅ AUTO-ACTION QUANDO TIMER REAL CHEGA A 0 (37s total passaram)
       if (restante === 0 && !timerFrozen && possoJogar && meuTime) {
         const turnOrder = getTurnOrder(modo);
         const ehMeuTurno = turnOrder[currentDraft.current_turn]?.team === meuTime;
+        console.log(`[DraftRoom] Verificando auto-action: restante=${restante}, ehMeuTurno=${ehMeuTurno}, turn=${currentDraft.current_turn}, turnOrder=${JSON.stringify(turnOrder)}`);
         if (ehMeuTurno) {
           if (currentDraft.current_phase === 'ban') {
             console.log('[DraftRoom] ⏱️ Ban automático em branco');
