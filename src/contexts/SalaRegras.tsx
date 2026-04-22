@@ -124,8 +124,9 @@ async function encerrarPartidaComResultado(
     }
   }
 
+  // ✅ encerrarSala agora desvincula TODOS automaticamente
   await encerrarSala(salaId, vencedorDB as any);
-  await deletarJogadoresDaSala(salaId);
+  // ✅ Liberar código para reutilização
   await liberarCodigoPartida(salaId);
 }
 
@@ -823,9 +824,9 @@ export function SalaRegrasProvider({
       // Salvar resultado como cancelada (sem MP/MC)
       const jogadores = sala.jogadores.map(j => ({ id: j.id, nome: j.nome, isTimeA: j.isTimeA, role: j.role }));
       await salvarResultadoPartida(salaId, 'cancelada', 'cancelada', jogadores);
-      // Encerrar sala e limpar
+      // ✅ encerrarSala agora desvincula TODOS automaticamente
       await encerrarSala(salaId, undefined);
-      await deletarJogadoresDaSala(salaId);
+      // ✅ Liberar código para reutilização
       await liberarCodigoPartida(salaId);
     } finally {
       transicionandoRef.current = false;
