@@ -312,7 +312,8 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
   }
 
   const [{ data: perfis }, { data: membros }] = await Promise.all([
-    supabase.from('profiles').select('id, lane, lane2, is_vip').in('id', userIds),
+    // ✅ Usar RPC para pular RLS e buscar TODOS os perfis
+    supabase.rpc('buscar_perfis_publicos', { user_ids: userIds }),
     supabase.from('time_membros').select('user_id, time_id').in('user_id', userIds),
   ]);
 
