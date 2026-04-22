@@ -784,9 +784,19 @@ export function SalaRegrasProvider({
 
     // Comportamento diferente por estado
     if (sala.estado === 'confirmacao') {
-      // Em confirmacao: reset reversível (remove não-confirmers, mantém confirmers)
-      await resetarConfirmacoes(salaId);
-      await transicionarEstado(salaId, 'preenchendo');
+      // Em confirmacao: reset reversível (desvincula primeiro, depois reseta)
+      transicionandoRef.current = true;
+      try {
+        // 🔧 FIX: Desvincula ANTES de resetar (resetarConfirmacoes filtra vinculado=false)
+        await atualizarVinculacao(salaId, false);
+        await supabase.from('sala_jogadores')
+          .update({ confirmado: false })
+          .eq('sala_id', salaId);
+        await resetarConfirmacoes(salaId);
+        await transicionarEstado(salaId, 'preenchendo');
+      } finally {
+        transicionandoRef.current = false;
+      }
       return;
     }
 
@@ -803,6 +813,12 @@ export function SalaRegrasProvider({
         });
 
         // 🔴 RESET COMPLETO: Garantir limpeza TOTAL, sem dados residuais
+        // 🔧 FIX: Desvincula ANTES de deletar (remove o bloqueio de sairDaVaga)
+        await atualizarVinculacao(salaId, false);
+        await supabase.from('sala_jogadores')
+          .update({ confirmado: false })
+          .eq('sala_id', salaId);
+
         // 1. Deletar QUALQUER draft dessa sala (não confiar em sala.draft_id que pode ser stale)
         await supabase.from('drafts').delete().eq('sala_id', salaId);
 
@@ -812,11 +828,11 @@ export function SalaRegrasProvider({
         // 3. Deletar TODOS os votos (confirmacao + aguardando_inicio)
         await supabase.from('sala_votos').delete().eq('sala_id', salaId);
 
-        // 4. Deletar TODOS os jogadores
-        await deletarJogadoresDaSala(salaId);
-
-        // 5. Volta pra preenchendo completamente vazia e limpa
+        // 4. Transicionar para preenchendo ANTES de deletar (assim sairDaVaga não bloqueia)
         await transicionarEstado(salaId, 'preenchendo');
+
+        // 5. Deletar TODOS os jogadores agora que sala está em preenchendo
+        await deletarJogadoresDaSala(salaId);
       } finally {
         transicionandoRef.current = false;
       }
