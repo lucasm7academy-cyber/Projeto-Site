@@ -652,15 +652,20 @@ export default function App() {
                       </div>
                     )}
 
-                    {/* VIP Banner Faixa */}
+                    {/* VIP Banner Fita Diagonal */}
                     {jogador.isVIP && (
-                      <div className="absolute top-0 right-0 w-24 h-24 overflow-hidden">
-                        <div className="absolute -top-2 -right-8 w-32 h-12 bg-gradient-to-r from-[#FFB800] to-[#FFD700] transform rotate-45 flex items-center justify-center shadow-lg"
+                      <div className="absolute top-0 right-0 w-16 h-16 overflow-hidden pointer-events-none">
+                        <div
+                          className="absolute w-20 h-8 bg-gradient-to-r from-[#FFB800] to-[#FFD700] flex items-center justify-center font-black text-black text-[11px] tracking-widest shadow-lg"
                           style={{
-                            boxShadow: '0 4px 15px rgba(255, 184, 0, 0.4)'
+                            top: '4px',
+                            right: '-28px',
+                            transform: 'rotate(-45deg)',
+                            boxShadow: '0 2px 8px rgba(255, 184, 0, 0.5)',
+                            letterSpacing: '0.15em'
                           }}
                         >
-                          <span className="text-xs font-black text-black tracking-wider transform -rotate-45">VIP</span>
+                          VIP
                         </div>
                       </div>
                     )}
