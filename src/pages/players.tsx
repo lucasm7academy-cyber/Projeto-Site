@@ -249,6 +249,30 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
 
   const userIds = contas.map((c: any) => c.user_id);
 
+  // ✅ OTIMIZAÇÃO: Buscar resultados UMA VEZ para todos, não por jogador
+  const { data: resultados } = await supabase
+    .from('resultados_partidas')
+    .select('vencedor, jogadores')
+    .limit(1000);
+
+  // Contar partidas por jogador em memória (O(n) em vez de O(n*m))
+  const contarMap: Record<string, { total: number; vitories: number; defeats: number }> = {};
+  for (const userId of userIds) {
+    contarMap[userId] = { total: 0, vitories: 0, defeats: 0 };
+  }
+  if (resultados) {
+    for (const resultado of resultados) {
+      const jogadores = resultado.jogadores as any[];
+      for (const jogador of jogadores ?? []) {
+        if (!contarMap[jogador.id]) continue;
+        const ehVitoria = (resultado.vencedor === 'time_a' && jogador.isTimeA) || (resultado.vencedor === 'time_b' && !jogador.isTimeA);
+        contarMap[jogador.id].total++;
+        if (ehVitoria) contarMap[jogador.id].vitories++;
+        else contarMap[jogador.id].defeats++;
+      }
+    }
+  }
+
   const [{ data: perfis }, { data: membros }] = await Promise.all([
     supabase.from('profiles').select('id, lane, lane2, is_vip').in('id', userIds),
     supabase.from('time_membros').select('user_id, time_id').in('user_id', userIds),
@@ -263,54 +287,52 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
   const membroMap = Object.fromEntries((membros ?? []).map((m: any) => [m.user_id, m]));
   const timeMap   = Object.fromEntries((times  ?? []).map((t: any) => [t.id, t]));
 
-  const jogadores = await Promise.all(
-    contas.map(async (c: any) => {
-      const perfil = perfilMap[c.user_id] ?? {};
-      const membro = membroMap[c.user_id];
-      const time   = membro ? timeMap[membro.time_id] : null;
+  const jogadores = contas.map((c: any) => {
+    const perfil = perfilMap[c.user_id] ?? {};
+    const membro = membroMap[c.user_id];
+    const time   = membro ? timeMap[membro.time_id] : null;
 
-      // Contar partidas reais
-      const { total, vitories, defeats } = await contarPartidas(c.user_id);
-      const winRate = total > 0 ? Math.round((vitories / total) * 100) : 0;
+    // ✅ Contar vem do mapa pré-computado (sem async)
+    const { total, vitories, defeats } = contarMap[c.user_id] ?? { total: 0, vitories: 0, defeats: 0 };
+    const winRate = total > 0 ? Math.round((vitories / total) * 100) : 0;
 
-      // ✅ CACHE: Elo vem do banco (tier), não de busca sequencial da Riot API
-      const eloType: EloType = c.tier ? (TIER_MAP[c.tier] ?? 'Ferro') : 'Ferro';
-      const eloIdadeMs = c.last_elo_update ? Date.now() - new Date(c.last_elo_update).getTime() : null;
-      const eloTempoAtualizacao = eloIdadeMs
-        ? eloIdadeMs < 3600000 ? '< 1h'
-        : eloIdadeMs < 86400000 ? '< 24h'
-        : '> 24h'
-        : 'nunca';
+    // ✅ CACHE: Elo vem do banco (tier), não de busca sequencial da Riot API
+    const eloType: EloType = c.tier ? (TIER_MAP[c.tier] ?? 'Ferro') : 'Ferro';
+    const eloIdadeMs = c.last_elo_update ? Date.now() - new Date(c.last_elo_update).getTime() : null;
+    const eloTempoAtualizacao = eloIdadeMs
+      ? eloIdadeMs < 3600000 ? '< 1h'
+      : eloIdadeMs < 86400000 ? '< 24h'
+      : '> 24h'
+      : 'nunca';
 
-      return {
-        id:               c.user_id,
-        riotId:           c.riot_id ?? 'Jogador',
-        nome:             (c.riot_id ?? 'Jogador').split('#')[0],
-        nivel:            c.level ?? 1,
-        elo:              eloType,
-        iconeId:          c.profile_icon_id ?? 1,
-        partidas:         total,
-        winRate:          winRate,
-        titulos:          0,
-        rolePrincipal:    (LANE_MAP[perfil.lane]  ?? 'MID') as Role,
-        roleSecundaria:   (LANE_MAP[perfil.lane2] ?? 'RES') as Role,
-        isVIP:            perfil.is_vip ?? false,
-        isVerified:       true,
-        kda:              0,
-        csPorMinuto:      0,
-        participacaoKill: 0,
-        conquistas:       [],
-        timeTag:          time?.tag          ?? undefined,
-        timeColor:        time?.gradient_from ?? undefined,
-        timeLogo:         time?.logo_url      ?? undefined,
-        timeId:           membro?.time_id     ?? undefined,
-        mp:               c.mp ?? 0,
-        mc:               c.mc ?? 0,
-        _puuid:           c.puuid ?? undefined,
-        _eloTempoAtual:   eloTempoAtualizacao,  // ← Mostrar idade do cache
-      } as Jogador & { _puuid?: string; _eloTempoAtual?: string };
-    })
-  );
+    return {
+      id:               c.user_id,
+      riotId:           c.riot_id ?? 'Jogador',
+      nome:             (c.riot_id ?? 'Jogador').split('#')[0],
+      nivel:            c.level ?? 1,
+      elo:              eloType,
+      iconeId:          c.profile_icon_id ?? 1,
+      partidas:         total,
+      winRate:          winRate,
+      titulos:          0,
+      rolePrincipal:    (LANE_MAP[perfil.lane]  ?? 'MID') as Role,
+      roleSecundaria:   (LANE_MAP[perfil.lane2] ?? 'RES') as Role,
+      isVIP:            perfil.is_vip ?? false,
+      isVerified:       true,
+      kda:              0,
+      csPorMinuto:      0,
+      participacaoKill: 0,
+      conquistas:       [],
+      timeTag:          time?.tag          ?? undefined,
+      timeColor:        time?.gradient_from ?? undefined,
+      timeLogo:         time?.logo_url      ?? undefined,
+      timeId:           membro?.time_id     ?? undefined,
+      mp:               c.mp ?? 0,
+      mc:               c.mc ?? 0,
+      _puuid:           c.puuid ?? undefined,
+      _eloTempoAtual:   eloTempoAtualizacao,  // ← Mostrar idade do cache
+    } as Jogador & { _puuid?: string; _eloTempoAtual?: string };
+  });
 
   return { jogadores, temMais };
 }
@@ -627,6 +649,19 @@ export default function App() {
                     {jogador.isVIP && (
                       <div className="absolute -top-1 left-1/2 -translate-x-1/2 z-10">
                         <VipCrown />
+                      </div>
+                    )}
+
+                    {/* VIP Banner Faixa */}
+                    {jogador.isVIP && (
+                      <div className="absolute top-0 right-0 w-24 h-24 overflow-hidden">
+                        <div className="absolute -top-2 -right-8 w-32 h-12 bg-gradient-to-r from-[#FFB800] to-[#FFD700] transform rotate-45 flex items-center justify-center shadow-lg"
+                          style={{
+                            boxShadow: '0 4px 15px rgba(255, 184, 0, 0.4)'
+                          }}
+                        >
+                          <span className="text-xs font-black text-black tracking-wider transform -rotate-45">VIP</span>
+                        </div>
                       </div>
                     )}
                     
