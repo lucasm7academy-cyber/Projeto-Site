@@ -231,6 +231,7 @@ export function SalaRegrasProvider({
   const entrandoVagaRef     = useRef(false); // evita double-click / requisições simultâneas
   const leaveTimeoutsRef    = useRef<Record<string, NodeJS.Timeout>>({}); // timeouts para remoção após leave
   const recarregarTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined); // debounce Realtime updates
+  const votosTimeoutRef      = useRef<Record<string, NodeJS.Timeout>>({});  // debounce por fase de votos
   const salaRef             = useRef<Sala | null>(null); // rastreia estado atual para closures (não fica congelado)
   const cancelandoDraftRef  = useRef(false); // evita múltiplas chamadas simultâneas de acaoCancelarDraftPorTimeout
 
@@ -241,19 +242,30 @@ export function SalaRegrasProvider({
     if (atualizada) setSala(atualizada);
   }, [salaId]);
 
-  // Debounce Realtime updates — agrupa múltiplas mudanças em uma única query (100ms)
+  // Debounce Realtime updates — agrupa múltiplas mudanças em uma única query (300ms)
   const recarregarComDebounce = useCallback(() => {
     if (recarregarTimeoutRef.current) clearTimeout(recarregarTimeoutRef.current);
     recarregarTimeoutRef.current = setTimeout(() => {
+      console.log('[SalaRegras] Recarregando sala após debounce');
       recarregar();
       recarregarTimeoutRef.current = undefined;
-    }, 100);
+    }, 300);
   }, [recarregar]);
 
   const recarregarVotos = useCallback(async (fase: 'aguardando_inicio' | 'finalizacao') => {
     const novosVotos = await buscarVotos(salaId, fase);
     setVotos(novosVotos);
   }, [salaId]);
+
+  // Debounce para votos — agrupa múltiplos votos em uma única query (200ms)
+  const recarregarVotosComDebounce = useCallback((fase: 'aguardando_inicio' | 'finalizacao') => {
+    if (votosTimeoutRef.current[fase]) clearTimeout(votosTimeoutRef.current[fase]);
+    votosTimeoutRef.current[fase] = setTimeout(() => {
+      console.log(`[SalaRegras] Recarregando votos (${fase}) após debounce`);
+      recarregarVotos(fase);
+      delete votosTimeoutRef.current[fase];
+    }, 200);
+  }, [recarregarVotos]);
 
   // ── Manter salaRef.current sincronizado para closures de timeout ────────────
   useEffect(() => {
@@ -265,15 +277,15 @@ export function SalaRegrasProvider({
 
     const channel = supabase
       .channel(`sala_regras_${salaId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'salas',
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'salas',
           filter: `id=eq.${salaId}` }, () => recarregarComDebounce())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores',
           filter: `sala_id=eq.${salaId}` }, () => recarregarComDebounce())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_votos',
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sala_votos',
           filter: `sala_id=eq.${salaId}` }, (payload) => {
-            console.log('[Realtime] sala_votos changed:', payload.eventType);
-            if (sala?.estado === 'aguardando_inicio') recarregarVotos('aguardando_inicio');
-            if (sala?.estado === 'finalizacao')       recarregarVotos('finalizacao');
+            console.log('[Realtime] sala_votos INSERT:', payload.new?.id);
+            if (sala?.estado === 'aguardando_inicio') recarregarVotosComDebounce('aguardando_inicio');
+            if (sala?.estado === 'finalizacao')       recarregarVotosComDebounce('finalizacao');
           })
       .subscribe();
 
