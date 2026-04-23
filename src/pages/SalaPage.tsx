@@ -44,10 +44,11 @@ async function carregarUsuario(): Promise<UsuarioAtual | null> {
   const user = await getCachedUser();
   if (!user) return null;
 
-  // Fetch sequencialmente para evitar contenção de locks de auth
-  const { data: perfil } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-  const { data: riot } = await supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle();
-  const { data: membro } = await supabase.from('time_membros').select('time_id, role').eq('user_id', user.id).maybeSingle();
+  const [{ data: perfil }, { data: riot }, { data: membro }] = await Promise.all([
+    supabase.from('profiles').select('id, username, full_name').eq('id', user.id).maybeSingle(),
+    supabase.from('contas_riot').select('riot_id, elo_cache, profile_icon_id').eq('user_id', user.id).maybeSingle(),
+    supabase.from('time_membros').select('time_id, role').eq('user_id', user.id).maybeSingle(),
+  ]);
 
   const riotAny = riot as any;
   const riotId: string = riotAny?.riot_id ?? '';
@@ -90,6 +91,7 @@ export default function SalaPage() {
   const navigate = useNavigate();
   const [usuarioAtual, setUsuarioAtual] = useState<UsuarioAtual | null>(null);
   const [salaInicial, setSalaInicial]   = useState<Sala | null>(null);
+  const [cargoInicial, setCargoInicial] = useState<'proprietario' | 'admin' | 'streamer' | 'coach' | 'jogador'>('jogador');
   const [loading, setLoading]           = useState(true);
   const [erro, setErro]                 = useState<string | null>(null);
 
@@ -108,7 +110,11 @@ export default function SalaPage() {
         return;
       }
 
-      const sala = await buscarSalaCompleta(salaId);
+      const [sala, cargo] = await Promise.all([
+        buscarSalaCompleta(salaId),
+        buscarCargoUsuario(usuario.id),
+      ]);
+
       if (!sala) {
         setErro('Sala não encontrada.');
         setLoading(false);
@@ -116,6 +122,7 @@ export default function SalaPage() {
       }
 
       setSalaInicial(sala);
+      setCargoInicial(cargo ?? 'jogador');
       setLoading(false);
     };
     init();
@@ -153,7 +160,7 @@ export default function SalaPage() {
       onEncerrada={() => navigate('/jogar')}
       salaInicial={salaInicial}
     >
-      <SalaPageView usuarioAtual={usuarioAtual} />
+      <SalaPageView usuarioAtual={usuarioAtual} cargoInicial={cargoInicial} />
     </SalaRegrasProvider>
   );
 }
@@ -165,12 +172,12 @@ export default function SalaPage() {
 function ArcaneIndicators() {
   return (
     <div className="absolute inset-0 rounded-full pointer-events-none z-10">
-      {[...Array(60)].map((_, i) => (
+      {[...Array(30)].map((_, i) => (
         <div
           key={`tick-${i}`}
           className="absolute top-1/2 left-1/2 w-[1px] h-[1.5vmin] bg-white/5 origin-bottom"
           style={{
-            transform: `translate(-50%, -50%) rotate(${i * 6}deg) translateY(-35vmin)`,
+            transform: `translate(-50%, -50%) rotate(${i * 12}deg) translateY(-35vmin)`,
             height: i % 5 === 0 ? '2.5vmin' : '1.2vmin',
             backgroundColor: i % 5 === 0 ? 'rgba(255, 183, 0, 0.2)' : 'rgba(255, 255, 255, 0.05)'
           }}
@@ -201,12 +208,6 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome, time
   timeATag?: string;
   timeBTag?: string;
 }) {
-  // Debug: log props da logo
-  if (modo === 'time_vs_time') {
-    console.log('[CentralDisplay] timeALogo:', timeALogo, 'timeAColor:', timeAColor);
-    console.log('[CentralDisplay] timeBLogo:', timeBLogo, 'timeBColor:', timeBColor);
-  }
-
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-full">
       {/* Background image */}
@@ -222,6 +223,7 @@ function CentralDisplay({ modo, timeALogo, timeBLogo, timeANome, timeBNome, time
           <img
             src="https://static.wikia.nocookie.net/leagueoflegends/images/9/9c/Summoner%27s_Rift_LoL_Promo_01.png/revision/latest/scale-to-width-down/1000?cb=20220817091416"
             alt="Summoner's Rift"
+            loading="lazy"
             className="w-[90%] h-[90%] object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]"
             referrerPolicy="no-referrer"
           />
@@ -555,7 +557,9 @@ function HextechActionBar({
 // VIEW DA SALA (LÓGICA + VISUAL NOVO)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
+type CargoUsuario = 'proprietario' | 'admin' | 'streamer' | 'coach' | 'jogador';
+
+function SalaPageView({ usuarioAtual, cargoInicial }: { usuarioAtual: UsuarioAtual; cargoInicial: CargoUsuario }) {
   const navigate = useNavigate();
   const {
     sala, loading, jogadorAtual, viewers, semContaRiot, erroEntrada,
@@ -577,24 +581,11 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
   const [enviandoDenuncia, setEnviandoDenuncia]   = useState(false);
   const [showConfirmarCancelamento, setShowConfirmarCancelamento] = useState(false);
   const [visualizandoPartida, setVisualizandoPartida] = useState(false);
-  const [cargoUsuario, setCargoUsuario] = useState<'proprietario' | 'admin' | 'streamer' | 'coach' | 'jogador'>('jogador');
+  const [cargoUsuario, setCargoUsuario] = useState<CargoUsuario>(cargoInicial);
   const [salaStreamAtiva, setSalaStreamAtiva] = useState<any>(null);
   const [isStreamModalOpen, setIsStreamModalOpen] = useState(false);
   const [resultadoPartida, setResultadoPartida] = useState<any>(null);
   const vagasEmAndamento                    = useRef<Set<string>>(new Set());
-
-  // Carregar cargo do usuário
-  useEffect(() => {
-    if (usuarioAtual) {
-      const carregarCargo = async () => {
-        console.log('[SalaPage] Buscando cargo para usuário:', usuarioAtual.id);
-        const cargo = await buscarCargoUsuario(usuarioAtual.id);
-        console.log('[SalaPage] Cargo obtido:', cargo);
-        setCargoUsuario(cargo ?? 'jogador');
-      };
-      carregarCargo();
-    }
-  }, [usuarioAtual?.id]);
 
   // Listen to active streams in this room
   useEffect(() => {
@@ -602,7 +593,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
     const loadActiveStream = async () => {
       try {
-        console.log('[SalaPage] Carregando stream ativa para sala:', sala.id);
         const { data, error } = await supabase
           .from('sala_streams')
           .select('*')
@@ -615,7 +605,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           return;
         }
 
-        console.log('[SalaPage] ✅ Stream ativa carregada:', data);
         setSalaStreamAtiva(data?.ativo ? data : null);
       } catch (err) {
         console.error('[SalaPage] ❌ Exception ao carregar stream:', err);
@@ -636,32 +625,21 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           filter: `sala_id=eq.${sala.id}`,
         },
         (payload: any) => {
-          console.log('[SalaPage] Realtime update - event:', payload.event, 'payload:', payload);
-
           const eventType = payload.event?.toUpperCase() || payload.eventType?.toUpperCase();
-          console.log('[SalaPage] Event type detected:', eventType);
 
           if (eventType === 'INSERT' || eventType === 'UPDATE') {
             const newStream = payload.new as any;
-            console.log('[SalaPage] INSERT/UPDATE received - newStream:', newStream, 'ativo:', newStream?.ativo);
             if (newStream?.ativo === true) {
-              console.log('[SalaPage] ✅ Ativando stream para todos:', newStream);
               setSalaStreamAtiva(newStream);
             } else {
-              console.log('[SalaPage] ⚠️ Stream não está ativo, desativando');
               setSalaStreamAtiva(null);
             }
           } else if (eventType === 'DELETE') {
-            console.log('[SalaPage] ❌ DELETE - Desativando stream');
             setSalaStreamAtiva(null);
-          } else {
-            console.log('[SalaPage] Unknown event type:', eventType);
           }
         }
       )
-      .subscribe((status: any) => {
-        console.log('[SalaPage] Subscription status:', status);
-      });
+      .subscribe();
 
     return () => {
       subscription.unsubscribe();
@@ -683,7 +661,6 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
           if (error) {
             console.error('[SalaPage] Erro ao carregar resultado:', error);
           } else if (data) {
-            console.log('[SalaPage] Resultado carregado:', data);
             setResultadoPartida(data);
           }
         } catch (err) {
@@ -700,9 +677,7 @@ function SalaPageView({ usuarioAtual }: { usuarioAtual: UsuarioAtual }) {
 
   // Auto-open resultado modal quando partida está encerrada
   useEffect(() => {
-    console.log('[SalaPage] Auto-open check - Estado:', sala?.estado, 'Visualizando:', visualizandoPartida);
     if (sala && sala.estado === 'encerrada' && !visualizandoPartida) {
-      console.log('[SalaPage] ✅ Abrindo modal de resultado automaticamente!');
       setVisualizandoPartida(true);
     }
   }, [sala?.estado, visualizandoPartida]);
