@@ -534,8 +534,11 @@ const Jogar = () => {
 
     const channel = supabase
       .channel('salas_jogar_page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' }, () => recarregarSalasComDebounce(usuarioAtual))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores' }, () => recarregarSalasComDebounce(usuarioAtual))
+      // ✅ OTIMIZADO: INSERT + UPDATE em vez de '*' — remove DELETE noise (desnecessário)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'salas' }, () => recarregarSalasComDebounce(usuarioAtual))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'salas' }, () => recarregarSalasComDebounce(usuarioAtual))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sala_jogadores' }, () => recarregarSalasComDebounce(usuarioAtual))
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sala_jogadores' }, () => recarregarSalasComDebounce(usuarioAtual))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_streams' }, async () => {
         // Atualizar streams ativos
         const { data: streams } = await supabase
@@ -567,7 +570,9 @@ const Jogar = () => {
 
     const channel = supabase
       .channel('salas_finalizadas_page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' }, recarregarSalasFinalizadas)
+      // ✅ OTIMIZADO: INSERT + UPDATE em vez de '*'
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'salas' }, recarregarSalasFinalizadas)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'salas' }, recarregarSalasFinalizadas)
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };

@@ -279,7 +279,10 @@ export function SalaRegrasProvider({
       .channel(`sala_regras_${salaId}`)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'salas',
           filter: `id=eq.${salaId}` }, () => recarregarComDebounce())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores',
+      // ✅ OTIMIZADO: INSERT + UPDATE em vez de '*' — DELETE de jogador não precisa avisar em tempo real
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sala_jogadores',
+          filter: `sala_id=eq.${salaId}` }, () => recarregarComDebounce())
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'sala_jogadores',
           filter: `sala_id=eq.${salaId}` }, () => recarregarComDebounce())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sala_votos',
           filter: `sala_id=eq.${salaId}` }, (payload) => {
