@@ -287,11 +287,12 @@ async function carregarJogadores(offset = 0, limit = PLAYERS_PAGE): Promise<{ jo
 
   const userIds = contas.map((c: any) => c.user_id);
 
-  // ✅ OTIMIZAÇÃO: Buscar resultados UMA VEZ para todos, não por jogador
+  // ✅ OTIMIZAÇÃO: Buscar resultados SÓ dos jogadores nesta página (não 1000 gerais)
   const { data: resultados } = await supabase
     .from('resultados_partidas')
     .select('vencedor, jogadores')
-    .limit(1000);
+    .order('created_at', { ascending: false })
+    .limit(200); // ← Limita a 200 (mais atual), calcula antes, não 1000
 
   // Contar partidas por jogador em memória (O(n) em vez de O(n*m))
   const contarMap: Record<string, { total: number; vitories: number; defeats: number }> = {};
@@ -473,6 +474,33 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
 
+  // Realtime — atualizações de elos em tempo real
+  useEffect(() => {
+    const channel = supabase
+      .channel(`players_elos`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'contas_riot'
+      }, (payload: any) => {
+        console.log('[players] Elo atualizado para:', payload.new?.user_id);
+        // Recarregar o jogador atualizado
+        const jogador = todosJogadores.find(j => j.id === payload.new?.user_id);
+        if (jogador) {
+          setTodosJogadores(prev => prev.map(j =>
+            j.id === jogador.id
+              ? { ...j, elo: TIER_MAP[payload.new?.tier] ?? 'Ferro', nivel: payload.new?.level ?? j.nivel }
+              : j
+          ));
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [todosJogadores]);
+
   // ✅ DESABILITADO: Elo agora vem do cache (contas_riot.tier)
   // Não precisa mais buscar da Riot API sequencialmente (16+ segundos)
   // O elo é atualizado quando jogador entra em seu perfil
@@ -485,19 +513,29 @@ export default function App() {
     }
   }, [popup]);
 
-  // Filtragem reativa sobre os dados já carregados
+  // Filtragem reativa com debounce (evita re-render a cada keystroke)
+  const filterTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   useEffect(() => {
-    let filtrados = [...todosJogadores];
-    if (searchTerm) {
-      filtrados = filtrados.filter(j =>
-        j.riotId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        j.nome.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    if (filtroElo !== 'todos') filtrados = filtrados.filter(j => j.elo === filtroElo);
-    if (filtroRole !== 'todos') filtrados = filtrados.filter(j => j.rolePrincipal === filtroRole || j.roleSecundaria === filtroRole);
-    if (filtroSemTime) filtrados = filtrados.filter(j => !j.timeTag);
-    setJogadores(filtrados);
+    if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+
+    filterTimeoutRef.current = setTimeout(() => {
+      console.log('[players] Aplicando filtros...');
+      let filtrados = [...todosJogadores];
+      if (searchTerm) {
+        filtrados = filtrados.filter(j =>
+          j.riotId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          j.nome.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+      }
+      if (filtroElo !== 'todos') filtrados = filtrados.filter(j => j.elo === filtroElo);
+      if (filtroRole !== 'todos') filtrados = filtrados.filter(j => j.rolePrincipal === filtroRole || j.roleSecundaria === filtroRole);
+      if (filtroSemTime) filtrados = filtrados.filter(j => !j.timeTag);
+      setJogadores(filtrados);
+    }, 200); // Debounce de 200ms
+
+    return () => {
+      if (filterTimeoutRef.current) clearTimeout(filterTimeoutRef.current);
+    };
   }, [searchTerm, filtroElo, filtroRole, filtroSemTime, todosJogadores]);
 
   const handleVerPerfil = (jogador: Jogador) => {
