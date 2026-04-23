@@ -5,7 +5,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  Play, ChevronLeft, ChevronRight, Trophy, Users, Eye, Coins,
+  Play, ChevronLeft, ChevronRight, Trophy, Users, Coins,
   Search, Lock, Zap, Crown, X, LogIn, Plus, SlidersHorizontal,
   Sword, Shield, Swords, Gem, Snowflake, Tv2
 } from 'lucide-react';
@@ -929,11 +929,6 @@ const Jogar = () => {
                           {sala.temSenha && <Lock className="w-3.5 h-3.5 text-yellow-400" />}
                         </div>
                         <div className="flex items-center gap-2">
-                          {/* Visualizações */}
-                          <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm text-white/60 text-[10px] font-black px-2.5 py-1.5 rounded border border-white/10">
-                            <Eye className="w-3 h-3 text-[#FFB700]" />
-                            {viewerCounts[sala.id] || 0}
-                          </div>
                           {/* Vagas */}
                           <div className="flex items-center gap-1.5 bg-black/50 backdrop-blur-sm text-white/60 text-[10px] font-black px-2.5 py-1.5 rounded border border-white/10">
                             <Users className="w-3 h-3" />
