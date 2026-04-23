@@ -10,7 +10,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { getCachedUser } from '../contexts/AuthContext';
 import { atualizarPontosPartida } from '../api/player';
-import { resolverPartidaTravada, deletarSala } from '../api/salas';
+import { resolverPartidaTravada, deletarSala, buscarSalaCompleta } from '../api/salas';
 import {
   type CargoAdmin,
   CARGO_LABELS, CARGO_COLORS,
@@ -329,14 +329,20 @@ function AbaSalas({ adminCargo }: { adminCargo: CargoAdmin }) {
         if (error) throw error;
         setPopup({ tipo: 'sucesso', msg: 'Sala deletada com sucesso!' });
       } else {
-        const sala = salas.find(s => s.id === confirmacao.salaId);
-        if (!sala) throw new Error('Sala não encontrada');
+        // Buscar dados completos da sala com jogadores
+        const salaCompleta = await buscarSalaCompleta(confirmacao.salaId);
+        if (!salaCompleta) throw new Error('Sala não encontrada');
 
         const { sucesso, erro } = await resolverPartidaTravada(
           confirmacao.salaId,
           confirmacao.vencedor || 'cancelada',
-          sala.modo,
-          []
+          salaCompleta.modo,
+          salaCompleta.jogadores.map(j => ({
+            id: j.id,
+            nome: j.nome,
+            isTimeA: j.isTimeA,
+            role: j.role,
+          }))
         );
         if (!sucesso) throw new Error(erro || 'Erro ao resolver');
         setPopup({ tipo: 'sucesso', msg: 'Sala finalizada com sucesso!' });
