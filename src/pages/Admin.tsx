@@ -1132,13 +1132,13 @@ export default function Admin() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 p-1 rounded-xl bg-white/5 border border-white/5">
+        <div className="flex gap-2 p-1 rounded-xl bg-white/5 border border-white/5 overflow-x-auto">
           {abas.map(({ id, label, icon: Icon, bloqueada }) => (
             <button
               key={id}
               onClick={() => !bloqueada && setAbaAtiva(id)}
               disabled={bloqueada}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg font-black text-sm uppercase tracking-widest transition-all ${
+              className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-black text-sm uppercase tracking-widest transition-all whitespace-nowrap shrink-0 ${
                 abaAtiva === id
                   ? 'bg-white/10 text-white'
                   : bloqueada
