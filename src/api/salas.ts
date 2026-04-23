@@ -739,56 +739,79 @@ export async function buscarSalaPorCodigo(codigo: string): Promise<Sala | null> 
 
 // ── Códigos de partida (pool FIFO circular) ───────────────────────────────────
 
-/** Atribui código sequencial à sala (simples e sem race conditions) */
+/** Atribui código fixo à sala (rodízio dos códigos disponíveis) */
 export async function atribuirCodigoPartida(salaId: number, modo: string): Promise<string | null> {
   try {
-    // Busca a configuração do modo e incrementa o número
-    const { data, error: fetchErr } = await supabase
-      .from('codigo_partida_sequencial')
-      .select('ultimo_numero, numero_minimo, numero_maximo')
+    // 1. Busca todos os códigos do modo
+    const { data: todosCodigosData, error: allErr } = await supabase
+      .from('codigos_partida')
+      .select('id, codigo')
       .eq('modo', modo)
-      .single();
+      .order('ultima_vez_usado', { ascending: true });
 
-    if (fetchErr || !data) {
-      console.warn('[atribuirCodigoPartida] Modo não encontrado:', modo);
+    if (allErr || !todosCodigosData || todosCodigosData.length === 0) {
+      console.error('[atribuirCodigoPartida] Nenhum código disponível para modo:', modo);
       return null;
     }
 
-    let proximoNumero = data.ultimo_numero + 1;
-    // Se chegou no máximo, volta ao mínimo
-    if (proximoNumero > data.numero_maximo) {
-      proximoNumero = data.numero_minimo;
-    }
+    // 2. Pega o primeiro disponível (menos usado recentemente)
+    const codigoSelecionado = todosCodigosData[0];
 
-    // Atualiza o contador
+    // 3. Marca como em_uso e associa à sala
+    const agora = new Date().toISOString();
     const { error: updateErr } = await supabase
-      .from('codigo_partida_sequencial')
-      .update({ ultimo_numero: proximoNumero })
-      .eq('modo', modo);
+      .from('codigos_partida')
+      .update({
+        em_uso: true,
+        sala_id: salaId,
+        ultima_vez_usado: agora
+      })
+      .eq('id', codigoSelecionado.id);
 
     if (updateErr) throw updateErr;
 
-    // Formata o código (ex: "5V5-001" ou "001")
-    const codigoFormatado = String(proximoNumero).padStart(6, '0');
-
-    // Salva na sala
+    // 4. Salva o código na sala
     const { error: salaErr } = await supabase.from('salas')
-      .update({ codigo_partida: codigoFormatado })
+      .update({ codigo_partida: codigoSelecionado.codigo })
       .eq('id', salaId);
 
     if (salaErr) throw salaErr;
 
-    console.log('[atribuirCodigoPartida] ✅ Código atribuído:', codigoFormatado, 'para modo:', modo);
-    return codigoFormatado;
+    console.log('[atribuirCodigoPartida] ✅ Código atribuído:', codigoSelecionado.codigo, 'para modo:', modo);
+    return codigoSelecionado.codigo;
   } catch (err: any) {
     console.error('[atribuirCodigoPartida] Erro:', err?.message);
     return null;
   }
 }
 
-/** Libera o código quando a partida encerra (agora não faz nada, já que é sequencial) */
-export async function liberarCodigoPartida(): Promise<void> {
-  // Sistema sequencial não precisa liberar — os códigos são reutilizados automaticamente
+/** Libera o código quando a partida encerra (marca como disponível novamente) */
+export async function liberarCodigoPartida(salaId: number): Promise<void> {
+  try {
+    // Busca o código da sala
+    const { data: sala } = await supabase
+      .from('salas')
+      .select('codigo_partida')
+      .eq('id', salaId)
+      .maybeSingle();
+
+    if (!sala?.codigo_partida) {
+      console.log('[liberarCodigoPartida] Sala sem código atribuído');
+      return;
+    }
+
+    // Marca o código como não em uso
+    const { error } = await supabase
+      .from('codigos_partida')
+      .update({ em_uso: false, sala_id: null })
+      .eq('codigo', sala.codigo_partida);
+
+    if (error) throw error;
+
+    console.log('[liberarCodigoPartida] ✅ Código liberado:', sala.codigo_partida);
+  } catch (err: any) {
+    console.error('[liberarCodigoPartida] Erro:', err?.message);
+  }
 }
 
 // ── Reset completo de sala (cancela partida, desvincula todos) ────────────────
@@ -797,7 +820,7 @@ export async function resetarSalaCompleta(salaId: number): Promise<void> {
   await supabase.from('sala_jogadores').delete().eq('sala_id', salaId);
   await supabase.from('sala_votos').delete().eq('sala_id', salaId);
   // Libera o código se havia um atribuído
-  await liberarCodigoPartida();
+  await liberarCodigoPartida(salaId);
   // 🔴 RESET COMPLETO: Deletar QUALQUER draft dessa sala (não confiar em draft_id que pode ser stale)
   await supabase.from('drafts').delete().eq('sala_id', salaId);
   // Volta para aberta completamente vazia e limpa
@@ -904,7 +927,7 @@ export async function resolverPartidaTravada(
     await encerrarSala(salaId, vencedor === 'cancelada' ? undefined : (vencedor === 'time_a' ? 'A' : 'B'));
 
     // 4. Liberar código da partida
-    await liberarCodigoPartida();
+    await liberarCodigoPartida(salaId);
 
     return { sucesso: true };
   } catch (error: any) {
