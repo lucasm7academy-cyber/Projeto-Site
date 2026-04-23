@@ -289,83 +289,32 @@ export async function entrarNaVaga(
 }
 
 // ── Sair da vaga ──────────────────────────────────────────────────────────────
+// ✅ OTIMIZADO: RPC atômica que faz 4-6 queries em 1 transação
 export async function sairDaVaga(salaId: number, userId: string): Promise<void> {
-  // 🔒 PROTEÇÃO: nunca remove jogadores durante partida em andamento
-  // 1. Verificar estado da sala (se em qualquer fase de jogo, bloquear saída)
-  const { data: sala } = await supabase
-    .from('salas')
-    .select('estado')
-    .eq('id', salaId)
-    .maybeSingle();
+  try {
+    const { data, error } = await supabase.rpc('sair_da_vaga', {
+      p_sala_id: salaId,
+      p_user_id: userId,
+    });
 
-  const estadosEmPartida = ['confirmacao', 'travada', 'aguardando_inicio', 'em_partida', 'finalizacao'];
-  if (sala && estadosEmPartida.includes(sala.estado)) {
-    console.log(`[sairDaVaga] Sala em estado "${sala.estado}" — NÃO permitindo saída`);
-    return;
-  }
-
-  // 2. Buscar o jogador para saber qual lado estava (time_a ou time_b)
-  const { data: jogador } = await supabase
-    .from('sala_jogadores')
-    .select('is_time_a, vinculado')
-    .eq('sala_id', salaId)
-    .eq('user_id', userId)
-    .maybeSingle();
-
-  // 🔴 BUG FIX #3: Se jogador não existe ou foi deletado, retorna silenciosamente
-  // Evita race condition durante resetarConfirmacoes
-  if (!jogador) {
-    console.log(`[sairDaVaga] Jogador ${userId} não encontrado ou já foi deletado`);
-    return;
-  }
-
-  // Se jogador está vinculado (em partida), retorna sem fazer nada
-  if (jogador.vinculado) {
-    console.log(`[sairDaVaga] Jogador ${userId} está vinculado (em partida) — NÃO removendo`);
-    return;
-  }
-
-  // Remove o jogador da vaga (apenas se vinculado = false)
-  const { error: deleteError } = await supabase.from('sala_jogadores').delete()
-    .eq('sala_id', salaId).eq('user_id', userId).eq('vinculado', false);
-
-  // Se foi deletado e era time_vs_time, verificar se ainda há jogadores naquele lado
-  if (!deleteError && jogador) {
-    const { count, error: countError } = await supabase
-      .from('sala_jogadores')
-      .select('*', { count: 'exact', head: true })
-      .eq('sala_id', salaId)
-      .eq('is_time_a', jogador.is_time_a)
-      .eq('vinculado', false);
-
-    // Se nenhum jogador restante naquele lado, limpar o time_id e dados
-    // Verificar também que ele é false (não vinculado) para ter certeza
-    if (!countError && count === 0) {
-      const campoTimeId = jogador.is_time_a ? 'time_a_id' : 'time_b_id';
-      const campoLogo = jogador.is_time_a ? 'time_a_logo' : 'time_b_logo';
-      const campoNome = jogador.is_time_a ? 'time_a_nome' : 'time_b_nome';
-      const campoTag = jogador.is_time_a ? 'time_a_tag' : 'time_b_tag';
-      const campoCor = jogador.is_time_a ? 'time_a_color' : 'time_b_color';
-
-      console.log(`[sairDaVaga] Último jogador saiu. Resetando ${jogador.is_time_a ? 'TIME A' : 'TIME B'} da sala ${salaId}`);
-
-      const { error: resetError } = await supabase
-        .from('salas')
-        .update({
-          [campoTimeId]: null,
-          [campoLogo]: null,
-          [campoNome]: null,
-          [campoTag]: null,
-          [campoCor]: null,
-        })
-        .eq('id', salaId);
-
-      if (resetError) {
-        console.error(`[sairDaVaga] Erro ao resetar time:`, resetError);
-      } else {
-        console.log(`[sairDaVaga] ✅ Time resetado com sucesso`);
-      }
+    if (error) {
+      console.error('[sairDaVaga] Erro RPC:', error);
+      return;
     }
+
+    if (data?.bloqueado) {
+      console.log(`[sairDaVaga] Jogador ${userId} está em partida — bloqueado`);
+      return;
+    }
+
+    if (!data?.sucesso) {
+      console.warn('[sairDaVaga] RPC retornou erro:', data?.erro);
+      return;
+    }
+
+    console.log('[sairDaVaga] ✅ Jogador saiu com sucesso (via RPC)');
+  } catch (err: any) {
+    console.error('[sairDaVaga] Exception:', err?.message);
   }
 }
 
@@ -388,53 +337,36 @@ export async function resetarVagas(salaId: number): Promise<void> {
 }
 
 // ── Reset seletivo de confirmação ─────────────────────────────────────────────
-// Comportamento ao expirar o timer ou alguém sair durante confirmação:
-//   • Quem NÃO confirmou  → removido da vaga (fica como espectador na sala)
-//   • Quem confirmou      → permanece na vaga, mas confirmado é resetado para false
-// Assim a partida retoma de onde estava: confirmers já nas vagas, 1 vaga aberta.
+// ✅ OTIMIZADO: RPC elimina fallback de 20+ queries sequenciais
+// Comportamento:
+//   • Quem NÃO confirmou  → deletado
+//   • Quem confirmou      → reseta confirmado para false
 export async function resetarConfirmacoes(salaId: number): Promise<void> {
-  // 1. Remove quem não confirmou (ainda está na vaga)
-  await supabase.from('sala_jogadores')
-    .delete()
-    .eq('sala_id', salaId)
-    .eq('confirmado', false)
-    .eq('vinculado', false);
-
-  // 2. Reseta o "pronto" de quem confirmou — tenta UPDATE direto
-  const { error: errUpdate } = await supabase.from('sala_jogadores')
-    .update({ confirmado: false })
-    .eq('sala_id', salaId)
-    .eq('confirmado', true)
-    .eq('vinculado', false);
-
-  if (errUpdate) {
-    // Fallback para DELETE+INSERT caso a policy de UPDATE não cubra essa coluna
-    const { data: confirmados } = await supabase.from('sala_jogadores')
-      .select('*')
-      .eq('sala_id', salaId)
-      .eq('confirmado', true)
-      .eq('vinculado', false);
-
-    if (confirmados) {
-      for (const row of confirmados) {
-        await supabase.from('sala_jogadores')
-          .delete().eq('sala_id', salaId).eq('user_id', row.user_id);
-        const { id: _id, ...semId } = row;
-        await supabase.from('sala_jogadores').insert({ ...semId, confirmado: false });
-      }
+  try {
+    const { error } = await supabase.rpc('resetar_confirmacoes', { p_sala_id: salaId });
+    if (error) {
+      console.error('[resetarConfirmacoes] Erro RPC:', error);
+    } else {
+      console.log('[resetarConfirmacoes] ✅ Confirmações resetadas (via RPC)');
     }
+  } catch (err: any) {
+    console.error('[resetarConfirmacoes] Exception:', err?.message);
   }
-
-  // 3. Limpa votos da rodada anterior
-  await supabase.from('sala_votos').delete().eq('sala_id', salaId);
 }
 
 // ── Vincular jogadores (confirmacao → travada) ────────────────────────────────
+// ✅ OTIMIZADO: RPC com SECURITY DEFINER elimina dependência de policy
 export async function vincularJogadores(salaId: number): Promise<void> {
-  // Usa UPDATE — precisa da policy "sj_update" no Supabase
-  await supabase.from('sala_jogadores')
-    .update({ vinculado: true })
-    .eq('sala_id', salaId);
+  try {
+    const { error } = await supabase.rpc('vincular_jogadores', { p_sala_id: salaId });
+    if (error) {
+      console.error('[vincularJogadores] Erro RPC:', error);
+    } else {
+      console.log('[vincularJogadores] ✅ Jogadores vinculados (via RPC)');
+    }
+  } catch (err: any) {
+    console.error('[vincularJogadores] Exception:', err?.message);
+  }
 }
 
 // ── Registrar voto ────────────────────────────────────────────────────────────
@@ -783,16 +715,16 @@ export async function verificarIntegraldadePartidaEncerrada(
     if ((jogadoresVinculados?.length ?? 0) > 0) {
       avisos.push(`⚠️ ${jogadoresVinculados?.length} jogadores ainda vinculados`);
 
-      // Desvinculação de emergência (batch update, não sequencial)
-      for (const jogador of (jogadoresVinculados ?? [])) {
-        await supabase
-          .from('sala_jogadores')
-          .update({ vinculado: false })
-          .eq('sala_id', salaId)
-          .eq('user_id', jogador.user_id);
+      // ✅ Batch update em vez de loop (1 query em vez de N)
+      await supabase
+        .from('sala_jogadores')
+        .update({ vinculado: false })
+        .eq('sala_id', salaId)
+        .eq('vinculado', true);
 
-        acoesTomadas.push(`✅ Desvinculado: ${jogador.user_id}`);
-      }
+      (jogadoresVinculados ?? []).forEach(j => {
+        acoesTomadas.push(`✅ Desvinculado: ${j.user_id}`);
+      });
     }
 
     // 3. Verificar se resultado foi registrado (query leve: só count)
@@ -851,16 +783,14 @@ export async function limparVinculacaosSalasEncerradas(userId: string): Promise<
 
     if (!salasEncerradas || salasEncerradas.length === 0) return;
 
-    // Desvinculação de emergência
-    for (const sala of salasEncerradas) {
-      await supabase
-        .from('sala_jogadores')
-        .update({ vinculado: false })
-        .eq('sala_id', sala.id)
-        .eq('user_id', userId);
+    // ✅ Batch update com .in() em vez de loop (1 query em vez de N)
+    await supabase
+      .from('sala_jogadores')
+      .update({ vinculado: false })
+      .in('sala_id', salaIds)
+      .eq('user_id', userId);
 
-      console.log(`[LimpezaVinculacao] Desvinculado ${userId} de sala encerrada ${sala.id}`);
-    }
+    console.log(`[LimpezaVinculacao] Desvinculado ${userId} de ${salasEncerradas.length} salas encerradas`);
   } catch (err: any) {
     console.warn('[limparVinculacaosSalasEncerradas]', err?.message);
     // Falha silenciosa — não bloqueia fluxo principal
