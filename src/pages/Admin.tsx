@@ -10,6 +10,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { getCachedUser } from '../contexts/AuthContext';
 import { atualizarPontosPartida } from '../api/player';
+import { resolverPartidaTravada } from '../api/salas';
 import {
   type CargoAdmin,
   CARGO_LABELS, CARGO_COLORS,
@@ -46,7 +47,7 @@ interface Jogador {
   saldo:    number;
 }
 
-type Aba = 'disputas' | 'saldos';
+type Aba = 'disputas' | 'partidas_travadas' | 'saldos';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -264,6 +265,273 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ABA: PARTIDAS TRAVADAS
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface PartidaTravada {
+  id:           number;
+  nome:         string;
+  estado:       string;
+  modo:         string;
+  criadorNome:  string;
+  timeANome?:   string;
+  timeBNome?:   string;
+  jogadores:    Array<{ id: string; nome: string; isTimeA: boolean; role: string }>;
+  finalizacaoExpiresAt?: string;
+}
+
+function AbaPartidasTravadas({ adminCargo }: { adminCargo: CargoAdmin }) {
+  const [partidas, setPartidas]           = useState<PartidaTravada[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [resolvendo, setResolvendo]       = useState<number | null>(null);
+  const [confirmacao, setConfirmacao]     = useState<{ salaId: number; vencedor: 'time_a' | 'time_b' | 'cancelada' } | null>(null);
+  const [popup, setPopup]                 = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
+
+  const podeResolver = temPermissao(adminCargo, 'resolverPartidas');
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('salas')
+      .select('id, nome, estado, modo, criador_nome, time_a_nome, time_b_nome, finalizacao_expires_at, sala_jogadores(user_id, nome, is_time_a, role)')
+      .not('estado', 'eq', 'encerrada')
+      .order('updated_at', { ascending: false })
+      .limit(50);
+
+    if (!error && data) {
+      setPartidas(data.map((s: any) => ({
+        id:           s.id,
+        nome:         s.nome,
+        estado:       s.estado,
+        modo:         s.modo,
+        criadorNome:  s.criador_nome,
+        timeANome:    s.time_a_nome,
+        timeBNome:    s.time_b_nome,
+        jogadores:    (s.sala_jogadores ?? []).map((j: any) => ({
+          id:        j.user_id,
+          nome:      j.nome,
+          isTimeA:   j.is_time_a,
+          role:      j.role,
+        })),
+        finalizacaoExpiresAt: s.finalizacao_expires_at,
+      })));
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const resolver = async (vencedor: 'time_a' | 'time_b' | 'cancelada') => {
+    if (!confirmacao) return;
+
+    setResolvendo(confirmacao.salaId);
+    const partida = partidas.find(p => p.id === confirmacao.salaId)!;
+
+    const { sucesso, erro } = await resolverPartidaTravada(
+      confirmacao.salaId,
+      vencedor,
+      partida.modo,
+      partida.jogadores
+    );
+
+    setResolvendo(null);
+    setConfirmacao(null);
+
+    if (sucesso) {
+      setPopup({ tipo: 'sucesso', msg: vencedor === 'cancelada' ? 'Partida cancelada!' : `${vencedor === 'time_a' ? 'Time A' : 'Time B'} definido como vencedor!` });
+      carregar();
+    } else {
+      setPopup({ tipo: 'erro', msg: erro || 'Erro ao resolver partida' });
+    }
+    setTimeout(() => setPopup(null), 3000);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-black text-white uppercase tracking-tight">Partidas Travadas</h2>
+          <p className="text-white/30 text-xs mt-1">Resolva partidas que não foram finalizadas ou ficaram presas.</p>
+        </div>
+        <button onClick={carregar} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors">
+          <RefreshCw className={`w-4 h-4 text-white/40 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {popup && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-bold ${
+              popup.tipo === 'sucesso'
+                ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                : 'bg-red-500/10 border-red-500/20 text-red-400'
+            }`}
+          >
+            {popup.tipo === 'sucesso' ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+            {popup.msg}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+        </div>
+      ) : partidas.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 rounded-3xl" style={CardStyle()}>
+          <Trophy className="w-10 h-10 text-white/10 mb-4" />
+          <p className="text-white/20 font-black uppercase tracking-widest text-sm">Nenhuma partida travada</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {partidas.map(p => {
+            const timeA = p.jogadores.filter(j => j.isTimeA);
+            const timeB = p.jogadores.filter(j => !j.isTimeA);
+            const estadoLabel = p.estado === 'travada' ? 'Travada'
+              : p.estado === 'aguardando_inicio' ? 'Aguardando Início'
+              : p.estado === 'em_partida' ? 'Em Partida'
+              : p.estado === 'finalizacao' ? 'Finalização' : p.estado;
+
+            return (
+              <motion.div
+                key={p.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="rounded-2xl p-6"
+                style={CardStyle()}
+              >
+                <div className="flex items-start justify-between gap-4 mb-5">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`px-2 py-0.5 text-[10px] font-black uppercase tracking-widest rounded border ${
+                        p.estado === 'finalizacao'
+                          ? 'bg-orange-500/10 border-orange-500/20 text-orange-400'
+                          : p.estado === 'em_partida'
+                          ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                          : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                      }`}>
+                        {estadoLabel}
+                      </span>
+                      <span className="text-white/20 text-xs">Sala #{p.id}</span>
+                    </div>
+                    <p className="text-white/30 text-xs font-bold">{p.nome}</p>
+                    <p className="text-white/20 text-xs mt-1">{p.modo} • Criador: {p.criadorNome}</p>
+                  </div>
+                </div>
+
+                {/* Times */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="bg-blue-500/5 border border-blue-500/10 rounded-xl p-4">
+                    <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest mb-2">{p.timeANome || 'Time A'}</p>
+                    <div className="space-y-1">
+                      {timeA.map(j => (
+                        <p key={j.id} className="text-white/60 text-sm font-bold truncate">{j.nome}</p>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="bg-red-500/5 border border-red-500/10 rounded-xl p-4">
+                    <p className="text-red-400 text-[10px] font-black uppercase tracking-widest mb-2">{p.timeBNome || 'Time B'}</p>
+                    <div className="space-y-1">
+                      {timeB.map(j => (
+                        <p key={j.id} className="text-white/60 text-sm font-bold truncate">{j.nome}</p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ações */}
+                <div className="flex gap-3">
+                  <button
+                    disabled={!podeResolver || resolvendo === p.id}
+                    onClick={() => setConfirmacao({ salaId: p.id, vencedor: 'time_a' })}
+                    className="flex-1 py-2.5 rounded-xl bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    {resolvendo === p.id ? '...' : `${p.timeANome || 'Time A'} Venceu`}
+                  </button>
+                  <button
+                    disabled={!podeResolver || resolvendo === p.id}
+                    onClick={() => setConfirmacao({ salaId: p.id, vencedor: 'time_b' })}
+                    className="flex-1 py-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    {resolvendo === p.id ? '...' : `${p.timeBNome || 'Time B'} Venceu`}
+                  </button>
+                  <button
+                    disabled={!podeResolver || resolvendo === p.id}
+                    onClick={() => setConfirmacao({ salaId: p.id, vencedor: 'cancelada' })}
+                    className="px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/40 hover:text-white/60 font-black text-sm uppercase tracking-widest transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Cancelar partida"
+                  >
+                    <Ban className="w-4 h-4" />
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal de confirmação */}
+      <AnimatePresence>
+        {confirmacao && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => !resolvendo && setConfirmacao(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="rounded-2xl p-8 max-w-sm w-full"
+              style={CardStyle()}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-amber-400" />
+                </div>
+                <h3 className="text-lg font-black text-white uppercase tracking-tight">Confirmar Resolução</h3>
+              </div>
+
+              <p className="text-white/60 text-sm mb-6">
+                Tem certeza que deseja definir o vencedor desta partida?
+                {confirmacao.vencedor === 'cancelada' && ' Esta ação não pode ser desfeita.'}
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => !resolvendo && setConfirmacao(null)}
+                  disabled={!!resolvendo}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/40 font-black text-sm uppercase transition-all disabled:opacity-30"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => resolver(confirmacao.vencedor)}
+                  disabled={!!resolvendo}
+                  className={`flex-1 py-2.5 rounded-xl font-black text-sm uppercase transition-all disabled:opacity-30 ${
+                    confirmacao.vencedor === 'cancelada'
+                      ? 'bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400'
+                      : 'bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary'
+                  }`}
+                >
+                  {resolvendo ? 'Processando...' : 'Confirmar'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -623,8 +891,9 @@ export default function Admin() {
 
   const permissoes = PERMISSOES_POR_CARGO[adminInfo.cargo];
   const abas: { id: Aba; label: string; icon: React.ElementType; bloqueada: boolean }[] = [
-    { id: 'disputas', label: 'Disputas',      icon: Trophy, bloqueada: !permissoes.resolverPartidas },
-    { id: 'saldos',   label: 'Saldos MPoints', icon: Coins,  bloqueada: !permissoes.gerenciarSaldos },
+    { id: 'disputas',           label: 'Disputas',      icon: Trophy, bloqueada: !permissoes.resolverPartidas },
+    { id: 'partidas_travadas',  label: 'Travadas',      icon: AlertTriangle, bloqueada: !permissoes.resolverPartidas },
+    { id: 'saldos',             label: 'Saldos MPoints', icon: Coins,  bloqueada: !permissoes.gerenciarSaldos },
   ];
 
   return (
@@ -678,8 +947,9 @@ export default function Admin() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
           >
-            {abaAtiva === 'disputas' && <AbaDisputas adminCargo={adminInfo.cargo} />}
-            {abaAtiva === 'saldos'   && <AbaSaldos   adminCargo={adminInfo.cargo} />}
+            {abaAtiva === 'disputas'           && <AbaDisputas           adminCargo={adminInfo.cargo} />}
+            {abaAtiva === 'partidas_travadas'  && <AbaPartidasTravadas   adminCargo={adminInfo.cargo} />}
+            {abaAtiva === 'saldos'             && <AbaSaldos            adminCargo={adminInfo.cargo} />}
           </motion.div>
         </AnimatePresence>
 

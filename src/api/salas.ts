@@ -889,3 +889,47 @@ export async function salvarResultadoPartida(
   // Falha silenciosa — tabela pode ainda não existir
   if (error) console.warn('[salvarResultadoPartida]', error.message);
 }
+
+// ── Resolver partida travada (admin/proprietário) ───────────────────────────
+export async function resolverPartidaTravada(
+  salaId: number,
+  vencedor: 'time_a' | 'time_b' | 'cancelada',
+  modo: string,
+  jogadores: { id: string; nome: string; isTimeA: boolean; role: string }[]
+): Promise<{ sucesso: boolean; erro?: string }> {
+  try {
+    const vencedorNome = vencedor === 'cancelada' ? 'Cancelado'
+      : vencedor === 'time_a' ? 'Time A' : 'Time B';
+
+    // 1. Salvar resultado
+    await salvarResultadoPartida(salaId, vencedor, vencedorNome, jogadores);
+
+    // 2. Atualizar pontos (se não foi cancelado)
+    if (vencedor !== 'cancelada') {
+      const { atualizarPontosPartida } = await import('./player');
+      await atualizarPontosPartida({
+        salaId,
+        modo,
+        vencedor,
+        jogadores: jogadores.map(j => ({
+          userId: j.id,
+          isTimeA: j.isTimeA,
+          nome: j.nome,
+        })),
+      }).catch(e => {
+        console.warn('[resolverPartidaTravada] erro ao atualizar pontos:', e);
+      });
+    }
+
+    // 3. Encerrar sala
+    await encerrarSala(salaId, vencedor === 'cancelada' ? undefined : (vencedor === 'time_a' ? 'A' : 'B'));
+
+    // 4. Liberar código da partida
+    await liberarCodigoPartida(salaId);
+
+    return { sucesso: true };
+  } catch (error: any) {
+    console.error('[resolverPartidaTravada]', error);
+    return { sucesso: false, erro: error?.message || 'Erro ao resolver partida' };
+  }
+}
