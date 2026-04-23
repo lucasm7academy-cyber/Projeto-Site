@@ -83,10 +83,10 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
     setLoading(true);
     const { data, error } = await supabase
       .from('resultados_partidas')
-      .select('*, salas(modo)')
+      .select('id, sala_id, vencedor, vencedor_nome, jogadores, created_at')
       .eq('vencedor', 'disputa')
-      .is('resolvido_por', null)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(50);
 
     if (!error && data) {
       setPartidas(data.map((r: any) => ({
@@ -96,8 +96,10 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
         vencedorNome: r.vencedor_nome,
         jogadores:    r.jogadores ?? [],
         createdAt:    r.created_at,
-        modo:         r.salas?.modo ?? '5v5',
+        modo:         '5v5',
       })));
+    } else if (error) {
+      console.error('[AbaDisputas] Erro ao carregar:', error);
     }
     setLoading(false);
   }, []);
