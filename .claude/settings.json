@@ -3,7 +3,8 @@
     "allow": [
       "Bash(ls -la \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\supabase\\\\\\\\\")",
       "Bash(ls -la \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\supabase\\\\\\\\functions\\\\\\\\\")",
-      "Bash(ls -la \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\supabase\\\\\\\\migrations\\\\\\\\\")"
+      "Bash(ls -la \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\supabase\\\\\\\\migrations\\\\\\\\\")",
+      "Bash(xargs grep *)"
     ]
   }
 }

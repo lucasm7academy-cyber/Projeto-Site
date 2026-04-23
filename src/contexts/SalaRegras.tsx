@@ -580,6 +580,20 @@ export function SalaRegrasProvider({
     // finalizacao: avalia quando todos os jogadores votaram
     if (estado === 'finalizacao') {
       const finVotos = votos.filter((v: Voto) => v.fase === 'finalizacao');
+
+      // Auto-vitória com 7 votos — encerra sem esperar todos
+      const votosA = finVotos.filter(v => v.opcao === 'time_a').length;
+      const votosB = finVotos.filter(v => v.opcao === 'time_b').length;
+      if ((votosA >= 7 || votosB >= 7) && !transicionandoRef.current) {
+        console.log(`[SalaRegras] ⚠️ AUTO-VITÓRIA: Time ${votosA >= 7 ? 'A' : 'B'} com ${Math.max(votosA, votosB)} votos!`);
+        transicionandoRef.current = true;
+        encerrarPartidaComResultado(salaId, votosA >= 7 ? 'time_a' : 'time_b', sala).finally(() => {
+          transicionandoRef.current = false;
+        });
+        return;
+      }
+
+      // Caminho normal: todos votaram
       if (finVotos.length >= sala.maxJogadores && finVotos.length > 0) {
         const decisao = avaliarVotosResultado(finVotos);
         if (decisao !== 'pendente') {

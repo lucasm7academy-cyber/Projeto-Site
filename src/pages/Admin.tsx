@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getCachedUser } from '../contexts/AuthContext';
+import { atualizarPontosPartida } from '../api/player';
 import {
   type CargoAdmin,
   CARGO_LABELS, CARGO_COLORS,
@@ -34,6 +35,7 @@ interface PartidaDisputa {
   vencedorNome?: string;
   jogadores:   Array<{ id: string; nome: string; isTimeA: boolean }>;
   createdAt:   string;
+  modo:        string;
 }
 
 interface Jogador {
@@ -80,7 +82,7 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
     setLoading(true);
     const { data, error } = await supabase
       .from('resultados_partidas')
-      .select('*')
+      .select('*, salas(modo)')
       .eq('vencedor', 'disputa')
       .is('resolvido_por', null)
       .order('created_at', { ascending: false });
@@ -93,6 +95,7 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
         vencedorNome: r.vencedor_nome,
         jogadores:    r.jogadores ?? [],
         createdAt:    r.created_at,
+        modo:         r.salas?.modo ?? '5v5',
       })));
     }
     setLoading(false);
@@ -103,8 +106,9 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
   const resolver = async (id: number, decisao: 'time_a' | 'time_b' | 'cancelado') => {
     setResolvendo(id);
     const user = await getCachedUser();
+    const partida = partidas.find(p => p.id === id)!;
     const vencedorNome = decisao === 'cancelado' ? 'Cancelado'
-      : partidas.find(p => p.id === id)?.vencedorNome ?? decisao;
+      : partida.vencedorNome ?? decisao;
 
     const { error } = await supabase
       .from('resultados_partidas')
@@ -115,6 +119,24 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
         resolvido_em:  new Date().toISOString(),
       })
       .eq('id', id);
+
+    // Conceder pontos se vencedor foi decidido (não cancelado)
+    if (!error && decisao !== 'cancelado') {
+      console.log(`[Admin] Resolvendo disputa #${id} - Vencedor: ${decisao}`);
+      await atualizarPontosPartida({
+        salaId:   partida.salaId,
+        modo:     partida.modo,
+        vencedor: decisao,
+        jogadores: partida.jogadores.map(j => ({
+          userId:  j.id,
+          isTimeA: j.isTimeA,
+          nome:    j.nome,
+        })),
+      }).catch(e => {
+        console.error('[Admin] Erro ao conceder pontos na resolução de disputa:', e);
+        setPopup({ tipo: 'erro', msg: 'Resultado registrado mas erro ao atualizar pontos.' });
+      });
+    }
 
     setResolvendo(null);
     if (error) {
