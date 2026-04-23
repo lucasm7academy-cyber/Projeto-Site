@@ -251,240 +251,36 @@ export async function entrarNaVaga(
   isTimeA: boolean,
   modo?: string
 ): Promise<{ sucesso: boolean; erro?: string }> {
-  // Verifica se vaga está ocupada por outro
-  const { data: existente } = await supabase
-    .from('sala_jogadores')
-    .select('user_id')
-    .eq('sala_id', salaId)
-    .eq('role', role)
-    .eq('is_time_a', isTimeA)
-    .maybeSingle();
+  try {
+    // ✅ OTIMIZADO: Chamar RPC que faz TUDO em 1 transação atômica (12-15 queries → 1)
+    const { data, error } = await supabase.rpc('entrar_na_vaga', {
+      p_sala_id: salaId,
+      p_user_id: usuario.id,
+      p_nome: usuario.nome,
+      p_tag: usuario.tag || '',
+      p_elo: usuario.elo,
+      p_avatar: usuario.avatar || null,
+      p_role: role,
+      p_is_time_a: isTimeA,
+      p_modo: modo || '5v5',
+    });
 
-  if (existente && existente.user_id !== usuario.id) {
-    console.warn('[entrarNaVaga] vaga ocupada por outro jogador');
-    return { sucesso: false, erro: 'Vaga ocupada' };
-  }
-
-  // Verifica se usuário está vinculado a outra sala (bloqueio absoluto)
-  const { data: vinculo } = await supabase
-    .from('sala_jogadores')
-    .select('sala_id, vinculado')
-    .eq('user_id', usuario.id)
-    .eq('vinculado', true)
-    .neq('sala_id', salaId)
-    .maybeSingle();
-
-  if (vinculo) {
-    console.warn('[entrarNaVaga] jogador vinculado a outra sala');
-    return { sucesso: false, erro: 'Você está em outra sala' };
-  }
-
-  // ========== VALIDAÇÃO PARA time_vs_time ==========
-  if (modo === 'time_vs_time') {
-    // Buscar time do usuário
-    const { data: membro } = await supabase
-      .from('time_membros')
-      .select('time_id')
-      .eq('user_id', usuario.id)
-      .maybeSingle();
-
-    if (!membro || !membro.time_id) {
-      console.warn('[entrarNaVaga] usuário sem time tentando entrar em time_vs_time');
-      return { sucesso: false, erro: 'Você precisa estar em um time' };
+    if (error) {
+      console.error('[entrarNaVaga] Erro RPC:', error);
+      return { sucesso: false, erro: error.message || 'Erro ao entrar na vaga' };
     }
 
-    // Buscar info da sala para verificar time_a_id e time_b_id
-    const { data: sala } = await supabase
-      .from('salas')
-      .select('time_a_id, time_b_id')
-      .eq('id', salaId)
-      .single();
-
-    if (sala) {
-      const timeIdDaSala = isTimeA ? sala.time_a_id : sala.time_b_id;
-
-      // Se já tem time definido naquele lado, verificar se é o mesmo
-      if (timeIdDaSala && timeIdDaSala !== membro.time_id) {
-        console.warn('[entrarNaVaga] time diferente tentando entrar em vaga ocupada');
-        return { sucesso: false, erro: 'Esta vaga é exclusiva para outro time' };
-      }
+    if (!data || data.sucesso === false) {
+      console.warn('[entrarNaVaga] RPC retornou erro:', data?.erro);
+      return { sucesso: false, erro: data?.erro || 'Erro desconhecido' };
     }
+
+    console.log('[entrarNaVaga] ✅ Jogador entrou com sucesso (via RPC)');
+    return { sucesso: true };
+  } catch (err: any) {
+    console.error('[entrarNaVaga] Exception:', err?.message);
+    return { sucesso: false, erro: 'Erro ao entrar na vaga' };
   }
-  // ========== FIM VALIDAÇÃO time_vs_time ==========
-
-  // Remove o usuário de qualquer outra sala em que esteja sem vínculo
-  // (impede que uma pessoa fique em duas salas ao mesmo tempo)
-  await supabase.from('sala_jogadores').delete()
-    .eq('user_id', usuario.id)
-    .eq('vinculado', false)
-    .neq('sala_id', salaId);
-
-  // Buscar info da vaga anterior ANTES de sair (para resetar time_id depois)
-  const { data: vagaAnterior } = await supabase
-    .from('sala_jogadores')
-    .select('is_time_a')
-    .eq('sala_id', salaId)
-    .eq('user_id', usuario.id)
-    .eq('vinculado', false)
-    .maybeSingle();
-
-  // Remove vaga anterior (sem passar por sairDaVaga, para evitar race condition)
-  await supabase.from('sala_jogadores').delete()
-    .eq('sala_id', salaId).eq('user_id', usuario.id).eq('vinculado', false);
-
-  // Conta jogadores para definir líder
-  const { count } = await supabase.from('sala_jogadores')
-    .select('*', { count: 'exact', head: true }).eq('sala_id', salaId);
-
-  const row: Record<string, any> = {
-    sala_id:   salaId,
-    user_id:   usuario.id,
-    nome:      usuario.nome,
-    tag:       usuario.tag || '',
-    elo:       usuario.elo,
-    role,
-    is_lider:  (count ?? 0) === 0,
-    is_time_a: isTimeA,
-    confirmado: false,
-    vinculado:  false,
-  };
-  if (usuario.avatar) row.avatar = usuario.avatar;
-
-  const { error } = await supabase.from('sala_jogadores').insert(row);
-  if (error) {
-    if (error.code === '23505') {
-      console.warn('[entrarNaVaga] conflito de vaga — vaga preenchida por outro jogador no mesmo instante');
-      return { sucesso: false, erro: 'Vaga já foi preenchida' };
-    } else {
-      console.error('[entrarNaVaga]', error);
-      return { sucesso: false, erro: 'Erro ao entrar na vaga' };
-    }
-  }
-
-  // Após INSERT bem-sucedido, limpar time_id do lado anterior (time_vs_time)
-  if (vagaAnterior && modo === 'time_vs_time') {
-    const { count: contagem } = await supabase
-      .from('sala_jogadores')
-      .select('*', { count: 'exact', head: true })
-      .eq('sala_id', salaId)
-      .eq('is_time_a', vagaAnterior.is_time_a)
-      .eq('vinculado', false);
-
-    if (contagem === 0) {
-      const campoTimeIdAntigo = vagaAnterior.is_time_a ? 'time_a_id' : 'time_b_id';
-      const campoLogoAntigo = vagaAnterior.is_time_a ? 'time_a_logo' : 'time_b_logo';
-      const campoNomeAntigo = vagaAnterior.is_time_a ? 'time_a_nome' : 'time_b_nome';
-      const campoTagAntigo = vagaAnterior.is_time_a ? 'time_a_tag' : 'time_b_tag';
-      const campoCorAntigo = vagaAnterior.is_time_a ? 'time_a_color' : 'time_b_color';
-
-      try {
-        await supabase
-          .from('salas')
-          .update({
-            [campoTimeIdAntigo]: null,
-            [campoLogoAntigo]: null,
-            [campoNomeAntigo]: null,
-            [campoTagAntigo]: null,
-            [campoCorAntigo]: null,
-          })
-          .eq('id', salaId);
-      } catch (err: any) {
-        console.error(`[entrarNaVaga] Erro ao limpar time do lado:`, err);
-      }
-    }
-  }
-
-  // ========== REGISTRAR TIME NA SALA (time_vs_time) ==========
-  if (modo === 'time_vs_time') {
-    const { data: membro } = await supabase
-      .from('time_membros')
-      .select('time_id')
-      .eq('user_id', usuario.id)
-      .maybeSingle();
-
-    if (membro?.time_id) {
-      // Buscar sala para ver qual time já está definido
-      const { data: sala } = await supabase
-        .from('salas')
-        .select('time_a_id, time_b_id')
-        .eq('id', salaId)
-        .single();
-
-      // Se esse lado ainda não tem time definido, registrar
-      const campoTimeId = isTimeA ? 'time_a_id' : 'time_b_id';
-      const timeIdJaDefinido = isTimeA ? sala?.time_a_id : sala?.time_b_id;
-
-      if (!timeIdJaDefinido) {
-        // Registrar time_id PRIMEIRO
-        const { error: updateTimeIdError } = await supabase
-          .from('salas')
-          .update({ [campoTimeId]: membro.time_id })
-          .eq('id', salaId);
-
-        if (updateTimeIdError) {
-          console.error(`[entrarNaVaga] Erro ao registrar ${campoTimeId}:`, updateTimeIdError);
-        } else {
-          // Só buscar dados do time SE o time_id foi registrado com sucesso
-          // Usar RPC ou query sem autenticação para buscar dados públicos do time
-          const { data: timeData, error: timeError } = await supabase
-            .from('times')
-            .select('*')
-            .eq('id', membro.time_id)
-            .maybeSingle();
-
-          if (timeError) {
-            console.warn('[entrarNaVaga] Aviso ao buscar dados do time:', timeError, '- continuando mesmo assim');
-          }
-
-          if (timeData) {
-            console.log('[entrarNaVaga] Dados do time recebidos:', Object.keys(timeData));
-            console.log('[entrarNaVaga] timeData completo:', timeData);
-
-            const campoLogo = isTimeA ? 'time_a_logo' : 'time_b_logo';
-            const campoNome = isTimeA ? 'time_a_nome' : 'time_b_nome';
-            const campoTag = isTimeA ? 'time_a_tag' : 'time_b_tag';
-            const campoCor = isTimeA ? 'time_a_color' : 'time_b_color';
-
-            // Tenta diferentes nomes de campo para logo
-            const logo = (timeData as any).logo_url || (timeData as any).logoUrl || (timeData as any).logo;
-            const nome = (timeData as any).name || (timeData as any).nome;
-            const tag = (timeData as any).tag;
-            const cor = (timeData as any).gradient_from || (timeData as any).color || '#a855f7';
-
-            console.log(`[entrarNaVaga] Logo encontrada: ${logo}, Nome: ${nome}, Tag: ${tag}, Cor: ${cor}`);
-
-            // Preparar UPDATE com dados do time
-            const camposAtualizacao: Record<string, any> = {};
-            if (logo) camposAtualizacao[campoLogo] = logo;
-            if (nome) camposAtualizacao[campoNome] = nome;
-            if (tag) camposAtualizacao[campoTag] = tag;
-            if (cor) camposAtualizacao[campoCor] = cor;
-
-            console.log(`[entrarNaVaga] Campos a atualizar:`, camposAtualizacao);
-
-            if (Object.keys(camposAtualizacao).length > 0) {
-              const { error: updateError, data: updateData } = await supabase
-                .from('salas')
-                .update(camposAtualizacao)
-                .eq('id', salaId);
-
-              if (updateError) {
-                console.error(`[entrarNaVaga] Erro ao atualizar dados do time:`, updateError);
-              } else {
-                console.log(`[entrarNaVaga] ✅ Dados do time registrados:`, camposAtualizacao);
-                console.log(`[entrarNaVaga] Update data:`, updateData);
-              }
-            } else {
-              console.warn(`[entrarNaVaga] ⚠️ Nenhum campo para atualizar!`);
-            }
-          }
-        }
-      }
-    }
-  }
-  // ========== FIM REGISTRAR TIME ==========
-
-  return { sucesso: true };
 }
 
 // ── Sair da vaga ──────────────────────────────────────────────────────────────
