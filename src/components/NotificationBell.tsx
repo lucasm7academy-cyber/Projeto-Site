@@ -18,32 +18,43 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  // ── Carrega notificações ──────────────────────────────────────────────────
+  // ── Carrega notificações com debounce 500ms ───────────────────────────────
   const carregarNotificacoes = async (userId: string) => {
     const allNotifs: any[] = [];
 
-    // 1. Solicitações pendentes para o usuário (capitão do time)
-    const { data: pendentes, error: errPend } = await supabase
+    // ✅ OTIMIZADO: Combinar 3 queries em 1 com .or() — reduz de 3 para 1 query
+    const { data: todos, error: errTodos } = await supabase
       .from('time_convites')
-      .select('id, time_id, de_user_id, riot_id, role, mensagem, criado_em')
-      .eq('tipo', 'solicitacao')
-      .eq('status', 'pendente')
-      .eq('para_user_id', userId)
-      .order('criado_em', { ascending: false });
+      .select('id, time_id, de_user_id, para_user_id, tipo, status, riot_id, role, mensagem, criado_em')
+      .or(`para_user_id.eq.${userId},de_user_id.eq.${userId}`)
+      .order('criado_em', { ascending: false })
+      .limit(50);
 
-    if (errPend) console.error('Notif pendentes erro:', errPend);
+    if (errTodos) {
+      console.error('[NotificationBell] Erro ao carregar convites:', errTodos);
+      return;
+    }
 
-    if (pendentes && pendentes.length > 0) {
-      const teamIds = [...new Set(pendentes.map((r: any) => r.time_id))];
-      const { data: timesData } = await supabase
-        .from('times')
-        .select('id, nome')
-        .in('id', teamIds);
-      const teamMap: Record<string, string> = {};
-      (timesData || []).forEach((t: any) => { teamMap[t.id] = t.nome; });
+    if (!todos || todos.length === 0) {
+      setNotifications([]);
+      return;
+    }
 
-      pendentes.forEach((r: any) => {
+    // Buscar times em 1 query (em vez de 3)
+    const teamIds = [...new Set(todos.map((r: any) => r.time_id))];
+    const { data: timesData } = await supabase
+      .from('times')
+      .select('id, nome')
+      .in('id', teamIds);
+    const teamMap: Record<string, string> = {};
+    (timesData || []).forEach((t: any) => { teamMap[t.id] = t.nome; });
+
+    // Processar todos os convites uma vez, separando por tipo/status
+    todos.forEach((r: any) => {
+      // 1. Solicitações pendentes para o usuário (é o capitão, recebe solicitação)
+      if (r.tipo === 'solicitacao' && r.status === 'pendente' && r.para_user_id === userId) {
         allNotifs.push({
           id: r.id,
           type: 'join_request',
@@ -56,30 +67,10 @@ export default function NotificationBell() {
           message: r.mensagem,
           criado_em: r.criado_em,
         });
-      });
-    }
+      }
 
-    // 2. Status dos meus convites/solicitações enviados (aceito ou recusado)
-    const { data: minhas, error: errMin } = await supabase
-      .from('time_convites')
-      .select('id, time_id, de_user_id, status, tipo, riot_id, criado_em')
-      .eq('de_user_id', userId)
-      .in('status', ['aceito', 'recusado'])
-      .order('criado_em', { ascending: false })
-      .limit(10);
-
-    if (errMin) console.error('Notif minhas erro:', errMin);
-
-    if (minhas && minhas.length > 0) {
-      const teamIds2 = [...new Set(minhas.map((r: any) => r.time_id))];
-      const { data: timesData2 } = await supabase
-        .from('times')
-        .select('id, nome')
-        .in('id', teamIds2);
-      const teamMap2: Record<string, string> = {};
-      (timesData2 || []).forEach((t: any) => { teamMap2[t.id] = t.nome; });
-
-      minhas.forEach((r: any) => {
+      // 2. Status dos meus convites/solicitações (enviei, recebi resposta)
+      if (r.de_user_id === userId && (r.status === 'aceito' || r.status === 'recusado')) {
         allNotifs.push({
           id: r.id + '_status',
           type: 'status_update',
@@ -88,48 +79,36 @@ export default function NotificationBell() {
           player_riot_id: r.riot_id || 'Jogador',
           convite_id: r.id,
           time_id: r.time_id,
-          team_name: teamMap2[r.time_id] || 'Time',
+          team_name: teamMap[r.time_id] || 'Time',
           de_user_id: r.de_user_id,
           criado_em: r.criado_em,
         });
-      });
-    }
+      }
 
-    // 3. Convites recebidos pendentes (capitão convidou este jogador)
-    const { data: convitesRecebidos, error: errConv } = await supabase
-      .from('time_convites')
-      .select('id, time_id, de_user_id, riot_id, role, mensagem, criado_em')
-      .eq('tipo', 'convite')
-      .eq('status', 'pendente')
-      .eq('para_user_id', userId)
-      .order('criado_em', { ascending: false });
-
-    if (errConv) console.error('Notif convites erro:', errConv);
-
-    if (convitesRecebidos && convitesRecebidos.length > 0) {
-      const teamIdsC = [...new Set(convitesRecebidos.map((r: any) => r.time_id))];
-      const { data: timesDataC } = await supabase
-        .from('times')
-        .select('id, nome')
-        .in('id', teamIdsC);
-      const teamMapC: Record<string, string> = {};
-      (timesDataC || []).forEach((t: any) => { teamMapC[t.id] = t.nome; });
-
-      convitesRecebidos.forEach((r: any) => {
+      // 3. Convites recebidos pendentes (capitão convidou)
+      if (r.tipo === 'convite' && r.status === 'pendente' && r.para_user_id === userId) {
         allNotifs.push({
           id: r.id + '_invite',
           type: 'invite_received',
           convite_id: r.id,
           time_id: r.time_id,
-          team_name: teamMapC[r.time_id] || 'Time',
+          team_name: teamMap[r.time_id] || 'Time',
           role: r.role,
           message: r.mensagem,
           criado_em: r.criado_em,
         });
-      });
-    }
+      }
+    });
 
     setNotifications(allNotifs);
+  };
+
+  // ── Debounce wrapper: 500ms ────────────────────────────────────────────────
+  const carregarNotificacoesDebounced = (userId: string) => {
+    if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
+    loadTimeoutRef.current = setTimeout(() => {
+      carregarNotificacoes(userId);
+    }, 500);
   };
 
   // ── Ações ─────────────────────────────────────────────────────────────────
@@ -245,10 +224,26 @@ export default function NotificationBell() {
 
       carregarNotificacoes(u.id);
 
+      // ✅ Filtro por userId + debounce 500ms — reduz broadcasts para apenas este usuário
       channel = supabase
         .channel('notif-bell-' + u.id)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'time_convites' },
-          () => carregarNotificacoes(u.id)
+        .on('postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'time_convites',
+            filter: `or(para_user_id.eq.${u.id},de_user_id.eq.${u.id})`
+          },
+          () => carregarNotificacoesDebounced(u.id)
+        )
+        .on('postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'time_convites',
+            filter: `or(para_user_id.eq.${u.id},de_user_id.eq.${u.id})`
+          },
+          () => carregarNotificacoesDebounced(u.id)
         )
         .subscribe();
     };
@@ -258,7 +253,8 @@ export default function NotificationBell() {
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
+      // ✅ Remover TOKEN_REFRESHED: evita recarregar a cada token refresh (frequente)
+      if (u && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
         carregarNotificacoes(u.id);
       }
       if (event === 'SIGNED_OUT') setNotifications([]);
@@ -287,7 +283,7 @@ export default function NotificationBell() {
       <button
         onClick={() => {
           playSound('click');
-          if (user) carregarNotificacoes(user.id);
+          if (user) carregarNotificacoesDebounced(user.id);
           setIsOpen(prev => !prev);
         }}
         className="relative p-2 transition-all duration-150 group"
