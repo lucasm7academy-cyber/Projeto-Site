@@ -58,15 +58,39 @@ export default function Streamers() {
       const seenUsers = new Set<string>();
       const uniqueSalaStreams = salaStreams.filter((salaStream: any) => {
         if (seenUsers.has(salaStream.user_id)) {
-          return false; // Skip duplicates
+          return false;
         }
         seenUsers.add(salaStream.user_id);
         return true;
       });
 
-      // Convert sala_streams to TwitchLiveStream format and fetch user profiles + team info
-      const streamCardsPromises = uniqueSalaStreams.map(async (salaStream: any) => {
-        // Create stream object from sala_streams
+      // ✅ OTIMIZADO: Batch queries em vez de N queries por stream
+      // 1 query profiles + 1 query time_membros + 1 query times = 4 total (vs N×3)
+      const userIds = uniqueSalaStreams.map((s: any) => s.user_id);
+
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, nome, avatar_url')
+        .in('id', userIds);
+
+      const { data: membrosData } = await supabase
+        .from('time_membros')
+        .select('user_id, time_id')
+        .in('user_id', userIds);
+
+      const teamIds = [...new Set((membrosData || []).map((m: any) => m.time_id))];
+      const { data: timesData } = await supabase
+        .from('times')
+        .select('id, nome, tag, logo_url')
+        .in('id', teamIds);
+
+      // Mapear dados em memória
+      const profilesMap = new Map(profilesData?.map((p: any) => [p.id, p]) || []);
+      const membrosMap = new Map(membrosData?.map((m: any) => [m.user_id, m]) || []);
+      const timesMap = new Map(timesData?.map((t: any) => [t.id, t]) || []);
+
+      // Montar stream cards com dados já buscados
+      const streamCards = uniqueSalaStreams.map((salaStream: any) => {
         const stream: TwitchLiveStream = {
           id: salaStream.id,
           user_id: salaStream.user_id,
@@ -77,39 +101,14 @@ export default function Streamers() {
           ao_vivo: true,
           updated_at: new Date().toISOString()
         };
-        let profile: UserProfile | undefined;
-        let team: TeamInfo | undefined;
 
-        // Fetch profile
-        const { data: profileData } = await supabase
-          .from('profiles')
-          .select('id, nome, avatar_url')
-          .eq('id', salaStream.user_id)
-          .single();
-
-        profile = profileData || undefined;
-
-        // Fetch team info
-        const { data: membro } = await supabase
-          .from('time_membros')
-          .select('time_id')
-          .eq('user_id', salaStream.user_id)
-          .maybeSingle();
-
-        if (membro?.time_id) {
-          const { data: teamData } = await supabase
-            .from('times')
-            .select('id, nome, tag, logo_url')
-            .eq('id', membro.time_id)
-            .single();
-
-          team = teamData || undefined;
-        }
+        const profile = profilesMap.get(salaStream.user_id);
+        const membro = membrosMap.get(salaStream.user_id);
+        const team = membro ? timesMap.get(membro.time_id) : undefined;
 
         return { ...stream, profile, team };
       });
 
-      const streamCards = await Promise.all(streamCardsPromises);
       setStreams(streamCards as StreamCard[]);
     } catch (error) {
       console.error('Error fetching streams:', error);

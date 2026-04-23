@@ -1,7 +1,7 @@
 // src/pages/MinhasPartidas.tsx
 // NOVA VERSÃO - Com bloqueio para não-VIP e marketing premium
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
@@ -32,80 +32,107 @@ export default function MinhasPartidas() {
   const [stats, setStats] = useState({ vitorias: 0, derrotas: 0, winRate: 0 });
   const [isVip, setIsVip] = useState(false);
   const [loadingVip, setLoadingVip] = useState(true);
+  const reloadTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
+  const carregarDados = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      // Verificar se o usuário é VIP
+      const { data: perfil } = await supabase
+        .from('profiles')
+        .select('is_vip, vip_expira_em')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const perfilAny = perfil as any;
+      const vipAtivo = perfilAny?.is_vip || false;
+      setIsVip(vipAtivo);
+      setLoadingVip(false);
+
+      // ✅ OTIMIZADO: Limitar a últimas 200 partidas (evita baixar todas)
+      // Depois filtra em memória por user_id
+      const { data, error } = await supabase
+        .from('resultados_partidas')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (error) {
+        console.error('[MinhasPartidas] Erro na query:', error);
+        return;
+      }
+
+      if (data) {
+        // Filtrar apenas partidas que o usuário participou
+        const minhasPartidas = data
+          .filter((resultado: any) => {
+            const jogadores = Array.isArray(resultado.jogadores) ? resultado.jogadores : [];
+            return jogadores.some((j: any) => j.id === user?.id);
+          })
+          .map((resultado: any) => ({
+            id: resultado.sala_id,
+            modo: resultado.modo,
+            vencedor: resultado.vencedor,
+            vencedor_nome: resultado.vencedor_nome,
+            created_at: resultado.created_at,
+            jogadores: Array.isArray(resultado.jogadores) ? resultado.jogadores : [],
+            timeANome: resultado.time_a_nome,
+            timeBNome: resultado.time_b_nome,
+          }));
+
+        setPartidas(minhasPartidas);
+
+        // Calcular estatísticas
+        let vitorias = 0;
+        minhasPartidas.forEach(partida => {
+          const jogador = partida.jogadores.find((j: any) => j.id === user?.id);
+          if (jogador && partida.vencedor) {
+            const venceuTimeA = partida.vencedor === 'A';
+            if (jogador.isTimeA === venceuTimeA) vitorias++;
+          }
+        });
+
+        setStats({
+          vitorias,
+          derrotas: minhasPartidas.length - vitorias,
+          winRate: minhasPartidas.length > 0 ? Math.round((vitorias / minhasPartidas.length) * 100) : 0
+        });
+      }
+    } catch (err) {
+      console.error('[MinhasPartidas] Exception:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    carregarDados();
+  }, [carregarDados]);
+
+  // ✅ Realtime listener — atualiza quando novas partidas são criadas
   useEffect(() => {
     if (!user) return;
 
-    const carregarDados = async () => {
-      try {
-        // Verificar se o usuário é VIP
-        const { data: perfil } = await supabase
-          .from('profiles')
-          .select('is_vip, vip_expira_em')
-          .eq('id', user.id)
-          .maybeSingle();
+    const channel = supabase
+      .channel('minhas_partidas_updates')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'resultados_partidas',
+      }, () => {
+        // Debounce 500ms para evitar múltiplas refetch rápidas
+        if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
+        reloadTimeoutRef.current = setTimeout(() => {
+          carregarDados();
+        }, 500);
+      })
+      .subscribe();
 
-        const perfilAny = perfil as any;
-        const vipAtivo = perfilAny?.is_vip || false;
-        setIsVip(vipAtivo);
-        setLoadingVip(false);
-
-        // Buscar de resultados_partidas (onde os dados são preservados)
-        const { data, error } = await supabase
-          .from('resultados_partidas')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('[MinhasPartidas] Erro na query:', error);
-          return;
-        }
-
-        if (data) {
-          // Filtrar apenas partidas que o usuário participou
-          const minhasPartidas = data
-            .filter((resultado: any) => {
-              const jogadores = Array.isArray(resultado.jogadores) ? resultado.jogadores : [];
-              return jogadores.some((j: any) => j.id === user?.id);
-            })
-            .map((resultado: any) => ({
-              id: resultado.sala_id,
-              modo: resultado.modo,
-              vencedor: resultado.vencedor,
-              vencedor_nome: resultado.vencedor_nome,
-              created_at: resultado.created_at,
-              jogadores: Array.isArray(resultado.jogadores) ? resultado.jogadores : [],
-              timeANome: resultado.time_a_nome,
-              timeBNome: resultado.time_b_nome,
-            }));
-
-          setPartidas(minhasPartidas);
-
-          // Calcular estatísticas
-          let vitorias = 0;
-          minhasPartidas.forEach(partida => {
-            const jogador = partida.jogadores.find((j: any) => j.id === user?.id);
-            if (jogador && partida.vencedor) {
-              const venceuTimeA = partida.vencedor === 'A';
-              if (jogador.isTimeA === venceuTimeA) vitorias++;
-            }
-          });
-          
-          setStats({
-            vitorias,
-            derrotas: minhasPartidas.length - vitorias,
-            winRate: minhasPartidas.length > 0 ? Math.round((vitorias / minhasPartidas.length) * 100) : 0
-          });
-        }
-      } catch (err) {
-        console.error('[MinhasPartidas] Exception:', err);
-      } finally {
-        setLoading(false);
-      }
+    return () => {
+      if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
+      supabase.removeChannel(channel);
     };
-
-    carregarDados();
-  }, [user]);
+  }, [user, carregarDados]);
 
   const isVitoria = (partida: Partida, userId: string): boolean => {
     const jogador = partida.jogadores.find((j) => j.id === userId);
