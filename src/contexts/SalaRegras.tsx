@@ -201,17 +201,20 @@ interface SalaRegrasProviderProps {
   usuarioAtual: UsuarioAtual;
   onSair: () => void;
   onEncerrada?: () => void;
+  salaInicial?: Sala | null; // ✅ OTIMIZADO: Reusar sala já carregada
   children: React.ReactNode;
 }
 
 export function SalaRegrasProvider({
   salaId,
   usuarioAtual,
+  salaInicial = null,
   onSair,
   onEncerrada,
   children,
 }: SalaRegrasProviderProps) {
-  const [sala, setSala]       = useState<Sala | null>(null);
+  // ✅ OTIMIZADO: Inicializar com salaInicial (reusar sala já carregada, evitar query duplicada)
+  const [sala, setSala]       = useState<Sala | null>(salaInicial ?? null);
   const [votos, setVotos]     = useState<Voto[]>([]);
   const [loading]             = useState(false);
   const [erro]                = useState<string | null>(null);
@@ -273,7 +276,8 @@ export function SalaRegrasProvider({
   }, [sala]);
 
   useEffect(() => {
-    recarregar();
+    // ✅ OTIMIZADO: Só chamar recarregar() se salaInicial não foi fornecido
+    if (!salaInicial) recarregar();
 
     const channel = supabase
       .channel(`sala_regras_${salaId}`)
@@ -379,7 +383,7 @@ export function SalaRegrasProvider({
       supabase.removeChannel(channel);
       supabase.removeChannel(presenceChannel);
     };
-  }, [salaId]);
+  }, [salaId, salaInicial, recarregar]);
 
   // Sincroniza votos ao mudar de estado
   useEffect(() => {

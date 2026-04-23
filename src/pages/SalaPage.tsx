@@ -151,6 +151,7 @@ export default function SalaPage() {
       usuarioAtual={usuarioAtual}
       onSair={() => navigate('/jogar')}
       onEncerrada={() => navigate('/jogar')}
+      salaInicial={salaInicial}
     >
       <SalaPageView usuarioAtual={usuarioAtual} />
     </SalaRegrasProvider>
