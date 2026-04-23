@@ -25,7 +25,10 @@ interface VerificacaoContextType {
 
 const VerificacaoContext = createContext<VerificacaoContextType | undefined>(undefined);
 
-const POLLING_INTERVAL_MS = 15000;
+// ✅ OTIMIZADO: Aumentar polling de 15s para 30s (reduz em 50% requests à Riot API)
+// 15s: 4 req/min × 240s timeout = 16 requests por verificação
+// 30s: 2 req/min × 240s timeout = 8 requests por verificação
+const POLLING_INTERVAL_MS = 30000;
 const TIMEOUT_SEGUNDOS = 240;
 
 export function VerificacaoProvider({ children }: { children: ReactNode }) {
