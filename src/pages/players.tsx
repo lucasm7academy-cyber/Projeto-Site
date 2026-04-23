@@ -410,6 +410,8 @@ export default function App() {
   const temMaisRef       = useRef(true);
   // Impede que o observer carregue antes do load inicial terminar
   const readyRef         = useRef(false);
+  // ✅ Manter ref atualizada para acessar no Realtime handler sem recriar o canal
+  const todosJogadoresRef = useRef<Jogador[]>([]);
 
   const PRIMARY_COLOR = '#FFB700';
 
@@ -474,6 +476,11 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
 
+  // ✅ Sincronizar ref — usado no Realtime listener sem recriar o canal
+  useEffect(() => {
+    todosJogadoresRef.current = todosJogadores;
+  }, [todosJogadores]);
+
   // Realtime — atualizações de elos em tempo real
   useEffect(() => {
     const channel = supabase
@@ -484,8 +491,8 @@ export default function App() {
         table: 'contas_riot'
       }, (payload: any) => {
         console.log('[players] Elo atualizado para:', payload.new?.user_id);
-        // Recarregar o jogador atualizado
-        const jogador = todosJogadores.find(j => j.id === payload.new?.user_id);
+        // ✅ Usar ref em vez de state — evita recriar o canal a cada scroll
+        const jogador = todosJogadoresRef.current.find(j => j.id === payload.new?.user_id);
         if (jogador) {
           setTodosJogadores(prev => prev.map(j =>
             j.id === jogador.id
@@ -499,7 +506,7 @@ export default function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [todosJogadores]);
+  }, []); // ✅ Deps vazio — canal criado UMA VEZ, nunca recriado
 
   // ✅ DESABILITADO: Elo agora vem do cache (contas_riot.tier)
   // Não precisa mais buscar da Riot API sequencialmente (16+ segundos)
