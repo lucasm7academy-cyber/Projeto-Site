@@ -809,6 +809,7 @@ export default function App() {
   const sentinelRef    = useRef<HTMLDivElement>(null);
   const fetchingRef    = useRef(false);
   const temMaisRef     = useRef(true);
+  const reloadTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined); // debounce realtime
 
   useEffect(() => {
     let ignore = false;
@@ -841,21 +842,28 @@ export default function App() {
     });
 
     const recarregarVisivel = () => {
-      const uid = uidRef.current;
-      const total = arenaOffsetRef.current;
-      Promise.all([
-        uid ? carregarMeuTime(uid) : Promise.resolve(null),
-        carregarTimesDoSupabase(uid, 0, Math.max(total, TEAMS_PAGE)),
-      ]).then(([meuTime, { teams: reloaded }]) => {
+      // Debounce: agrupa múltiplas mudanças em uma única query (300ms)
+      if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
+      reloadTimeoutRef.current = setTimeout(async () => {
+        console.log('[equipes] Recarregando times após debounce');
+        const uid = uidRef.current;
+        const total = arenaOffsetRef.current;
+        const [meuTime, { teams: reloaded }] = await Promise.all([
+          uid ? carregarMeuTime(uid) : Promise.resolve(null),
+          carregarTimesDoSupabase(uid, 0, Math.max(total, TEAMS_PAGE)),
+        ]);
         setMyTeam(meuTime);
         setArenaTeams(reloaded);
-      });
+        reloadTimeoutRef.current = undefined;
+      }, 300);
     };
 
     const channel = supabase
       .channel('equipes-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'times' }, recarregarVisivel)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'time_membros' }, recarregarVisivel)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'times' }, recarregarVisivel)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'times' }, recarregarVisivel)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'time_membros' }, recarregarVisivel)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'time_membros' }, recarregarVisivel)
       .subscribe();
 
     return () => {
@@ -892,8 +900,10 @@ export default function App() {
   const [modalCriar, setModalCriar] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState(''); // debounced search
   const [myTeamBannerUrl, setMyTeamBannerUrl] = useState<string | null>(null);
   const [appliedSlots] = useState<string[]>([]);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const handleMyTeamBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -903,11 +913,24 @@ export default function App() {
     }
   };
 
+  // Debounce search — agrupa keystrokes em uma única filtragem (200ms)
+  useEffect(() => {
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      console.log('[equipes] Aplicando filtro de busca:', searchQuery);
+      setAppliedSearch(searchQuery);
+      searchTimeoutRef.current = undefined;
+    }, 200);
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [searchQuery]);
+
   const filteredTeams = arenaTeams
     .sort((a, b) => a.ranking - b.ranking)
     .filter(team =>
-      team.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      team.tag.toLowerCase().includes(searchQuery.toLowerCase())
+      team.name.toLowerCase().includes(appliedSearch.toLowerCase()) ||
+      team.tag.toLowerCase().includes(appliedSearch.toLowerCase())
     );
 
   const handleCreateTeam = async (newTeamData: Partial<Team>) => {
