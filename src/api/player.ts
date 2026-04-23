@@ -364,42 +364,47 @@ const PONTOS_POR_MODO: Record<string, { vitoria: number; derrota: number }> = {
 export async function atualizarPontosPartida(resultado: ResultadoPartida): Promise<void> {
   const pontos = PONTOS_POR_MODO[resultado.modo] ?? { vitoria: 0, derrota: 0 };
 
-  for (const jogador of resultado.jogadores) {
+  // ✅ OTIMIZADO: Buscar TODOS os MPs de uma vez em vez de 1 por jogador (N+1 → 1 query)
+  const userIds = resultado.jogadores.map(j => j.userId);
+  const { data: contasAtuais } = await supabase
+    .from('contas_riot')
+    .select('user_id, mp, mc')
+    .in('user_id', userIds);
+
+  const contasMap: Record<string, any> = {};
+  (contasAtuais || []).forEach(c => { contasMap[c.user_id] = c; });
+
+  // Calcular novos MPs em memória
+  const updates = resultado.jogadores.map(jogador => {
     const ehVitoria =
       (resultado.vencedor === 'time_a' && jogador.isTimeA) ||
       (resultado.vencedor === 'time_b' && !jogador.isTimeA);
 
     const mpGanho = ehVitoria ? pontos.vitoria : pontos.derrota;
-
-    // Atualizar MP em contas_riot (buscar valor atual + incrementar)
-    const { data: contaAtual } = await supabase
-      .from('contas_riot')
-      .select('mp')
-      .eq('user_id', jogador.userId)
-      .maybeSingle();
-
+    const contaAtual = contasMap[jogador.userId];
     const mpAtual = contaAtual?.mp ?? 0;
-    const novoMP = Math.max(0, mpAtual + mpGanho); // Nunca pode ser negativo
-
-    // Buscar MC de saldos (sincronizar)
-    const { data: saldoData } = await supabase
-      .from('saldos')
-      .select('saldo')
-      .eq('user_id', jogador.userId)
-      .maybeSingle();
-
-    const novoMC = saldoData?.saldo ?? 0;
-
-    await supabase
-      .from('contas_riot')
-      .update({ mp: novoMP, mc: novoMC })
-      .eq('user_id', jogador.userId);
-
-    // Atualizar stats por modo
-    await atualizarStatsPorModo(jogador.userId, resultado.modo, ehVitoria);
+    const novoMP = Math.max(0, mpAtual + mpGanho);
+    const novoMC = contaAtual?.mc ?? 0;
 
     console.log(`[atualizarPontosPartida] ${jogador.nome}: ${ehVitoria ? '✅ Vitória' : '❌ Derrota'} +${mpGanho} MP`);
-  }
+
+    return { userId: jogador.userId, novoMP, novoMC, ehVitoria };
+  });
+
+  // ✅ UPDATE em paralelo (Promise.all) em vez de sequencial (for...await)
+  await Promise.all([
+    // Updates de MP/MC em paralelo
+    ...updates.map(u =>
+      supabase
+        .from('contas_riot')
+        .update({ mp: u.novoMP, mc: u.novoMC })
+        .eq('user_id', u.userId)
+    ),
+    // Stats por modo em paralelo
+    ...resultado.jogadores.map((jogador, idx) =>
+      atualizarStatsPorModo(jogador.userId, resultado.modo, updates[idx].ehVitoria)
+    ),
+  ]);
 }
 
 /**
