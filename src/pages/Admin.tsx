@@ -10,7 +10,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { getCachedUser } from '../contexts/AuthContext';
 import { atualizarPontosPartida } from '../api/player';
-import { resolverPartidaTravada } from '../api/salas';
+import { resolverPartidaTravada, deletarSala } from '../api/salas';
 import {
   type CargoAdmin,
   CARGO_LABELS, CARGO_COLORS,
@@ -47,7 +47,7 @@ interface Jogador {
   saldo:    number;
 }
 
-type Aba = 'disputas' | 'partidas_travadas' | 'saldos';
+type Aba = 'salas' | 'disputas' | 'partidas_travadas' | 'saldos';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HELPERS
@@ -265,6 +265,220 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ABA: SALAS ABERTAS
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SalaAberta {
+  id:           number;
+  nome:         string;
+  estado:       string;
+  criadorNome:  string;
+  modo:         string;
+  numJogadores: number;
+  maxJogadores: number;
+}
+
+function AbaSalas({ adminCargo }: { adminCargo: CargoAdmin }) {
+  const [salas, setSalas]               = useState<SalaAberta[]>([]);
+  const [loading, setLoading]           = useState(true);
+  const [deletando, setDeletando]       = useState<number | null>(null);
+  const [confirmacao, setConfirmacao]   = useState<number | null>(null);
+  const [popup, setPopup]               = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
+
+  const podeDeleta = temPermissao(adminCargo, 'resolverPartidas');
+
+  const carregar = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('salas')
+      .select('id, nome, estado, criador_nome, modo, max_jogadores, sala_jogadores(user_id)', { count: 'exact' })
+      .not('estado', 'eq', 'encerrada')
+      .order('created_at', { ascending: false })
+      .limit(100);
+
+    if (!error && data) {
+      setSalas(data.map((s: any) => ({
+        id:           s.id,
+        nome:         s.nome,
+        estado:       s.estado,
+        criadorNome:  s.criador_nome,
+        modo:         s.modo,
+        maxJogadores: s.max_jogadores,
+        numJogadores: (s.sala_jogadores ?? []).length,
+      })));
+    }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { carregar(); }, [carregar]);
+
+  const deletar = async () => {
+    if (!confirmacao) return;
+    setDeletando(confirmacao);
+
+    const { error } = await supabase.from('salas').delete().eq('id', confirmacao);
+
+    setDeletando(null);
+    setConfirmacao(null);
+
+    if (error) {
+      setPopup({ tipo: 'erro', msg: 'Erro ao deletar sala' });
+    } else {
+      setPopup({ tipo: 'sucesso', msg: 'Sala deletada com sucesso!' });
+      carregar();
+    }
+    setTimeout(() => setPopup(null), 3000);
+  };
+
+  const estadoColor = (estado: string) => {
+    if (estado === 'aberta') return 'bg-green-500/10 border-green-500/20 text-green-400';
+    if (estado === 'preenchendo') return 'bg-blue-500/10 border-blue-500/20 text-blue-400';
+    if (estado === 'confirmacao') return 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400';
+    if (estado === 'travada') return 'bg-purple-500/10 border-purple-500/20 text-purple-400';
+    if (estado === 'aguardando_inicio') return 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400';
+    if (estado === 'em_partida') return 'bg-orange-500/10 border-orange-500/20 text-orange-400';
+    if (estado === 'finalizacao') return 'bg-red-500/10 border-red-500/20 text-red-400';
+    return 'bg-white/5 border-white/10 text-white/40';
+  };
+
+  const estadoLabel = (estado: string) => {
+    const labels: Record<string, string> = {
+      'aberta': 'Aberta',
+      'preenchendo': 'Preenchendo',
+      'confirmacao': 'Confirmação',
+      'travada': 'Travada',
+      'aguardando_inicio': 'Aguardando Início',
+      'em_partida': 'Em Partida',
+      'finalizacao': 'Finalização',
+    };
+    return labels[estado] || estado;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-black text-white uppercase tracking-tight">Salas Abertas</h2>
+          <p className="text-white/30 text-xs mt-1">Gerencie salas que ainda não foram finalizadas.</p>
+        </div>
+        <button onClick={carregar} className="p-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors">
+          <RefreshCw className={`w-4 h-4 text-white/40 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {popup && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-sm font-bold ${
+              popup.tipo === 'sucesso'
+                ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                : 'bg-red-500/10 border-red-500/20 text-red-400'
+            }`}
+          >
+            {popup.tipo === 'sucesso' ? <Check className="w-4 h-4" /> : <X className="w-4 h-4" />}
+            {popup.msg}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-8 w-8 border-2 border-primary border-t-transparent" />
+        </div>
+      ) : salas.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 rounded-3xl" style={CardStyle()}>
+          <Trophy className="w-10 h-10 text-white/10 mb-4" />
+          <p className="text-white/20 font-black uppercase tracking-widest text-sm">Nenhuma sala aberta</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {salas.map(s => (
+            <motion.div
+              key={s.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-xl p-4 flex items-center justify-between gap-4"
+              style={CardStyle()}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`px-2 py-0.5 text-[9px] font-black uppercase tracking-widest rounded border ${estadoColor(s.estado)}`}>
+                    {estadoLabel(s.estado)}
+                  </span>
+                  <span className="text-white/20 text-xs font-bold">#{s.id}</span>
+                </div>
+                <p className="text-white font-black text-sm truncate">{s.nome}</p>
+                <p className="text-white/40 text-xs mt-0.5">{s.criadorNome} • {s.modo} • {s.numJogadores}/{s.maxJogadores} jogadores</p>
+              </div>
+              <button
+                disabled={!podeDeleta || deletando === s.id}
+                onClick={() => setConfirmacao(s.id)}
+                className="px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-black text-sm uppercase transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+              >
+                {deletando === s.id ? '...' : 'Deletar'}
+              </button>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Modal de confirmação */}
+      <AnimatePresence>
+        {confirmacao && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => !deletando && setConfirmacao(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="rounded-2xl p-8 max-w-sm w-full"
+              style={CardStyle()}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                </div>
+                <h3 className="text-lg font-black text-white uppercase tracking-tight">Deletar Sala?</h3>
+              </div>
+
+              <p className="text-white/60 text-sm mb-6">
+                Tem certeza que deseja deletar esta sala? Todos os dados será perdidos permanentemente.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => !deletando && setConfirmacao(null)}
+                  disabled={!!deletando}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/40 font-black text-sm uppercase transition-all disabled:opacity-30"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => deletar()}
+                  disabled={!!deletando}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-black text-sm uppercase transition-all disabled:opacity-30"
+                >
+                  {deletando ? 'Deletando...' : 'Deletar'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -834,7 +1048,7 @@ function AbaSaldos({ adminCargo }: { adminCargo: CargoAdmin }) {
 export default function Admin() {
   const [adminInfo, setAdminInfo]   = useState<AdminUser | null>(null);
   const [loading, setLoading]       = useState(true);
-  const [abaAtiva, setAbaAtiva]     = useState<Aba>('disputas');
+  const [abaAtiva, setAbaAtiva]     = useState<Aba>('salas');
 
   useEffect(() => {
     const verificar = async () => {
@@ -891,6 +1105,7 @@ export default function Admin() {
 
   const permissoes = PERMISSOES_POR_CARGO[adminInfo.cargo];
   const abas: { id: Aba; label: string; icon: React.ElementType; bloqueada: boolean }[] = [
+    { id: 'salas',              label: 'Salas',         icon: Users, bloqueada: !permissoes.resolverPartidas },
     { id: 'disputas',           label: 'Disputas',      icon: Trophy, bloqueada: !permissoes.resolverPartidas },
     { id: 'partidas_travadas',  label: 'Travadas',      icon: AlertTriangle, bloqueada: !permissoes.resolverPartidas },
     { id: 'saldos',             label: 'Saldos MPoints', icon: Coins,  bloqueada: !permissoes.gerenciarSaldos },
@@ -947,6 +1162,7 @@ export default function Admin() {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.15 }}
           >
+            {abaAtiva === 'salas'              && <AbaSalas             adminCargo={adminInfo.cargo} />}
             {abaAtiva === 'disputas'           && <AbaDisputas           adminCargo={adminInfo.cargo} />}
             {abaAtiva === 'partidas_travadas'  && <AbaPartidasTravadas   adminCargo={adminInfo.cargo} />}
             {abaAtiva === 'saldos'             && <AbaSaldos            adminCargo={adminInfo.cargo} />}
