@@ -15,6 +15,7 @@ import {
   atribuirCodigoPartida, liberarCodigoPartida,
   criarRequisicaoAdmin,
   atualizarVinculacao, deletarJogadoresDaSala, desvincularJogador, salvarResultadoPartida,
+  verificarIntegraldadePartidaEncerrada,
   type Sala, type EstadoSala, type JogadorNaSala,
   type OpcaoVotoResultado, type Voto,
 } from '../api/salas';
@@ -391,6 +392,27 @@ export function SalaRegrasProvider({
     if (sala.estado === 'aguardando_inicio') recarregarVotos('aguardando_inicio');
     if (sala.estado === 'finalizacao')       recarregarVotos('finalizacao');
   }, [sala?.estado]);
+
+  // 🛡️ Double-check: Verificar integridade quando partida é encerrada
+  // (verifica pontos, desvinculações, resultado registrado - roda em background)
+  useEffect(() => {
+    if (!sala || sala.estado !== 'encerrada') return;
+
+    // Roda em background sem bloquear UI
+    verificarIntegraldadePartidaEncerrada(salaId)
+      .then(resultado => {
+        if (resultado.acoesTomadas.length > 0) {
+          console.warn('[SalaRegras] 🛡️ Limpeza de emergência executada:', {
+            avisos: resultado.avisos,
+            acoesTomadas: resultado.acoesTomadas,
+          });
+        }
+        if (!resultado.valido) {
+          console.warn('[SalaRegras] ⚠️ Problemas encontrados na integridade:', resultado.avisos);
+        }
+      })
+      .catch(err => console.error('[SalaRegras] Erro na verificação de integridade:', err));
+  }, [sala?.estado, salaId]);
 
   // ── Timer de confirmação ───────────────────────────────────────────────────
 

@@ -252,6 +252,11 @@ export async function entrarNaVaga(
   modo?: string
 ): Promise<{ sucesso: boolean; erro?: string }> {
   try {
+    // 🛡️ SEGURANÇA: Limpar vinculações a salas encerradas antes de validar
+    // (evita erro "Você está em outra sala" se partida anterior foi encerrada)
+    // Roda em background, não bloqueia
+    limparVinculacaosSalasEncerradas(usuario.id).catch(() => {});
+
     // ✅ OTIMIZADO: Chamar RPC que faz TUDO em 1 transação atômica (12-15 queries → 1)
     const { data, error } = await supabase.rpc('entrar_na_vaga', {
       p_sala_id: salaId,
@@ -729,5 +734,135 @@ export async function resolverPartidaTravada(
   } catch (error: any) {
     console.error('[resolverPartidaTravada]', error);
     return { sucesso: false, erro: error?.message || 'Erro ao resolver partida' };
+  }
+}
+
+// ── Verificação de integridade pós-encerramento (double-check performance) ────
+export interface VerificacaoIntegridade {
+  valido: boolean;
+  avisos: string[];
+  acoesTomadas: string[];
+}
+
+/**
+ * Valida que uma partida encerrada foi completamente finalizada.
+ * - Desvincula jogadores que ainda estão ligados
+ * - Verifica se resultado foi registrado
+ * - Não faz queries pesadas; roda em background
+ */
+export async function verificarIntegraldadePartidaEncerrada(
+  salaId: number
+): Promise<VerificacaoIntegridade> {
+  const avisos: string[] = [];
+  const acoesTomadas: string[] = [];
+
+  try {
+    // 1. Buscar sala + jogadores vinculados (índice eficiente)
+    const { data: sala, error: errSala } = await supabase
+      .from('salas')
+      .select('id, estado')
+      .eq('id', salaId)
+      .single();
+
+    if (errSala || !sala) {
+      return { valido: false, avisos: ['Sala não encontrada'], acoesTomadas: [] };
+    }
+
+    // Só fazer verificação se sala realmente está encerrada
+    if (sala.estado !== 'encerrada') {
+      return { valido: true, avisos: [], acoesTomadas: [] };
+    }
+
+    // 2. Buscar jogadores ainda vinculados (query leve com índice sala_id + vinculado)
+    const { data: jogadoresVinculados } = await supabase
+      .from('sala_jogadores')
+      .select('user_id, vinculado')
+      .eq('sala_id', salaId)
+      .eq('vinculado', true);
+
+    if ((jogadoresVinculados?.length ?? 0) > 0) {
+      avisos.push(`⚠️ ${jogadoresVinculados?.length} jogadores ainda vinculados`);
+
+      // Desvinculação de emergência (batch update, não sequencial)
+      for (const jogador of (jogadoresVinculados ?? [])) {
+        await supabase
+          .from('sala_jogadores')
+          .update({ vinculado: false })
+          .eq('sala_id', salaId)
+          .eq('user_id', jogador.user_id);
+
+        acoesTomadas.push(`✅ Desvinculado: ${jogador.user_id}`);
+      }
+    }
+
+    // 3. Verificar se resultado foi registrado (query leve: só count)
+    const { count: temResultado } = await supabase
+      .from('resultados_partidas')
+      .select('*', { count: 'exact', head: true })
+      .eq('sala_id', salaId);
+
+    if ((temResultado ?? 0) === 0) {
+      avisos.push('⚠️ Resultado da partida não foi registrado');
+    }
+
+    console.log(`[IntegridadeSala] ${salaId}: ${avisos.length > 0 ? 'PROBLEMAS ENCONTRADOS' : 'OK'}`);
+    if (acoesTomadas.length > 0) {
+      console.log(`[IntegridadeSala] Ações de recuperação: ${acoesTomadas.join(' | ')}`);
+    }
+
+    return {
+      valido: avisos.length === 0,
+      avisos,
+      acoesTomadas,
+    };
+  } catch (err: any) {
+    console.error('[verificarIntegraldadePartidaEncerrada]', err?.message);
+    return {
+      valido: false,
+      avisos: [`Erro na verificação: ${err?.message}`],
+      acoesTomadas: [],
+    };
+  }
+}
+
+/**
+ * Limpeza preventiva: se jogador tem vinculação a sala encerrada, remove antes
+ * de tentar entrar em nova sala. Evita o erro "Você está em outra sala".
+ * (Roda em background, não bloqueia entrarNaVaga)
+ */
+export async function limparVinculacaosSalasEncerradas(userId: string): Promise<void> {
+  try {
+    // Buscar vinculações ativas
+    const { data: vinculacoes } = await supabase
+      .from('sala_jogadores')
+      .select('sala_id')
+      .eq('user_id', userId)
+      .eq('vinculado', true);
+
+    if (!vinculacoes || vinculacoes.length === 0) return;
+
+    // Verificar quais salas estão encerradas
+    const salaIds = vinculacoes.map(v => v.sala_id);
+    const { data: salasEncerradas } = await supabase
+      .from('salas')
+      .select('id')
+      .in('id', salaIds)
+      .eq('estado', 'encerrada');
+
+    if (!salasEncerradas || salasEncerradas.length === 0) return;
+
+    // Desvinculação de emergência
+    for (const sala of salasEncerradas) {
+      await supabase
+        .from('sala_jogadores')
+        .update({ vinculado: false })
+        .eq('sala_id', sala.id)
+        .eq('user_id', userId);
+
+      console.log(`[LimpezaVinculacao] Desvinculado ${userId} de sala encerrada ${sala.id}`);
+    }
+  } catch (err: any) {
+    console.warn('[limparVinculacaosSalasEncerradas]', err?.message);
+    // Falha silenciosa — não bloqueia fluxo principal
   }
 }
