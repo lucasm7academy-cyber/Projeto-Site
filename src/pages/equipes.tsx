@@ -1187,7 +1187,6 @@ export default function App() {
                   {filteredTeams.map((team: Team, index: number) => (
                     <motion.div
                       key={team.id}
-                      layout
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 0.05 * Math.min(index, 6) }}
