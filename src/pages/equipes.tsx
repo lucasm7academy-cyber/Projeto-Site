@@ -1184,20 +1184,15 @@ export default function App() {
             {filteredTeams.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {filteredTeams.map((team: Team, index: number) => (
-                    <motion.div
-                      key={team.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.05 * Math.min(index, 6) }}
-                    >
+                  {filteredTeams.map((team: Team) => (
+                    <div key={team.id}>
                       <TimeCard
                         team={team}
                         onClick={(t) => navigate(`/times/${t.id}`)}
                         isLarge={false}
                         appliedSlots={appliedSlots}
                       />
-                    </motion.div>
+                    </div>
                   ))}
                 </div>
                 {/* Sentinel + spinner de infinite scroll */}
