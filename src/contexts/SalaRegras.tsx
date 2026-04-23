@@ -58,7 +58,7 @@ export function transicaoValida(atual: EstadoSala, proximo: EstadoSala): boolean
 // ─────────────────────────────────────────────────────────────────────────────
 const TIMER_CONFIRMACAO_S  = 30;
 const TIMER_CANCELAMENTO_S = 180; // aguardando_inicio: 3 min para denunciar → depois vai pra em_partida
-const TIMER_FINALIZACAO_S  = 300; // finalizacao: 5 min para votar
+const TIMER_FINALIZACAO_S  = 180; // finalizacao: 3 min para votar
 
 // ─────────────────────────────────────────────────────────────────────────────
 // VALIDAÇÃO DE VOTOS
@@ -445,7 +445,7 @@ export function SalaRegrasProvider({
     return () => clearInterval(timerCancelamentoRef.current);
   }, [sala?.estado, sala?.aguardandoInicioExpiresAt?.getTime()]);
 
-  // ── Timer de finalizacao (5 min para votar, depois força resultado) ──────
+  // ── Timer de finalizacao (3 min para votar, depois força resultado) ──────
 
   useEffect(() => {
     clearInterval(timerFinalizacaoRef.current);
@@ -454,7 +454,14 @@ export function SalaRegrasProvider({
       return;
     }
 
-    setTimerFinalizacao(TIMER_FINALIZACAO_S);
+    // Calcular tempo restante baseado em finalizacaoExpiresAt (persistido no DB)
+    const tempoRestante = sala.finalizacaoExpiresAt
+      ? Math.ceil((new Date(sala.finalizacaoExpiresAt).getTime() - Date.now()) / 1000)
+      : TIMER_FINALIZACAO_S;
+
+    const timerInicial = Math.max(tempoRestante, 0);
+    setTimerFinalizacao(timerInicial);
+
     timerFinalizacaoRef.current = setInterval(() => {
       setTimerFinalizacao((prev: number) => {
         if (prev <= 1) {
@@ -466,7 +473,7 @@ export function SalaRegrasProvider({
     }, 1000);
 
     return () => clearInterval(timerFinalizacaoRef.current);
-  }, [sala?.estado]);
+  }, [sala?.estado, sala?.finalizacaoExpiresAt]);
 
   // ── Auto-transições dirigidas por regras ───────────────────────────────────
 

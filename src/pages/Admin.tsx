@@ -120,8 +120,8 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
       })
       .eq('id', id);
 
-    // Conceder pontos se vencedor foi decidido (não cancelado)
-    if (!error && decisao !== 'cancelado') {
+    // Conceder pontos APENAS se estava em disputa antes (não se já tinha vencedor)
+    if (!error && decisao !== 'cancelado' && partida.vencedor === 'disputa') {
       console.log(`[Admin] Resolvendo disputa #${id} - Vencedor: ${decisao}`);
       await atualizarPontosPartida({
         salaId:   partida.salaId,

@@ -72,6 +72,7 @@ export interface Sala {
   codigoPartida?: string;
   confirmacaoExpiresAt?: Date;
   aguardandoInicioExpiresAt?: Date;
+  finalizacaoExpiresAt?: Date;
   vencedor?: 'A' | 'B' | 'empate' | 'cancelada' | null;
   createdAt: Date;
 }
@@ -106,6 +107,7 @@ function mapSala(row: any, jogadoresRows: any[]): Sala {
     codigoPartida: row.codigo_partida,
     confirmacaoExpiresAt:    row.confirmacao_expires_at ? new Date(row.confirmacao_expires_at) : undefined,
     aguardandoInicioExpiresAt: row.aguardando_inicio_expires_at ? new Date(row.aguardando_inicio_expires_at) : undefined,
+    finalizacaoExpiresAt:    row.finalizacao_expires_at ? new Date(row.finalizacao_expires_at) : undefined,
     vencedor:     row.vencedor,
     createdAt:    new Date(row.created_at),
     jogadores: jogadoresRows.map(j => ({
@@ -225,6 +227,9 @@ export async function transicionarEstado(
   }
   if (novoEstado === 'aguardando_inicio') {
     updates.aguardando_inicio_expires_at = new Date(Date.now() + 180_000).toISOString();
+  }
+  if (novoEstado === 'finalizacao') {
+    updates.finalizacao_expires_at = new Date(Date.now() + 180_000).toISOString(); // 3 minutos
   }
   const { error } = await supabase.from('salas').update(updates).eq('id', salaId);
   if (!error) return true;
