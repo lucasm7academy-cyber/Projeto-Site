@@ -739,77 +739,56 @@ export async function buscarSalaPorCodigo(codigo: string): Promise<Sala | null> 
 
 // ── Códigos de partida (pool FIFO circular) ───────────────────────────────────
 
-/** Atribui código à sala.
- *  1) Tenta via RPC (pool FIFO, atômico)
- *  2) Se falhar, busca direto da tabela codigos_partida pelo modo
- *  3) Se também falhar (RLS), usa código aleatório de emergência
- */
+/** Atribui código sequencial à sala (simples e sem race conditions) */
 export async function atribuirCodigoPartida(salaId: number, modo: string): Promise<string | null> {
-  // ✅ Tentativa 1: RPC com fila FIFO atômica (transação com LOCK)
-  // Garante que dois clientes NUNCA recebem o mesmo código
-  const { data: rpcData, error: rpcErr } = await supabase
-    .rpc('atribuir_codigo_partida', { p_sala_id: Number(salaId), p_modo: modo });
+  try {
+    // Busca a configuração do modo e incrementa o número
+    const { data, error: fetchErr } = await supabase
+      .from('codigo_partida_sequencial')
+      .select('ultimo_numero, numero_minimo, numero_maximo')
+      .eq('modo', modo)
+      .single();
 
-  if (!rpcErr && rpcData) {
-    console.log('[atribuirCodigoPartida] Código atribuído via RPC:', rpcData);
-    // Salva o código na sala
-    await supabase.from('salas')
-      .update({ codigo_partida: rpcData })
+    if (fetchErr || !data) {
+      console.warn('[atribuirCodigoPartida] Modo não encontrado:', modo);
+      return null;
+    }
+
+    let proximoNumero = data.ultimo_numero + 1;
+    // Se chegou no máximo, volta ao mínimo
+    if (proximoNumero > data.numero_maximo) {
+      proximoNumero = data.numero_minimo;
+    }
+
+    // Atualiza o contador
+    const { error: updateErr } = await supabase
+      .from('codigo_partida_sequencial')
+      .update({ ultimo_numero: proximoNumero })
+      .eq('modo', modo);
+
+    if (updateErr) throw updateErr;
+
+    // Formata o código (ex: "5V5-001" ou "001")
+    const codigoFormatado = String(proximoNumero).padStart(6, '0');
+
+    // Salva na sala
+    const { error: salaErr } = await supabase.from('salas')
+      .update({ codigo_partida: codigoFormatado })
       .eq('id', salaId);
-    return rpcData as string;
+
+    if (salaErr) throw salaErr;
+
+    console.log('[atribuirCodigoPartida] ✅ Código atribuído:', codigoFormatado, 'para modo:', modo);
+    return codigoFormatado;
+  } catch (err: any) {
+    console.error('[atribuirCodigoPartida] Erro:', err?.message);
+    return null;
   }
-
-  console.warn('[atribuirCodigoPartida] RPC falhou:', rpcErr?.message);
-
-  // ❌ FALLBACK REMOVIDO: não usar query direta
-  // A query direta tem race condition e pode atribuir o mesmo código a duas salas
-  // Se o RPC falhou, usa código aleatório de emergência
-
-  // Tentativa 2: código aleatório de emergência
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const codigoEmergencia = Array.from({ length: 5 }, () =>
-    chars[Math.floor(Math.random() * chars.length)]
-  ).join('');
-
-  await supabase.from('salas')
-    .update({ codigo_partida: codigoEmergencia })
-    .eq('id', salaId);
-
-  console.error('[atribuirCodigoPartida] Código de emergência gerado (RPC indisponível para modo %s):', modo, codigoEmergencia);
-  return codigoEmergencia;
 }
 
-/** Libera o código quando a partida encerra (reciclagem na fila). */
-export async function liberarCodigoPartida(salaId: number): Promise<void> {
-  try {
-    // ✅ RPC move código de volta para a fila (em_uso = false)
-    const { error } = await supabase.rpc('liberar_codigo_partida', { p_sala_id: salaId });
-
-    if (!error) {
-      console.log('[liberarCodigoPartida] ✅ Código liberado via RPC para sala:', salaId);
-      return;
-    }
-
-    console.warn('[liberarCodigoPartida] RPC falhou:', error.message);
-  } catch (err: any) {
-    console.warn('[liberarCodigoPartida] Erro ao chamar RPC:', err?.message);
-  }
-
-  // ✅ FALLBACK: Buscar código da sala e liberar diretamente
-  const { data: sala } = await supabase.from('salas')
-    .select('codigo_partida').eq('id', salaId).maybeSingle();
-
-  if (sala?.codigo_partida) {
-    const { error } = await supabase.from('codigos_partida')
-      .update({ em_uso: false, sala_id: null })
-      .eq('codigo', sala.codigo_partida);
-
-    if (!error) {
-      console.log('[liberarCodigoPartida] ✅ Código liberado (fallback direto):', sala.codigo_partida);
-    } else {
-      console.error('[liberarCodigoPartida] ❌ Fallback falhou:', error.message);
-    }
-  }
+/** Libera o código quando a partida encerra (agora não faz nada, já que é sequencial) */
+export async function liberarCodigoPartida(): Promise<void> {
+  // Sistema sequencial não precisa liberar — os códigos são reutilizados automaticamente
 }
 
 // ── Reset completo de sala (cancela partida, desvincula todos) ────────────────
@@ -818,7 +797,7 @@ export async function resetarSalaCompleta(salaId: number): Promise<void> {
   await supabase.from('sala_jogadores').delete().eq('sala_id', salaId);
   await supabase.from('sala_votos').delete().eq('sala_id', salaId);
   // Libera o código se havia um atribuído
-  await liberarCodigoPartida(salaId);
+  await liberarCodigoPartida();
   // 🔴 RESET COMPLETO: Deletar QUALQUER draft dessa sala (não confiar em draft_id que pode ser stale)
   await supabase.from('drafts').delete().eq('sala_id', salaId);
   // Volta para aberta completamente vazia e limpa
@@ -925,7 +904,7 @@ export async function resolverPartidaTravada(
     await encerrarSala(salaId, vencedor === 'cancelada' ? undefined : (vencedor === 'time_a' ? 'A' : 'B'));
 
     // 4. Liberar código da partida
-    await liberarCodigoPartida(salaId);
+    await liberarCodigoPartida();
 
     return { sucesso: true };
   } catch (error: any) {
