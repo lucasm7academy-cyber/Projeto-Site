@@ -418,8 +418,8 @@ const Jogar = () => {
   const [loadingSalas, setLoadingSalas] = useState(true);
   const [busca, setBusca] = useState('');
   const [filtroModo, setFiltroModo] = useState<ModoJogo | 'todos'>('todos');
-  const [viewerCounts, setViewerCounts] = useState<Record<number, number>>({});
   const [streamsAtivos, setStreamsAtivos] = useState<Record<number, boolean>>({}); // Track active streams per sala
+  const recarregarSalasTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   // Estados das salas finalizadas
   const [salasFinalizadas, setSalasFinalizadas] = useState<Sala[]>([]);
@@ -505,6 +505,14 @@ const Jogar = () => {
     setLoadingSalas(false);
   }, []);
 
+  // ✅ Debounce 500ms para recarregarSalas — evita múltiplas queries quando eventos disparam juntos
+  const recarregarSalasComDebounce = useCallback((usuarioAtual: any) => {
+    if (recarregarSalasTimeoutRef.current) clearTimeout(recarregarSalasTimeoutRef.current);
+    recarregarSalasTimeoutRef.current = setTimeout(() => {
+      recarregarSalas();
+    }, 500);
+  }, [recarregarSalas]);
+
   // Carregar salas finalizadas
   const recarregarSalasFinalizadas = useCallback(async () => {
     const lista = await carregarSalasFinalizadas();
@@ -526,8 +534,8 @@ const Jogar = () => {
 
     const channel = supabase
       .channel('salas_jogar_page')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' }, recarregarSalas)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores' }, recarregarSalas)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' }, () => recarregarSalasComDebounce(usuarioAtual))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_jogadores' }, () => recarregarSalasComDebounce(usuarioAtual))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sala_streams' }, async () => {
         // Atualizar streams ativos
         const { data: streams } = await supabase
@@ -544,7 +552,7 @@ const Jogar = () => {
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
-  }, [usuarioAtual, navigate, recarregarSalas]);
+  }, [usuarioAtual, navigate, recarregarSalas, recarregarSalasComDebounce]);
 
   // Carregar e monitorar salas finalizadas
   useEffect(() => {
@@ -565,19 +573,8 @@ const Jogar = () => {
     return () => { supabase.removeChannel(channel); };
   }, [usuarioAtual, recarregarSalasFinalizadas]);
 
-  // Viewer counts via Presence
-  useEffect(() => {
-    if (salas.length === 0) return;
-    const channels = salas.map(sala => {
-      const ch = supabase.channel(`sala_presenca_${sala.id}`);
-      ch.on('presence', { event: 'sync' }, () => {
-        const count = Object.keys(ch.presenceState()).length;
-        setViewerCounts(prev => ({ ...prev, [sala.id]: count }));
-      }).subscribe();
-      return ch;
-    });
-    return () => { channels.forEach(ch => supabase.removeChannel(ch)); };
-  }, [salas]);
+  // ✅ REMOVIDO: Canais Presence individuais por sala (N canais = N² WebSocket overhead)
+  // Usar sala.jogadores.length em vez disso (já sincronizado via Realtime)
 
   // Hero navigation
   const nextHero = () => setActiveHero((prev) => (prev + 1) % heroSlides.length);
