@@ -766,9 +766,10 @@ async function carregarTimesDoSupabase(
   offset = 0,
   limit = TEAMS_PAGE,
 ): Promise<{ teams: Team[]; temMais: boolean }> {
+  // ✅ OTIMIZADO: Especificar apenas colunas necessárias
   const { data: timesRaw, error } = await supabase
     .from('times')
-    .select('*, time_membros(*)')
+    .select('id, nome, tag, logo_url, gradient_from, gradient_to, pdl, winrate, ranking, wins, games_played, dono_id, time_membros(riot_id, role, elo, balance, is_leader, user_id)')
     .order('ranking')
     .range(offset, offset + limit - 1);
 
@@ -787,9 +788,10 @@ async function carregarMeuTime(userId: string): Promise<Team | null> {
     .maybeSingle();
   if (!membro?.time_id) return null;
 
+  // ✅ OTIMIZADO: Especificar apenas colunas necessárias
   const { data: t } = await supabase
     .from('times')
-    .select('*, time_membros(*)')
+    .select('id, nome, tag, logo_url, gradient_from, gradient_to, pdl, winrate, ranking, wins, games_played, dono_id, time_membros(riot_id, role, elo, balance, is_leader, user_id)')
     .eq('id', membro.time_id)
     .maybeSingle();
   return t ? mapTimeRaw(t, userId) : null;
