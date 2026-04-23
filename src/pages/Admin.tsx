@@ -287,7 +287,7 @@ function AbaSalas({ adminCargo }: { adminCargo: CargoAdmin }) {
   const [salas, setSalas]               = useState<SalaAberta[]>([]);
   const [loading, setLoading]           = useState(true);
   const [deletando, setDeletando]       = useState<number | null>(null);
-  const [confirmacao, setConfirmacao]   = useState<number | null>(null);
+  const [confirmacao, setConfirmacao]   = useState<{ salaId: number; tipo: 'deletar' | 'resolver'; vencedor?: 'time_a' | 'time_b' | 'cancelada' } | null>(null);
   const [popup, setPopup]               = useState<{ tipo: 'sucesso' | 'erro'; msg: string } | null>(null);
 
   const podeDeleta = temPermissao(adminCargo, 'resolverPartidas');
@@ -317,21 +317,35 @@ function AbaSalas({ adminCargo }: { adminCargo: CargoAdmin }) {
 
   useEffect(() => { carregar(); }, [carregar]);
 
-  const deletar = async () => {
+  const executarAcao = async () => {
     if (!confirmacao) return;
-    setDeletando(confirmacao);
+    setDeletando(confirmacao.salaId);
 
-    const { error } = await supabase.from('salas').delete().eq('id', confirmacao);
+    try {
+      if (confirmacao.tipo === 'deletar') {
+        const { error } = await supabase.from('salas').delete().eq('id', confirmacao.salaId);
+        if (error) throw error;
+        setPopup({ tipo: 'sucesso', msg: 'Sala deletada com sucesso!' });
+      } else {
+        const sala = salas.find(s => s.id === confirmacao.salaId);
+        if (!sala) throw new Error('Sala não encontrada');
+
+        const { sucesso, erro } = await resolverPartidaTravada(
+          confirmacao.salaId,
+          confirmacao.vencedor || 'cancelada',
+          sala.modo,
+          []
+        );
+        if (!sucesso) throw new Error(erro || 'Erro ao resolver');
+        setPopup({ tipo: 'sucesso', msg: 'Sala finalizada com sucesso!' });
+      }
+      carregar();
+    } catch (err: any) {
+      setPopup({ tipo: 'erro', msg: err?.message || 'Erro ao executar ação' });
+    }
 
     setDeletando(null);
     setConfirmacao(null);
-
-    if (error) {
-      setPopup({ tipo: 'erro', msg: 'Erro ao deletar sala' });
-    } else {
-      setPopup({ tipo: 'sucesso', msg: 'Sala deletada com sucesso!' });
-      carregar();
-    }
     setTimeout(() => setPopup(null), 3000);
   };
 
@@ -418,13 +432,22 @@ function AbaSalas({ adminCargo }: { adminCargo: CargoAdmin }) {
                 <p className="text-white font-black text-sm truncate">{s.nome}</p>
                 <p className="text-white/40 text-xs mt-0.5">{s.criadorNome} • {s.modo} • {s.numJogadores}/{s.maxJogadores} jogadores</p>
               </div>
-              <button
-                disabled={!podeDeleta || deletando === s.id}
-                onClick={() => setConfirmacao(s.id)}
-                className="px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-black text-sm uppercase transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
-              >
-                {deletando === s.id ? '...' : 'Deletar'}
-              </button>
+              <div className="flex gap-2">
+                <button
+                  disabled={!podeDeleta || deletando === s.id}
+                  onClick={() => setConfirmacao({ salaId: s.id, tipo: 'resolver' })}
+                  className="px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary font-black text-sm uppercase transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                >
+                  {deletando === s.id ? '...' : 'Finalizar'}
+                </button>
+                <button
+                  disabled={!podeDeleta || deletando === s.id}
+                  onClick={() => setConfirmacao({ salaId: s.id, tipo: 'deletar' })}
+                  className="px-3 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 font-black text-sm uppercase transition-all disabled:opacity-30 disabled:cursor-not-allowed shrink-0"
+                >
+                  {deletando === s.id ? '...' : 'Deletar'}
+                </button>
+              </div>
             </motion.div>
           ))}
         </div>
@@ -432,7 +455,7 @@ function AbaSalas({ adminCargo }: { adminCargo: CargoAdmin }) {
 
       {/* Modal de confirmação */}
       <AnimatePresence>
-        {confirmacao && (
+        {confirmacao && confirmacao.tipo === 'deletar' && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -468,11 +491,91 @@ function AbaSalas({ adminCargo }: { adminCargo: CargoAdmin }) {
                   Cancelar
                 </button>
                 <button
-                  onClick={() => deletar()}
+                  onClick={() => executarAcao()}
                   disabled={!!deletando}
                   className="flex-1 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 text-red-400 font-black text-sm uppercase transition-all disabled:opacity-30"
                 >
                   {deletando ? 'Deletando...' : 'Deletar'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {confirmacao && confirmacao.tipo === 'resolver' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            onClick={() => !deletando && setConfirmacao(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="rounded-2xl p-8 max-w-sm w-full"
+              style={CardStyle()}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                  <Trophy className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="text-lg font-black text-white uppercase tracking-tight">Finalizar Sala</h3>
+              </div>
+
+              <p className="text-white/60 text-sm mb-6">
+                Selecione o vencedor para finalizar esta sala:
+              </p>
+
+              <div className="flex gap-2 mb-6">
+                <button
+                  onClick={() => setConfirmacao({ ...confirmacao, vencedor: 'time_a' })}
+                  className={`flex-1 py-2.5 rounded-xl font-black text-sm uppercase transition-all border ${
+                    confirmacao.vencedor === 'time_a'
+                      ? 'bg-blue-500/20 border-blue-500/30 text-blue-400'
+                      : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                  }`}
+                >
+                  Time A
+                </button>
+                <button
+                  onClick={() => setConfirmacao({ ...confirmacao, vencedor: 'time_b' })}
+                  className={`flex-1 py-2.5 rounded-xl font-black text-sm uppercase transition-all border ${
+                    confirmacao.vencedor === 'time_b'
+                      ? 'bg-red-500/20 border-red-500/30 text-red-400'
+                      : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                  }`}
+                >
+                  Time B
+                </button>
+                <button
+                  onClick={() => setConfirmacao({ ...confirmacao, vencedor: 'cancelada' })}
+                  className={`flex-1 py-2.5 rounded-xl font-black text-sm uppercase transition-all border ${
+                    confirmacao.vencedor === 'cancelada'
+                      ? 'bg-orange-500/20 border-orange-500/30 text-orange-400'
+                      : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10'
+                  }`}
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => !deletando && setConfirmacao(null)}
+                  disabled={!!deletando}
+                  className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/40 font-black text-sm uppercase transition-all disabled:opacity-30"
+                >
+                  Voltar
+                </button>
+                <button
+                  onClick={() => executarAcao()}
+                  disabled={!!deletando || !confirmacao.vencedor}
+                  className="flex-1 py-2.5 rounded-xl bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary font-black text-sm uppercase transition-all disabled:opacity-30"
+                >
+                  {deletando ? 'Finalizando...' : 'Confirmar'}
                 </button>
               </div>
             </motion.div>
