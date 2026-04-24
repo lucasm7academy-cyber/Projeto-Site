@@ -80,52 +80,54 @@ export default function Layout() {
   }, [isGamePage]);
 
   useEffect(() => {
-    const carregarDados = async () => {
-      if (!supabase) return;
+    let userRef: any = null;
+    let saldoChannel: ReturnType<typeof supabase.channel> | null = null;
 
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user ?? null;
-      setUser(user);
-
-      if (user) {
-        const [{ data: saldoData }, { data: riotData }] = await Promise.all([
-          supabase.from('saldos').select('saldo').eq('user_id', user.id).maybeSingle(),
-          supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle(),
-        ]);
-
-        if (saldoData) setBalance(saldoData.saldo ?? 0);
-        setContaRiot(riotData);
+    // 🛡️ Carregar dados QUANDO houver sessão (via auth listener)
+    const carregarDados = async (user: any) => {
+      if (!user) {
+        setLoadingUser(false);
+        return;
       }
+
+      const [{ data: saldoData }, { data: riotData }] = await Promise.all([
+        supabase.from('saldos').select('saldo').eq('user_id', user.id).maybeSingle(),
+        supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle(),
+      ]);
+
+      if (saldoData) setBalance(saldoData.saldo ?? 0);
+      setContaRiot(riotData);
       setLoadingUser(false);
     };
 
-    carregarDados();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session: any) => {
-      setUser(session?.user ?? null);
+    // 🛡️ Usar onAuthStateChange como única fonte de verdade (evita getSession duplicada)
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session: any) => {
+      userRef = session?.user ?? null;
+      setUser(userRef);
       if (event === 'SIGNED_OUT') navigate('/');
-    });
 
-    // Realtime: atualiza saldo automaticamente quando admin altera
-    let saldoChannel: ReturnType<typeof supabase.channel> | null = null;
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const uid = session?.user?.id;
-      if (!uid) return;
-      saldoChannel = supabase
-        .channel(`saldo_${uid}`)
+      // 🛡️ Setup realtime AQUI com a sessão que já temos
+      if (userRef?.id) {
+        if (saldoChannel) supabase.removeChannel(saldoChannel);
+        saldoChannel = supabase
+          .channel(`saldo_${userRef.id}`)
         .on('postgres_changes', {
           event: 'UPDATE', schema: 'public', table: 'saldos',
-          filter: `user_id=eq.${uid}`,
+          filter: `user_id=eq.${userRef.id}`,
         }, (payload) => {
           setBalance((payload.new as any).saldo ?? 0);
         })
         .on('postgres_changes', {
           event: 'INSERT', schema: 'public', table: 'saldos',
-          filter: `user_id=eq.${uid}`,
+          filter: `user_id=eq.${userRef.id}`,
         }, (payload) => {
           setBalance((payload.new as any).saldo ?? 0);
         })
         .subscribe();
+      }
+
+      // Carregar dados do usuário quando houver sessão
+      carregarDados(userRef);
     });
 
     return () => {
