@@ -230,7 +230,7 @@ export default function NotificationBell() {
     let channel: any = null;
 
     const init = async () => {
-      const { data: { user: u } } = await supabase.auth.getUser();
+      const u = await getCachedUser();
       if (!u) return;
       setUser(u);
 
