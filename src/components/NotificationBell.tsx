@@ -10,97 +10,109 @@ import { getCachedUser } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSound } from '../hooks/useSound';
 
+// 🛡️ Flag global para evitar múltiplas cargas simultâneas (React Strict Mode fix)
+let carregandoNotificacoes = false;
+
 export default function NotificationBell() {
   const { playSound } = useSound();
   const [user, setUser] = useState<any>(null);
-  const [contaRiot, setContaRiot] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const loadTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
-  // ── Carrega notificações com debounce 500ms ───────────────────────────────
+  // ── Carrega notificações com debounce 500ms + proteção contra duplicação ────
   const carregarNotificacoes = async (userId: string) => {
-    const allNotifs: any[] = [];
-
-    // ✅ OTIMIZADO: Combinar 3 queries em 1 com .or() — reduz de 3 para 1 query
-    const { data: todos, error: errTodos } = await supabase
-      .from('time_convites')
-      .select('id, time_id, de_user_id, para_user_id, tipo, status, riot_id, role, mensagem, criado_em')
-      .or(`para_user_id.eq.${userId},de_user_id.eq.${userId}`)
-      .order('criado_em', { ascending: false })
-      .limit(50);
-
-    if (errTodos) {
-      console.error('[NotificationBell] Erro ao carregar convites:', errTodos);
+    if (carregandoNotificacoes) {
+      console.log('🛡️ [NotificationBell] Carga já em andamento - ignorando duplicata');
       return;
     }
+    carregandoNotificacoes = true;
 
-    if (!todos || todos.length === 0) {
-      setNotifications([]);
-      return;
+    try {
+      const allNotifs: any[] = [];
+
+      // ✅ OTIMIZADO: Combinar 3 queries em 1 com .or() — reduz de 3 para 1 query
+      const { data: todos, error: errTodos } = await supabase
+        .from('time_convites')
+        .select('id, time_id, de_user_id, para_user_id, tipo, status, riot_id, role, mensagem, criado_em')
+        .or(`para_user_id.eq.${userId},de_user_id.eq.${userId}`)
+        .order('criado_em', { ascending: false })
+        .limit(50);
+
+      if (errTodos) {
+        console.error('[NotificationBell] Erro ao carregar convites:', errTodos);
+        return;
+      }
+
+      if (!todos || todos.length === 0) {
+        setNotifications([]);
+        return;
+      }
+
+      // Buscar times em 1 query (em vez de 3)
+      const teamIds = [...new Set(todos.map((r: any) => r.time_id))];
+      const { data: timesData } = await supabase
+        .from('times')
+        .select('id, nome')
+        .in('id', teamIds);
+      const teamMap: Record<string, string> = {};
+      (timesData || []).forEach((t: any) => { teamMap[t.id] = t.nome; });
+
+      // Processar todos os convites uma vez, separando por tipo/status
+      todos.forEach((r: any) => {
+        // 1. Solicitações pendentes para o usuário (é o capitão, recebe solicitação)
+        if (r.tipo === 'solicitacao' && r.status === 'pendente' && r.para_user_id === userId) {
+          allNotifs.push({
+            id: r.id,
+            type: 'join_request',
+            convite_id: r.id,
+            time_id: r.time_id,
+            team_name: teamMap[r.time_id] || 'Time',
+            player_riot_id: r.riot_id || 'Jogador',
+            de_user_id: r.de_user_id,
+            role: r.role,
+            message: r.mensagem,
+            criado_em: r.criado_em,
+          });
+        }
+
+        // 2. Status dos meus convites/solicitações (enviei, recebi resposta)
+        if (r.de_user_id === userId && (r.status === 'aceito' || r.status === 'recusado')) {
+          allNotifs.push({
+            id: r.id + '_status',
+            type: 'status_update',
+            subtype: r.status,
+            convite_tipo: r.tipo,
+            player_riot_id: r.riot_id || 'Jogador',
+            convite_id: r.id,
+            time_id: r.time_id,
+            team_name: teamMap[r.time_id] || 'Time',
+            de_user_id: r.de_user_id,
+            criado_em: r.criado_em,
+          });
+        }
+
+        // 3. Convites recebidos pendentes (capitão convidou)
+        if (r.tipo === 'convite' && r.status === 'pendente' && r.para_user_id === userId) {
+          allNotifs.push({
+            id: r.id + '_invite',
+            type: 'invite_received',
+            convite_id: r.id,
+            time_id: r.time_id,
+            team_name: teamMap[r.time_id] || 'Time',
+            role: r.role,
+            message: r.mensagem,
+            criado_em: r.criado_em,
+          });
+        }
+      });
+
+      setNotifications(allNotifs);
+    } finally {
+      carregandoNotificacoes = false;
     }
-
-    // Buscar times em 1 query (em vez de 3)
-    const teamIds = [...new Set(todos.map((r: any) => r.time_id))];
-    const { data: timesData } = await supabase
-      .from('times')
-      .select('id, nome')
-      .in('id', teamIds);
-    const teamMap: Record<string, string> = {};
-    (timesData || []).forEach((t: any) => { teamMap[t.id] = t.nome; });
-
-    // Processar todos os convites uma vez, separando por tipo/status
-    todos.forEach((r: any) => {
-      // 1. Solicitações pendentes para o usuário (é o capitão, recebe solicitação)
-      if (r.tipo === 'solicitacao' && r.status === 'pendente' && r.para_user_id === userId) {
-        allNotifs.push({
-          id: r.id,
-          type: 'join_request',
-          convite_id: r.id,
-          time_id: r.time_id,
-          team_name: teamMap[r.time_id] || 'Time',
-          player_riot_id: r.riot_id || 'Jogador',
-          de_user_id: r.de_user_id,
-          role: r.role,
-          message: r.mensagem,
-          criado_em: r.criado_em,
-        });
-      }
-
-      // 2. Status dos meus convites/solicitações (enviei, recebi resposta)
-      if (r.de_user_id === userId && (r.status === 'aceito' || r.status === 'recusado')) {
-        allNotifs.push({
-          id: r.id + '_status',
-          type: 'status_update',
-          subtype: r.status,
-          convite_tipo: r.tipo,
-          player_riot_id: r.riot_id || 'Jogador',
-          convite_id: r.id,
-          time_id: r.time_id,
-          team_name: teamMap[r.time_id] || 'Time',
-          de_user_id: r.de_user_id,
-          criado_em: r.criado_em,
-        });
-      }
-
-      // 3. Convites recebidos pendentes (capitão convidou)
-      if (r.tipo === 'convite' && r.status === 'pendente' && r.para_user_id === userId) {
-        allNotifs.push({
-          id: r.id + '_invite',
-          type: 'invite_received',
-          convite_id: r.id,
-          time_id: r.time_id,
-          team_name: teamMap[r.time_id] || 'Time',
-          role: r.role,
-          message: r.mensagem,
-          criado_em: r.criado_em,
-        });
-      }
-    });
-
-    setNotifications(allNotifs);
   };
 
   // ── Debounce wrapper: 500ms ────────────────────────────────────────────────
@@ -127,10 +139,17 @@ export default function NotificationBell() {
       return;
     }
 
+    // 🛡️ Lazy load contas_riot só quando necessário (não na init)
+    const { data: riotData } = await supabase
+      .from('contas_riot')
+      .select('riot_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
     const { error: errInsert } = await supabase.from('time_membros').insert({
       time_id:   notif.time_id,
       user_id:   user.id,
-      riot_id:   contaRiot?.riot_id || 'Jogador',
+      riot_id:   riotData?.riot_id || 'Jogador',
       cargo:     'jogador',
       role:      notif.role,
       is_leader: false,
@@ -214,13 +233,6 @@ export default function NotificationBell() {
       const { data: { user: u } } = await supabase.auth.getUser();
       if (!u) return;
       setUser(u);
-
-      const { data: riotData } = await supabase
-        .from('contas_riot')
-        .select('*')
-        .eq('user_id', u.id)
-        .maybeSingle();
-      setContaRiot(riotData);
 
       carregarNotificacoes(u.id);
 
