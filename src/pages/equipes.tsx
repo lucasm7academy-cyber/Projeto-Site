@@ -816,9 +816,9 @@ export default function App() {
   useEffect(() => {
     let ignore = false;
 
-    supabase.auth.getUser().then(async ({ data }) => {
+    getCachedUser().then(async (user) => {
       if (ignore) return;
-      const uid = data?.user?.id ?? null;
+      const uid = user?.id ?? null;
       uidRef.current = uid;
 
       if (uid) {
