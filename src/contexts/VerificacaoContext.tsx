@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, ReactNod
 import { buscarJogadorCompleto } from '../api/riot';
 import { supabase } from '../lib/supabase';
 import { sincronizarContaRiot } from '../api/player';
+import { useAuth } from '../contexts/AuthContext';
 
 interface VerificacaoAtiva {
   id: string;
@@ -25,17 +26,16 @@ interface VerificacaoContextType {
 
 const VerificacaoContext = createContext<VerificacaoContextType | undefined>(undefined);
 
-// ✅ OTIMIZADO: Aumentar polling de 15s para 30s (reduz em 50% requests à Riot API)
-// 15s: 4 req/min × 240s timeout = 16 requests por verificação
-// 30s: 2 req/min × 240s timeout = 8 requests por verificação
 const POLLING_INTERVAL_MS = 30000;
 const TIMEOUT_SEGUNDOS = 240;
 
 export function VerificacaoProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [verificacaoAtiva, setVerificacaoAtiva] = useState<VerificacaoAtiva | null>(null);
   const [tempoRestante, setTempoRestante] = useState<number | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const processandoRef = useRef(false);
 
   const pararTudo = () => {
     if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
@@ -55,7 +55,7 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
         } else {
           localStorage.removeItem('verificacao_ativa');
         }
-      } catch (e) {
+      } catch {
         localStorage.removeItem('verificacao_ativa');
       }
     }
@@ -64,52 +64,45 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const salvarNoBanco = async (verificacao: VerificacaoAtiva, iconeId: number) => {
+    if (!user) return false;
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user;
-      if (!user) return false;
-
-      const payload = {
-        riot_id: verificacao.riotId,
-        puuid: verificacao.puuid,
-        nickname: verificacao.nickname,
-        level: verificacao.nivel,
-        profile_icon_id: iconeId,
-        validado: true
-      };
-
       const { error } = await supabase
         .from('contas_riot')
-        .upsert({ user_id: user.id, ...payload }, { onConflict: 'user_id' });
+        .upsert({
+          user_id: user.id,
+          riot_id: verificacao.riotId,
+          puuid: verificacao.puuid,
+          nickname: verificacao.nickname,
+          level: verificacao.nivel,
+          profile_icon_id: iconeId,
+          validado: true,
+        }, { onConflict: 'user_id' });
 
       if (error) {
-        console.error('❌ Erro ao salvar:', error);
+        console.error('Erro ao salvar conta Riot:', error);
         return false;
       }
 
-      console.log('✅ Conta salva!');
-
-      // Sincronizar elo, campeões e ícone atualizado em background
       sincronizarContaRiot(verificacao.puuid, user.id).catch(e =>
-        console.warn('[VerificacaoContext] sincronizarContaRiot falhou:', e)
+        console.warn('sincronizarContaRiot falhou:', e)
       );
 
       return true;
-
     } catch (error) {
-      console.error('❌ Erro:', error);
+      console.error('Erro ao salvar:', error);
       return false;
     }
   };
 
   const iniciarPolling = (verificacao: VerificacaoAtiva) => {
     pararTudo();
+    processandoRef.current = false;
 
     const tempoPassado = (Date.now() - verificacao.iniciadoEm) / 1000;
     const segundosRestantes = Math.max(0, TIMEOUT_SEGUNDOS - tempoPassado);
     setTempoRestante(segundosRestantes);
 
-    // Timer de countdown — ao zerar, cancela tudo e dispara timeout
     timerRef.current = setInterval(() => {
       setTempoRestante(prev => {
         if (prev === null || prev <= 1) {
@@ -118,7 +111,7 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
           setVerificacaoAtiva(null);
           setTempoRestante(null);
           window.dispatchEvent(new CustomEvent('verificacao_timeout', {
-            detail: { riotId: verificacao.riotId }
+            detail: { riotId: verificacao.riotId },
           }));
           return null;
         }
@@ -126,20 +119,13 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
       });
     }, 1000);
 
-    let processando = false;
-
-    // Polling que checa se o ícone foi trocado
     pollingRef.current = setInterval(async () => {
-      if (processando) return;
-
-      console.log(`🔍 Verificando (polling): ${verificacao.riotId}`);
+      if (processandoRef.current) return;
 
       const resultado = await buscarJogadorCompleto(verificacao.riotId);
 
       if (resultado.success && resultado.data.iconeId === verificacao.iconeEsperado) {
-        processando = true;
-        console.log('✅ Verificação concluída!');
-
+        processandoRef.current = true;
         pararTudo();
 
         const salvou = await salvarNoBanco(verificacao, resultado.data.iconeId);
@@ -150,7 +136,7 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
           localStorage.setItem('verificacao_ativa', JSON.stringify(concluida));
 
           window.dispatchEvent(new CustomEvent('verificacao_concluida', {
-            detail: { riotId: verificacao.riotId }
+            detail: { riotId: verificacao.riotId },
           }));
 
           setTimeout(() => {
@@ -168,7 +154,7 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
           setVerificacaoAtiva(null);
           setTempoRestante(null);
           window.dispatchEvent(new CustomEvent('verificacao_erro_salvar', {
-            detail: { riotId: verificacao.riotId }
+            detail: { riotId: verificacao.riotId },
           }));
         }
       }
@@ -180,7 +166,7 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
       ...dados,
       id: Date.now().toString(),
       iniciadoEm: Date.now(),
-      status: 'pendente'
+      status: 'pendente',
     };
 
     setVerificacaoAtiva(novaVerificacao);
@@ -200,7 +186,7 @@ export function VerificacaoProvider({ children }: { children: ReactNode }) {
       verificacaoAtiva,
       iniciarVerificacao,
       cancelarVerificacao,
-      tempoRestante
+      tempoRestante,
     }}>
       {children}
     </VerificacaoContext.Provider>

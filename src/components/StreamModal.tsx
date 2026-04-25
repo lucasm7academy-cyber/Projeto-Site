@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { StreamEmbed } from './StreamEmbed';
@@ -20,18 +20,6 @@ export function StreamModal({
   title = 'Transmissão ao Vivo',
   viewerCount = 0,
 }: StreamModalProps) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
-
-  useEffect(() => {
-    console.log('[StreamModal] Renderizando com isOpen:', isOpen, 'channel:', channel);
-  }, [isOpen, channel]);
-
-  if (!isMounted) return null;
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -51,7 +39,6 @@ export function StreamModal({
             onClick={(e) => e.stopPropagation()}
             className="bg-black/90 rounded-2xl border border-primary/20 w-full max-w-4xl overflow-hidden"
           >
-            {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-primary/10">
               <div className="flex-1">
                 <h2 className="text-xl font-bold text-white">{channel}</h2>
@@ -59,15 +46,10 @@ export function StreamModal({
                   {title} • {viewerCount.toLocaleString()} espectadores
                 </p>
               </div>
-              <button
-                onClick={onClose}
-                className="text-on-surface-variant hover:text-white transition-colors p-2"
-              >
+              <button onClick={onClose} className="text-on-surface-variant hover:text-white transition-colors p-2">
                 <X size={24} />
               </button>
             </div>
-
-            {/* Stream Embed */}
             <div className="aspect-video bg-surface">
               <StreamEmbed channel={channel} className="w-full h-full" />
             </div>

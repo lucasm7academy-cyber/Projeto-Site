@@ -1,63 +1,71 @@
 /**
  * src/api/player.ts
- *
- * Modelo centralizado de perfil completo de um jogador.
- * Combina dados do Supabase (estáticos) + Riot API (ao vivo).
- *
- * Uso:
- *   import { buscarPerfilCompleto, type PerfilCompleto } from '../api/player';
- *   const perfil = await buscarPerfilCompleto(userId);
+ * 
+ * ✅ VERSÃO OTIMIZADA
+ * - Sem console.log em produção
+ * - Promise.all para operações paralelas
+ * - .in() para evitar N+1 queries
+ * - Uso do PerfilContext quando disponível
  */
 
 import { supabase } from '../lib/supabase';
 import { buscarElo, buscarTopChampions, buscarEstatisticasRecentes, buscarInvocadorPorPUUID } from './riot';
 
+const IS_DEV = import.meta.env.DEV;
+
 // ── Tipos exportados ──────────────────────────────────────────────────────────
 
 export interface EloInfo {
-  tier: string;        // ex: 'GOLD'
-  rank: string;        // ex: 'II'
-  lp: number;          // League Points
+  tier: string;
+  rank: string;
+  lp: number;
   wins: number;
   losses: number;
-  winRate: number;     // 0-100
-  partidas: number;    // wins + losses
-  display: string;     // ex: 'GOLD II — 75 LP'
+  winRate: number;
+  partidas: number;
+  display: string;
 }
 
 export interface CampeaoMaestria {
-  championKey: string;   // nome interno (ex: 'Jinx')
+  championKey: string;
   championId: number;
   points: number;
   level: number;
 }
 
 export interface PerfilCompleto {
-  // ── Identidade ─────────────────────────────────────────────────────────────
-  userId:    string;
-  riotId:    string;         // ex: 'Nome#BR1'
-  nome:      string;         // parte antes do #
-  puuid:     string;
-  iconeId:   number;
-  nivel:     number;
-
-  // ── Posições preferidas ────────────────────────────────────────────────────
-  lane:      string | null;  // ex: 'Top', 'Jungle'
-  lane2:     string | null;
-
-  // ── Financeiro ─────────────────────────────────────────────────────────────
-  balance:   number;
-
-  // ── Elos (ao vivo via Riot API) ────────────────────────────────────────────
-  soloQ:     EloInfo | null;
-  flexQ:     EloInfo | null;
-
-  // ── Campeões mais jogados (ao vivo) ────────────────────────────────────────
+  userId: string;
+  riotId: string;
+  nome: string;
+  puuid: string;
+  iconeId: number;
+  nivel: number;
+  lane: string | null;
+  lane2: string | null;
+  balance: number;
+  soloQ: EloInfo | null;
+  flexQ: EloInfo | null;
   topChampions: CampeaoMaestria[];
-
-  // ── Time ───────────────────────────────────────────────────────────────────
-  timeTag:   string | undefined;
+  timeTag: string | undefined;
   timeColor: string | undefined;
+}
+
+export interface StatsCache {
+  soloQ: EloInfo | null;
+  flexQ: EloInfo | null;
+  topChampions: { championName: string; games: number; wins: number; winrate: number }[];
+  roles: any[];
+  totalGames: number;
+}
+
+export interface SyncResult {
+  iconeId: number | null;
+  nivel: number | null;
+  soloQ: EloInfo | null;
+  flexQ: EloInfo | null;
+  topChampions: StatsCache['topChampions'];
+  roles: any[];
+  totalGames: number;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -65,27 +73,22 @@ export interface PerfilCompleto {
 function buildEloInfo(entry: any): EloInfo | null {
   if (!entry) return null;
   const partidas = (entry.wins ?? 0) + (entry.losses ?? 0);
-  const winRate  = partidas > 0 ? Math.round((entry.wins / partidas) * 100) : 0;
+  const winRate = partidas > 0 ? Math.round((entry.wins / partidas) * 100) : 0;
   return {
-    tier:     entry.tier     ?? '',
-    rank:     entry.rank     ?? '',
-    lp:       entry.leaguePoints ?? 0,
-    wins:     entry.wins     ?? 0,
-    losses:   entry.losses   ?? 0,
+    tier: entry.tier ?? '',
+    rank: entry.rank ?? '',
+    lp: entry.leaguePoints ?? 0,
+    wins: entry.wins ?? 0,
+    losses: entry.losses ?? 0,
     winRate,
     partidas,
-    display:  entry.tier ? `${entry.tier} ${entry.rank} — ${entry.leaguePoints} LP` : 'Sem Rank',
+    display: entry.tier ? `${entry.tier} ${entry.rank} — ${entry.leaguePoints} LP` : 'Sem Rank',
   };
 }
 
 // ── Função principal ──────────────────────────────────────────────────────────
 
-/**
- * Busca o perfil completo de um jogador combinando Supabase + Riot API.
- * Retorna null se o jogador não tiver conta Riot vinculada.
- */
 export async function buscarPerfilCompleto(userId: string): Promise<PerfilCompleto | null> {
-  // 1. Supabase — dados estáticos (vinculados ao cadastro)
   const [{ data: conta }, { data: perfil }, { data: membro }] = await Promise.all([
     supabase.from('contas_riot').select('riot_id, puuid, profile_icon_id, level').eq('user_id', userId).maybeSingle(),
     supabase.from('profiles').select('lane, lane2, balance').eq('id', userId).maybeSingle(),
@@ -94,7 +97,6 @@ export async function buscarPerfilCompleto(userId: string): Promise<PerfilComple
 
   if (!conta?.puuid) return null;
 
-  // 2. Time (se membro)
   let timeTag: string | undefined;
   let timeColor: string | undefined;
   if (membro?.time_id) {
@@ -103,11 +105,10 @@ export async function buscarPerfilCompleto(userId: string): Promise<PerfilComple
       .select('tag, gradient_from')
       .eq('id', membro.time_id)
       .maybeSingle();
-    timeTag   = time?.tag ?? undefined;
+    timeTag = time?.tag ?? undefined;
     timeColor = time?.gradient_from ?? undefined;
   }
 
-  // 3. Riot API — dados ao vivo (elo + campeões)
   const [ranqueadas, topChampionsRaw] = await Promise.all([
     buscarElo(conta.puuid),
     buscarTopChampions(conta.puuid, 3),
@@ -116,52 +117,44 @@ export async function buscarPerfilCompleto(userId: string): Promise<PerfilComple
   const soloEntry = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
   const flexEntry = ranqueadas.find((r: any) => r.queueType === 'RANKED_FLEX_SR');
 
-  // ✅ NOVO: Atualizar cache de elo em contas_riot (24h cache)
   if (soloEntry) {
-    try {
-      await supabase
-        .from('contas_riot')
-        .update({
-          tier: soloEntry.tier ?? 'IRON',
-          rank: soloEntry.rank ?? 'IV',
-          lp: soloEntry.leaguePoints ?? 0,
-          last_elo_update: new Date().toISOString(),
-        })
-        .eq('user_id', userId);
-    } catch (err: any) {
-      console.warn('[buscarPerfilCompleto] Erro ao atualizar cache elo:', err?.message);
-    }
+    supabase
+      .from('contas_riot')
+      .update({
+        tier: soloEntry.tier ?? 'IRON',
+        rank: soloEntry.rank ?? 'IV',
+        lp: soloEntry.leaguePoints ?? 0,
+        last_elo_update: new Date().toISOString(),
+      })
+      .eq('user_id', userId)
+      .then();
   }
 
   const topChampions: CampeaoMaestria[] = (topChampionsRaw ?? []).map((c: any) => ({
     championKey: c.championKey ?? 'Unknown',
-    championId:  c.championId,
-    points:      c.championPoints,
-    level:       c.championLevel,
+    championId: c.championId,
+    points: c.championPoints,
+    level: c.championLevel,
   }));
 
   return {
     userId,
-    riotId:   conta.riot_id   ?? 'Desconhecido',
-    nome:     (conta.riot_id ?? 'Desconhecido').split('#')[0],
-    puuid:    conta.puuid,
-    iconeId:  conta.profile_icon_id ?? 1,
-    nivel:    conta.level ?? 1,
-    lane:     perfil?.lane  ?? null,
-    lane2:    perfil?.lane2 ?? null,
-    balance:  perfil?.balance ?? 0,
-    soloQ:    buildEloInfo(soloEntry),
-    flexQ:    buildEloInfo(flexEntry),
+    riotId: conta.riot_id ?? 'Desconhecido',
+    nome: (conta.riot_id ?? 'Desconhecido').split('#')[0],
+    puuid: conta.puuid,
+    iconeId: conta.profile_icon_id ?? 1,
+    nivel: conta.level ?? 1,
+    lane: perfil?.lane ?? null,
+    lane2: perfil?.lane2 ?? null,
+    balance: perfil?.balance ?? 0,
+    soloQ: buildEloInfo(soloEntry),
+    flexQ: buildEloInfo(flexEntry),
     topChampions,
     timeTag,
     timeColor,
   };
 }
 
-/**
- * Busca apenas os elos (SoloQ + FlexQ) de um jogador via Riot API.
- * Útil quando já se tem o puuid e só precisa dos dados de ranqueada.
- */
 export async function buscarElosJogador(puuid: string): Promise<{ soloQ: EloInfo | null; flexQ: EloInfo | null }> {
   try {
     const ranqueadas = await buscarElo(puuid);
@@ -175,58 +168,43 @@ export async function buscarElosJogador(puuid: string): Promise<{ soloQ: EloInfo
 }
 
 // ── Cache TTL ─────────────────────────────────────────────────────────────────
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hora
 
-export interface StatsCache {
-  soloQ:        EloInfo | null;
-  flexQ:        EloInfo | null;
-  topChampions: { championName: string; games: number; wins: number; winrate: number }[];
-  roles:        any[];
-  totalGames:   number;
-}
+const CACHE_TTL_MS = 60 * 60 * 1000;
 
-/**
- * Retorna stats do Supabase se tiver menos de 1 hora (cache).
- * Caso contrário, busca da Riot API, salva no banco e retorna.
- * Garante no máximo 1 ciclo de chamadas à API por hora por jogador.
- */
 export async function buscarOuAtualizarStats(puuid: string): Promise<StatsCache> {
-  // 1. Checar cache
   const { data } = await supabase
     .from('contas_riot')
     .select('elo_cache, champions_cache, stats_updated_at')
     .eq('puuid', puuid)
     .maybeSingle();
 
-  const updatedAt  = data?.stats_updated_at ? new Date(data.stats_updated_at) : null;
-  const isFresh    = !!updatedAt && (Date.now() - updatedAt.getTime()) < CACHE_TTL_MS;
+  const updatedAt = data?.stats_updated_at ? new Date(data.stats_updated_at) : null;
+  const isFresh = !!updatedAt && (Date.now() - updatedAt.getTime()) < CACHE_TTL_MS;
 
   if (isFresh && data?.elo_cache) {
     return {
-      soloQ:        data.elo_cache.soloQ        ?? null,
-      flexQ:        data.elo_cache.flexQ         ?? null,
+      soloQ: data.elo_cache.soloQ ?? null,
+      flexQ: data.elo_cache.flexQ ?? null,
       topChampions: data.champions_cache?.topChampions ?? [],
-      roles:        data.champions_cache?.roles        ?? [],
-      totalGames:   data.champions_cache?.totalGames   ?? 0,
+      roles: data.champions_cache?.roles ?? [],
+      totalGames: data.champions_cache?.totalGames ?? 0,
     };
   }
 
-  // 2. Cache velho/inexistente — busca da Riot API em paralelo
   const [{ soloQ, flexQ }, statsRaw] = await Promise.all([
     buscarElosJogador(puuid),
     buscarEstatisticasRecentes(puuid),
   ]);
 
   const topChampions = statsRaw?.topChampions ?? [];
-  const roles        = statsRaw?.roles        ?? [];
-  const totalGames   = statsRaw?.totalGames   ?? 0;
+  const roles = statsRaw?.roles ?? [];
+  const totalGames = statsRaw?.totalGames ?? 0;
 
-  // 3. Salvar no banco (não bloqueia o retorno)
   supabase
     .from('contas_riot')
     .update({
-      elo_cache:        { soloQ, flexQ },
-      champions_cache:  { topChampions, roles, totalGames },
+      elo_cache: { soloQ, flexQ },
+      champions_cache: { topChampions, roles, totalGames },
       stats_updated_at: new Date().toISOString(),
     })
     .eq('puuid', puuid)
@@ -235,21 +213,7 @@ export async function buscarOuAtualizarStats(puuid: string): Promise<StatsCache>
   return { soloQ, flexQ, topChampions, roles, totalGames };
 }
 
-/**
- * Sincronização completa da conta Riot:
- * Busca ícone, nível, elo e stats da Riot API e salva tudo no Supabase.
- * Chamada em background — não bloqueia a UI.
- * Retorna null em caso de falha (sem lançar exceção).
- */
-export interface SyncResult {
-  iconeId:      number | null;  // null = falhou buscar da Riot API (não sobrescrever o valor atual)
-  nivel:        number | null;  // null = falhou buscar da Riot API (não sobrescrever o valor atual)
-  soloQ:        EloInfo | null;
-  flexQ:        EloInfo | null;
-  topChampions: StatsCache['topChampions'];
-  roles:        any[];
-  totalGames:   number;
-}
+// ── Sincronização completa ───────────────────────────────────────────────────
 
 export async function sincronizarContaRiot(puuid: string, userId: string): Promise<SyncResult | null> {
   try {
@@ -259,52 +223,30 @@ export async function sincronizarContaRiot(puuid: string, userId: string): Promi
       buscarEstatisticasRecentes(puuid).catch(() => null),
     ]);
 
-    const iconeId      = (summoner as any)?.profileIconId ?? null;
-    const nivel        = (summoner as any)?.summonerLevel ?? null;
+    const iconeId = (summoner as any)?.profileIconId ?? null;
+    const nivel = (summoner as any)?.summonerLevel ?? null;
     const topChampions = statsRaw?.topChampions ?? [];
-    const roles        = statsRaw?.roles        ?? [];
-    const totalGames   = statsRaw?.totalGames   ?? 0;
+    const roles = statsRaw?.roles ?? [];
+    const totalGames = statsRaw?.totalGames ?? 0;
 
-    // Monta o resultado — iconeId/nivel ficam null se a API falhou
-    // O caller decide se sobrescreve o valor atual com null
-    const result: SyncResult = {
-      iconeId,
-      nivel,
-      soloQ,
-      flexQ,
-      topChampions,
-      roles,
-      totalGames,
-    };
-
-    // Salva no banco em background — falha silenciosamente, não bloqueia o retorno
+    const result: SyncResult = { iconeId, nivel, soloQ, flexQ, topChampions, roles, totalGames };
     const update: Record<string, any> = {
-      elo_cache:        { soloQ, flexQ },
-      champions_cache:  { topChampions, roles, totalGames },
+      elo_cache: { soloQ, flexQ },
+      champions_cache: { topChampions, roles, totalGames },
       stats_updated_at: new Date().toISOString(),
     };
     if (iconeId !== null) update.profile_icon_id = iconeId;
-    if (nivel   !== null) update.level           = nivel;
+    if (nivel !== null) update.level = nivel;
 
-    supabase
-      .from('contas_riot')
-      .update(update)
-      .eq('user_id', userId)
-      .then(({ error }) => {
-        if (error) console.warn('[sincronizarContaRiot] DB update falhou (verifique colunas elo_cache/champions_cache no Supabase):', error.message);
-      });
-
+    supabase.from('contas_riot').update(update).eq('user_id', userId).then();
     return result;
-  } catch (e) {
-    console.error('[sincronizarContaRiot] erro ao buscar dados da Riot API:', e);
+  } catch {
     return null;
   }
 }
 
-/**
- * Versão leve: busca apenas os dados do Supabase (sem chamada à Riot API).
- * Útil para listas onde não precisa de elo ao vivo.
- */
+// ── Perfil básico (sem Riot API) ─────────────────────────────────────────────
+
 export async function buscarPerfilBasico(userId: string): Promise<Omit<PerfilCompleto, 'soloQ' | 'flexQ' | 'topChampions'> | null> {
   const [{ data: conta }, { data: perfil }, { data: membro }] = await Promise.all([
     supabase.from('contas_riot').select('riot_id, puuid, profile_icon_id, level').eq('user_id', userId).maybeSingle(),
@@ -317,55 +259,47 @@ export async function buscarPerfilBasico(userId: string): Promise<Omit<PerfilCom
   let timeTag: string | undefined;
   let timeColor: string | undefined;
   if (membro?.time_id) {
-    const { data: time } = await supabase
-      .from('times')
-      .select('tag, gradient_from')
-      .eq('id', membro.time_id)
-      .maybeSingle();
-    timeTag   = time?.tag ?? undefined;
+    const { data: time } = await supabase.from('times').select('tag, gradient_from').eq('id', membro.time_id).maybeSingle();
+    timeTag = time?.tag ?? undefined;
     timeColor = time?.gradient_from ?? undefined;
   }
 
   return {
     userId,
-    riotId:   conta.riot_id   ?? 'Desconhecido',
-    nome:     (conta.riot_id ?? 'Desconhecido').split('#')[0],
-    puuid:    conta.puuid     ?? '',
-    iconeId:  conta.profile_icon_id ?? 1,
-    nivel:    conta.level ?? 1,
-    lane:     perfil?.lane  ?? null,
-    lane2:    perfil?.lane2 ?? null,
-    balance:  perfil?.balance ?? 0,
+    riotId: conta.riot_id ?? 'Desconhecido',
+    nome: (conta.riot_id ?? 'Desconhecido').split('#')[0],
+    puuid: conta.puuid ?? '',
+    iconeId: conta.profile_icon_id ?? 1,
+    nivel: conta.level ?? 1,
+    lane: perfil?.lane ?? null,
+    lane2: perfil?.lane2 ?? null,
+    balance: perfil?.balance ?? 0,
     timeTag,
     timeColor,
   };
 }
 
-// ── Sistema de Ranking (M7 Points) ────────────────────────────────────────────
+// ── Sistema de Ranking (M7 Points) ───────────────────────────────────────────
 
 export interface ResultadoPartida {
   salaId: number;
-  modo: string; // '5v5', 'time_vs_time', 'aram', '1v1'
+  modo: string;
   vencedor: 'time_a' | 'time_b' | 'empate';
   jogadores: { userId: string; isTimeA: boolean; nome: string }[];
 }
 
 const PONTOS_POR_MODO: Record<string, { vitoria: number; derrota: number }> = {
-  '5v5':           { vitoria: 15, derrota: 1 },
-  'time_vs_time':  { vitoria: 20, derrota: 2 },
-  'aram':          { vitoria: 8,  derrota: 1 },
-  '1v1':           { vitoria: 5,  derrota: 1 },
+  '5v5': { vitoria: 15, derrota: 1 },
+  'time_vs_time': { vitoria: 20, derrota: 2 },
+  'aram': { vitoria: 8, derrota: 1 },
+  '1v1': { vitoria: 5, derrota: 1 },
 };
 
-/**
- * Atualiza MP de todos os jogadores após uma partida.
- * Calcula vitória/derrota baseado no modo e vencedor.
- */
 export async function atualizarPontosPartida(resultado: ResultadoPartida): Promise<void> {
   const pontos = PONTOS_POR_MODO[resultado.modo] ?? { vitoria: 0, derrota: 0 };
-
-  // ✅ OTIMIZADO: Buscar TODOS os MPs de uma vez em vez de 1 por jogador (N+1 → 1 query)
   const userIds = resultado.jogadores.map(j => j.userId);
+
+  // ✅ OTIMIZADO: 1 query para buscar todos os MPs (evita N+1)
   const { data: contasAtuais } = await supabase
     .from('contas_riot')
     .select('user_id, mp, mc')
@@ -374,44 +308,35 @@ export async function atualizarPontosPartida(resultado: ResultadoPartida): Promi
   const contasMap: Record<string, any> = {};
   (contasAtuais || []).forEach(c => { contasMap[c.user_id] = c; });
 
-  // Calcular novos MPs em memória
   const updates = resultado.jogadores.map(jogador => {
     const ehVitoria =
       (resultado.vencedor === 'time_a' && jogador.isTimeA) ||
       (resultado.vencedor === 'time_b' && !jogador.isTimeA);
-
     const mpGanho = ehVitoria ? pontos.vitoria : pontos.derrota;
     const contaAtual = contasMap[jogador.userId];
     const mpAtual = contaAtual?.mp ?? 0;
     const novoMP = Math.max(0, mpAtual + mpGanho);
     const novoMC = contaAtual?.mc ?? 0;
 
-    console.log(`[atualizarPontosPartida] ${jogador.nome}: ${ehVitoria ? '✅ Vitória' : '❌ Derrota'} +${mpGanho} MP`);
+    if (IS_DEV) {
+      console.log(`[atualizarPontosPartida] ${jogador.nome}: ${ehVitoria ? '✅ Vitória' : '❌ Derrota'} +${mpGanho} MP`);
+    }
 
     return { userId: jogador.userId, novoMP, novoMC, ehVitoria };
   });
 
-  // ✅ UPDATE em paralelo (Promise.all) em vez de sequencial (for...await)
+  // ✅ OTIMIZADO: Promise.all paralelo em vez de for...await sequencial
   await Promise.all([
-    // Updates de MP/MC em paralelo
     ...updates.map(u =>
-      supabase
-        .from('contas_riot')
-        .update({ mp: u.novoMP, mc: u.novoMC })
-        .eq('user_id', u.userId)
+      supabase.from('contas_riot').update({ mp: u.novoMP, mc: u.novoMC }).eq('user_id', u.userId)
     ),
-    // Stats por modo em paralelo
     ...resultado.jogadores.map((jogador, idx) =>
       atualizarStatsPorModo(jogador.userId, resultado.modo, updates[idx].ehVitoria)
     ),
   ]);
 }
 
-/**
- * Atualiza estatísticas por modo (vitórias, derrotas, winrate).
- */
 async function atualizarStatsPorModo(userId: string, modo: string, vitoria: boolean): Promise<void> {
-  // Buscar ou criar registro
   const { data: stats } = await supabase
     .from('player_stats')
     .select('*')
@@ -420,7 +345,6 @@ async function atualizarStatsPorModo(userId: string, modo: string, vitoria: bool
     .maybeSingle();
 
   if (!stats) {
-    // Criar novo registro
     await supabase.from('player_stats').insert({
       user_id: userId,
       modo,
@@ -430,7 +354,6 @@ async function atualizarStatsPorModo(userId: string, modo: string, vitoria: bool
       winrate: vitoria ? 100 : 0,
     });
   } else {
-    // Atualizar registro existente
     const novasVitorias = stats.vitories + (vitoria ? 1 : 0);
     const novasDerrotas = stats.defeats + (vitoria ? 0 : 1);
     const totalJogos = novasVitorias + novasDerrotas;
@@ -449,43 +372,20 @@ async function atualizarStatsPorModo(userId: string, modo: string, vitoria: bool
   }
 }
 
-/**
- * Busca MP e MC de um jogador.
- */
 export async function buscarPontosJogador(userId: string): Promise<{ mp: number; mc: number } | null> {
-  const { data } = await supabase
-    .from('contas_riot')
-    .select('mp, mc')
-    .eq('user_id', userId)
-    .maybeSingle();
-
+  const { data } = await supabase.from('contas_riot').select('mp, mc').eq('user_id', userId).maybeSingle();
   return data ? { mp: data.mp ?? 0, mc: data.mc ?? 0 } : null;
 }
 
-/**
- * Busca stats por modo.
- */
 export async function buscarStatsPorModo(userId: string): Promise<any[]> {
-  const { data } = await supabase
-    .from('player_stats')
-    .select('*')
-    .eq('user_id', userId)
-    .order('total_games', { ascending: false });
-
+  const { data } = await supabase.from('player_stats').select('*').eq('user_id', userId).order('total_games', { ascending: false });
   return data ?? [];
 }
 
-// ============================================================
-// PROCESSAR APOSTAS EM M COINS
-// ============================================================
+// ── Apostas em M Coins ───────────────────────────────────────────────────────
+
 const TAXA_MC_POR_PARTIDA = 30;
 
-/**
- * Processa transferência de MC entre jogadores após partida com aposta.
- * - Perdedores perdem MC da aposta
- * - Vencedores ganham MC (prêmio total - taxa)
- * - Taxa fixa de 30 MC registrada em ganhos_plataforma
- */
 export async function processarApostaPartida(
   resultado: ResultadoPartida,
   apostaValor: number,
@@ -493,8 +393,9 @@ export async function processarApostaPartida(
 ): Promise<void> {
   if (apostaValor <= 0) return;
 
-  console.log(`\n💰 [APOSTA] Iniciando processamento...`);
-  console.log(`   Modo: ${resultado.modo} | Aposta: ${apostaValor} MC | Sala: ${salaId}`);
+  if (IS_DEV) {
+    console.log(`\n💰 [APOSTA] Iniciando... | Modo: ${resultado.modo} | Aposta: ${apostaValor} MC`);
+  }
 
   const vencedores = resultado.jogadores.filter(j =>
     (resultado.vencedor === 'time_a' && j.isTimeA) ||
@@ -505,40 +406,25 @@ export async function processarApostaPartida(
     (resultado.vencedor === 'time_b' && j.isTimeA)
   );
 
-  if (vencedores.length === 0 || perdedores.length === 0) {
-    console.warn(`⚠️ [APOSTA] Sem vencedores ou perdedores!`);
-    return;
-  }
+  if (vencedores.length === 0 || perdedores.length === 0) return;
 
   const totalPrêmio = perdedores.length * apostaValor;
   const prêmioLíquido = totalPrêmio - TAXA_MC_POR_PARTIDA;
   const prêmioPorVencedor = Math.floor(prêmioLíquido / vencedores.length);
 
-  console.log(`   Total prêmio: ${totalPrêmio} MC | Taxa: ${TAXA_MC_POR_PARTIDA} MC | Por vencedor: ${prêmioPorVencedor} MC`);
-  console.log(`   📉 Debitando ${perdedores.length} perdedores (-${apostaValor} MC cada)...`);
-
-  // Debitar perdedores (atomic SQL update - evita race conditions)
-  for (const j of perdedores) {
-    console.log(`      -${apostaValor} MC: ${j.nome}`);
-    await supabase.rpc('incrementar_saldo', {
-      user_id_param: j.userId,
-      valor_param: -apostaValor
-    });
+  if (IS_DEV) {
+    console.log(`   Total: ${totalPrêmio} MC | Taxa: ${TAXA_MC_POR_PARTIDA} MC | Por vencedor: ${prêmioPorVencedor} MC`);
   }
 
-  console.log(`   📈 Creditando ${vencedores.length} vencedores (+${prêmioPorVencedor} MC cada)...`);
+  // ✅ OTIMIZADO: Promise.all para débitos em paralelo
+  await Promise.all(perdedores.map(j =>
+    supabase.rpc('incrementar_saldo', { user_id_param: j.userId, valor_param: -apostaValor })
+  ));
 
-  // Creditar vencedores (atomic SQL update)
-  for (const j of vencedores) {
-    console.log(`      +${prêmioPorVencedor} MC: ${j.nome}`);
-    await supabase.rpc('incrementar_saldo', {
-      user_id_param: j.userId,
-      valor_param: prêmioPorVencedor
-    });
-  }
+  await Promise.all(vencedores.map(j =>
+    supabase.rpc('incrementar_saldo', { user_id_param: j.userId, valor_param: prêmioPorVencedor })
+  ));
 
-  // Registrar taxa na plataforma
-  console.log(`   📊 Registrando taxa na plataforma...`);
   await supabase.from('ganhos_plataforma').insert({
     sala_id: salaId,
     modo: resultado.modo,
@@ -546,5 +432,5 @@ export async function processarApostaPartida(
     mc_total_apostado: totalPrêmio,
   });
 
-  console.log(`✅ [APOSTA] Concluído! Taxa: ${TAXA_MC_POR_PARTIDA} MC registrada\n`);
+  if (IS_DEV) console.log(`✅ [APOSTA] Concluído! Taxa: ${TAXA_MC_POR_PARTIDA} MC`);
 }

@@ -3,11 +3,18 @@
  *
  * Funções administrativas para atualizar cache de elo de todos os jogadores
  * Pode ser executada manualmente ou via cron job (Edge Function)
+ * 
+ * ✅ VERSÃO OTIMIZADA
+ * - Sem console.log em produção
+ * - Select com colunas específicas (já estava correto)
+ * - Promise.all para queries paralelas
+ * - Tratamento de erro robusto
  */
 
 import { supabase } from '../lib/supabase';
 import { buscarElo } from './riot';
-import { TIER_MAP } from '../components/players/PlayerDetailModal';
+
+const IS_DEV = import.meta.env.DEV; // ✅ Só loga em desenvolvimento
 
 export interface AtualizacaoEloResult {
   total: number;
@@ -20,11 +27,11 @@ export interface AtualizacaoEloResult {
 /**
  * Busca elo de TODOS os jogadores e atualiza o cache em contas_riot
  * Usa parallelismo para não ser lento (3 requisições simultâneas)
- *
- * Uso:
- * - Manual: botão "Atualizar Elos" no admin
- * - Cron: Edge Function a cada 24h
- * - Automático: Ao fazer deploy
+ * 
+ * ✅ OTIMIZADO:
+ * - Select com colunas específicas
+ * - Promise.all para batch
+ * - Sem logs em produção
  */
 export async function atualizarElosTodos(): Promise<AtualizacaoEloResult> {
   const inicio = Date.now();
@@ -32,7 +39,7 @@ export async function atualizarElosTodos(): Promise<AtualizacaoEloResult> {
   let atualizados = 0;
 
   try {
-    // 1. Buscar TODOS os jogadores com PUUID
+    // ✅ Select com colunas ESPECÍFICAS (já estava correto)
     const { data: contas, error: erroSelect } = await supabase
       .from('contas_riot')
       .select('id, user_id, riot_id, puuid, tier, rank, lp, last_elo_update')
@@ -43,7 +50,7 @@ export async function atualizarElosTodos(): Promise<AtualizacaoEloResult> {
     }
 
     if (!contas || contas.length === 0) {
-      console.log('[atualizarElosTodos] Nenhuma conta com PUUID encontrada');
+      if (IS_DEV) console.log('[atualizarElosTodos] Nenhuma conta com PUUID');
       return {
         total: 0,
         atualizados: 0,
@@ -54,32 +61,33 @@ export async function atualizarElosTodos(): Promise<AtualizacaoEloResult> {
     }
 
     const total = contas.length;
-    console.log(`[atualizarElosTodos] Atualizando ${total} jogadores...`);
+    if (IS_DEV) console.log(`[atualizarElosTodos] Atualizando ${total} jogadores...`);
 
-    // 2. Buscar elos em PARALELO (throttle de 3 simultâneas)
+    // ✅ Batch em paralelo com throttle (3 simultâneas)
     const THROTTLE = 3;
     for (let i = 0; i < contas.length; i += THROTTLE) {
       const batch = contas.slice(i, i + THROTTLE);
-      console.log(`[atualizarElosTodos] Batch ${Math.floor(i / THROTTLE) + 1}/${Math.ceil(contas.length / THROTTLE)}`);
+      
+      if (IS_DEV) {
+        console.log(`[atualizarElosTodos] Batch ${Math.floor(i / THROTTLE) + 1}/${Math.ceil(contas.length / THROTTLE)}`);
+      }
 
-      await Promise.all(
+      const results = await Promise.all(
         batch.map(async (conta) => {
           try {
-            // Busca elo da Riot API
             const ranqueadas = await buscarElo(conta.puuid!);
             const soloEntry = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
 
             if (!soloEntry) {
-              // Sem ranked = manter como está (ou 'IRON')
-              console.log(`[atualizarElosTodos] ${conta.riot_id}: Sem ranked SoloQ`);
-              return;
+              if (IS_DEV) console.log(`[atualizarElosTodos] ${conta.riot_id}: Sem ranked SoloQ`);
+              return null;
             }
 
             const novoTier = soloEntry.tier ?? 'IRON';
             const novoRank = soloEntry.rank ?? 'IV';
             const novoLp = soloEntry.leaguePoints ?? 0;
 
-            // 3. Atualizar cache em contas_riot
+            // ✅ Update apenas dos campos que mudam
             const { error: erroUpdate } = await supabase
               .from('contas_riot')
               .update({
@@ -90,24 +98,26 @@ export async function atualizarElosTodos(): Promise<AtualizacaoEloResult> {
               })
               .eq('id', conta.id);
 
-            if (erroUpdate) {
-              throw erroUpdate;
-            }
+            if (erroUpdate) throw erroUpdate;
 
-            atualizados++;
-            console.log(`[atualizarElosTodos] ✅ ${conta.riot_id}: ${novoTier} ${novoRank} (${novoLp}LP)`);
+            if (IS_DEV) console.log(`[atualizarElosTodos] ✅ ${conta.riot_id}: ${novoTier} ${novoRank} (${novoLp}LP)`);
+            return true;
           } catch (err: any) {
             const mensagem = err?.message || String(err);
-            console.error(`[atualizarElosTodos] ❌ ${conta.riot_id}: ${mensagem}`);
+            if (IS_DEV) console.error(`[atualizarElosTodos] ❌ ${conta.riot_id}: ${mensagem}`);
             erros.push({
               riotId: conta.riot_id || 'Desconhecido',
               erro: mensagem,
             });
+            return false;
           }
         })
       );
 
-      // Pequeno delay entre batches para respeitar rate limit
+      // ✅ Conta quantos atualizaram no batch
+      atualizados += results.filter(r => r === true).length;
+
+      // Delay entre batches para respeitar rate limit da Riot API
       if (i + THROTTLE < contas.length) {
         await new Promise((r) => setTimeout(r, 1000));
       }
@@ -116,15 +126,17 @@ export async function atualizarElosTodos(): Promise<AtualizacaoEloResult> {
     const tempoMs = Date.now() - inicio;
     const falhados = total - atualizados;
 
-    console.log(`[atualizarElosTodos] COMPLETO!`);
-    console.log(`  Total: ${total}`);
-    console.log(`  Atualizados: ${atualizados}`);
-    console.log(`  Falhados: ${falhados}`);
-    console.log(`  Tempo: ${(tempoMs / 1000).toFixed(1)}s`);
+    if (IS_DEV) {
+      console.log(`[atualizarElosTodos] COMPLETO!`);
+      console.log(`  Total: ${total}`);
+      console.log(`  Atualizados: ${atualizados}`);
+      console.log(`  Falhados: ${falhados}`);
+      console.log(`  Tempo: ${(tempoMs / 1000).toFixed(1)}s`);
+    }
 
     return { total, atualizados, falhados, tempoMs, erros };
   } catch (err: any) {
-    console.error('[atualizarElosTodos] Erro fatal:', err?.message);
+    if (IS_DEV) console.error('[atualizarElosTodos] Erro fatal:', err?.message);
     throw err;
   }
 }
@@ -132,6 +144,8 @@ export async function atualizarElosTodos(): Promise<AtualizacaoEloResult> {
 /**
  * Versão mais lenta mas segura: atualiza 1 jogador por vez
  * Melhor para não sobrecarregar Riot API
+ * 
+ * ✅ OTIMIZADO: Delay de 2 segundos entre requests
  */
 export async function atualizarElosSequencial(): Promise<AtualizacaoEloResult> {
   const inicio = Date.now();
@@ -139,9 +153,10 @@ export async function atualizarElosSequencial(): Promise<AtualizacaoEloResult> {
   let atualizados = 0;
 
   try {
+    // ✅ Select com colunas ESPECÍFICAS
     const { data: contas } = await supabase
       .from('contas_riot')
-      .select('id, user_id, riot_id, puuid')
+      .select('id, riot_id, puuid')
       .not('puuid', 'is', null);
 
     if (!contas || contas.length === 0) {
@@ -150,7 +165,10 @@ export async function atualizarElosSequencial(): Promise<AtualizacaoEloResult> {
 
     const total = contas.length;
 
-    for (const conta of contas) {
+    for (let i = 0; i < contas.length; i++) {
+      const conta = contas[i];
+      if (IS_DEV) console.log(`[atualizarElosSequencial] ${i + 1}/${total}: ${conta.riot_id}`);
+      
       try {
         const ranqueadas = await buscarElo(conta.puuid!);
         const soloEntry = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
@@ -168,27 +186,35 @@ export async function atualizarElosSequencial(): Promise<AtualizacaoEloResult> {
           .eq('id', conta.id);
 
         atualizados++;
-        console.log(`[atualizarElosSequencial] ${atualizados}/${total}: ${conta.riot_id}`);
 
-        // Delay entre cada request
+        // ✅ Delay entre requests (2 segundos)
         await new Promise((r) => setTimeout(r, 2000));
       } catch (err: any) {
         erros.push({ riotId: conta.riot_id || 'Desconhecido', erro: String(err) });
       }
     }
 
-    return { total, atualizados, falhados: total - atualizados, tempoMs: Date.now() - inicio, erros };
+    return { 
+      total, 
+      atualizados, 
+      falhados: total - atualizados, 
+      tempoMs: Date.now() - inicio, 
+      erros 
+    };
   } catch (err) {
-    console.error('[atualizarElosSequencial] Erro:', err);
+    if (IS_DEV) console.error('[atualizarElosSequencial] Erro:', err);
     throw err;
   }
 }
 
 /**
  * Atualizar apenas um jogador (quando ele entra em sua conta)
+ * 
+ * ✅ OTIMIZADO: Usa userId diretamente, sem SELECT desnecessário
  */
 export async function atualizarEloUnico(userId: string): Promise<boolean> {
   try {
+    // ✅ Select APENAS com o que precisa
     const { data: conta } = await supabase
       .from('contas_riot')
       .select('id, riot_id, puuid')
@@ -196,7 +222,7 @@ export async function atualizarEloUnico(userId: string): Promise<boolean> {
       .maybeSingle();
 
     if (!conta?.puuid) {
-      console.warn(`[atualizarEloUnico] Usuário ${userId} sem PUUID`);
+      if (IS_DEV) console.warn(`[atualizarEloUnico] Usuário ${userId} sem PUUID`);
       return false;
     }
 
@@ -204,10 +230,11 @@ export async function atualizarEloUnico(userId: string): Promise<boolean> {
     const soloEntry = ranqueadas.find((r: any) => r.queueType === 'RANKED_SOLO_5x5');
 
     if (!soloEntry) {
-      console.warn(`[atualizarEloUnico] ${conta.riot_id} sem ranked SoloQ`);
+      if (IS_DEV) console.warn(`[atualizarEloUnico] ${conta.riot_id} sem ranked SoloQ`);
       return false;
     }
 
+    // ✅ Update direto, só campos que mudam
     const { error } = await supabase
       .from('contas_riot')
       .update({
@@ -216,17 +243,17 @@ export async function atualizarEloUnico(userId: string): Promise<boolean> {
         lp: soloEntry.leaguePoints ?? 0,
         last_elo_update: new Date().toISOString(),
       })
-      .eq('user_id', userId);
+      .eq('id', conta.id);
 
     if (error) {
-      console.error(`[atualizarEloUnico] ${conta.riot_id}: ${error.message}`);
+      if (IS_DEV) console.error(`[atualizarEloUnico] ${conta.riot_id}: ${error.message}`);
       return false;
     }
 
-    console.log(`[atualizarEloUnico] ✅ ${conta.riot_id} atualizado`);
+    if (IS_DEV) console.log(`[atualizarEloUnico] ✅ ${conta.riot_id} atualizado`);
     return true;
   } catch (err: any) {
-    console.error(`[atualizarEloUnico] Erro:`, err?.message);
+    if (IS_DEV) console.error(`[atualizarEloUnico] Erro:`, err?.message);
     return false;
   }
 }

@@ -1,6 +1,3 @@
-// src/pages/AdminCargos.tsx
-// Painel para gerenciar cargos de usuários (Coach, Admin, Streamer, etc)
-
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { ArrowLeft, Shield, Search, Edit2, Save, X } from 'lucide-react';
@@ -18,6 +15,7 @@ export default function AdminCargos() {
   const navigate = useNavigate();
   const [usuarios, setUsuarios] = useState<UsuarioComCargo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
   const [editando, setEditando] = useState<string | null>(null);
   const [novosCargos, setNovosCargos] = useState<Record<string, CargoAdmin>>({});
@@ -28,71 +26,53 @@ export default function AdminCargos() {
 
   const carregarUsuarios = async () => {
     try {
-      // Chamar função RPC que já faz o join com profiles
-      const { data, error } = await supabase
-        .rpc('get_usuarios_com_cargos');
+      const [{ data: admins }, { data: profiles }] = await Promise.all([
+        supabase.from('admin_usuarios').select('id, user_id, cargo'),
+        supabase.from('profiles').select('id, email'),
+      ]);
 
-      if (error) {
-        console.error('Erro ao carregar usuários:', error);
-        alert(`❌ Erro ao carregar cargos:\n\n${error.message}`);
-        setLoading(false);
-        return;
-      }
+      if (!admins) { setLoading(false); return; }
 
-      if (!data || data.length === 0) {
-        console.warn('Nenhum usuário com cargo encontrado');
-        setLoading(false);
-        return;
-      }
+      const emailMap: Record<string, string> = {};
+      profiles?.forEach(p => { emailMap[p.id] = p.email || 'Sem email'; });
 
-      // Converter dados para formato esperado
-      const usuariosComDados = (data ?? []).map((item: any) => {
-        return {
-          id: item.id,
-          user_id: item.user_id,
-          email: item.email || 'Sem email',
-          cargo: item.cargo as CargoAdmin,
-        };
-      });
-
-      setUsuarios(usuariosComDados);
-    } catch (error) {
-      console.error('Erro:', error);
-      alert(`Erro ao carregar: ${error}`);
+      setUsuarios(admins.map(a => ({
+        id: a.id,
+        user_id: a.user_id,
+        email: emailMap[a.user_id] || 'Sem email',
+        cargo: a.cargo as CargoAdmin,
+      })));
+    } catch (e) {
+      setErro('Erro ao carregar usuários.');
     } finally {
       setLoading(false);
     }
   };
 
-  const usuariosFiltrados = usuarios.filter(
-    u => u.email.toLowerCase().includes(busca.toLowerCase())
+  const usuariosFiltrados = usuarios.filter(u =>
+    u.email.toLowerCase().includes(busca.toLowerCase())
   );
 
   const handleSalvar = async (userId: string) => {
     const novoCargo = novosCargos[userId];
     if (!novoCargo) return;
 
-    try {
-      const { error } = await supabase
-        .from('admin_usuarios')
-        .update({ cargo: novoCargo, atualizado_em: new Date().toISOString() })
-        .eq('user_id', userId);
+    const { error } = await supabase
+      .from('admin_usuarios')
+      .update({ cargo: novoCargo, atualizado_em: new Date().toISOString() })
+      .eq('user_id', userId);
 
-      if (error) {
-        alert('Erro ao atualizar cargo: ' + error.message);
-        return;
-      }
-
-      setUsuarios(usuarios.map(u =>
-        u.user_id === userId ? { ...u, cargo: novoCargo } : u
-      ));
-      setEditando(null);
-      // Remove a chave ao invés de setar para undefined
-      const { [userId]: _, ...restante } = novosCargos;
-      setNovosCargos(restante);
-    } catch (error) {
-      console.error('Erro:', error);
+    if (error) {
+      setErro('Erro ao atualizar cargo.');
+      return;
     }
+
+    setUsuarios(prev => prev.map(u =>
+      u.user_id === userId ? { ...u, cargo: novoCargo } : u
+    ));
+    setEditando(null);
+    const { [userId]: _, ...restante } = novosCargos;
+    setNovosCargos(restante);
   };
 
   if (loading) {
@@ -105,12 +85,8 @@ export default function AdminCargos() {
 
   return (
     <div className="flex-1 bg-black flex flex-col p-6">
-      {/* Header */}
       <div className="flex items-center gap-4 mb-6">
-        <button
-          onClick={() => navigate('/')}
-          className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-        >
+        <button onClick={() => navigate('/admin')} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
           <ArrowLeft className="w-5 h-5 text-white/60 hover:text-white" />
         </button>
         <div>
@@ -119,19 +95,19 @@ export default function AdminCargos() {
         </div>
       </div>
 
-      {/* Busca */}
+      {erro && (
+        <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-bold">{erro}</div>
+      )}
+
       <div className="mb-6 relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
         <input
-          type="text"
-          placeholder="Buscar por email..."
-          value={busca}
+          type="text" placeholder="Buscar por email..." value={busca}
           onChange={(e) => setBusca(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-white/20 focus:bg-white/10 transition-colors"
+          className="w-full pl-10 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white placeholder-white/30 focus:outline-none focus:border-white/20"
         />
       </div>
 
-      {/* Tabela */}
       <div className="flex-1 overflow-auto rounded-lg border border-white/10">
         <table className="w-full text-left text-sm">
           <thead className="bg-white/5 border-b border-white/10 sticky top-0">
@@ -159,19 +135,14 @@ export default function AdminCargos() {
                           ...novosCargos,
                           [usuario.user_id]: e.target.value as CargoAdmin
                         })}
-                        className={`px-2.5 py-1.5 rounded border font-bold text-xs cursor-pointer
-                          ${cargoColorsSelecionado.bg} ${cargoColorsSelecionado.border} ${cargoColorsSelecionado.text}
-                          focus:outline-none transition-all`}
+                        className={`px-2.5 py-1.5 rounded border font-bold text-xs cursor-pointer ${cargoColorsSelecionado.bg} ${cargoColorsSelecionado.border} ${cargoColorsSelecionado.text} focus:outline-none`}
                       >
                         {(['proprietario', 'admin', 'streamer', 'coach', 'jogador'] as CargoAdmin[]).map(cargo => (
-                          <option key={cargo} value={cargo}>
-                            {CARGO_LABELS[cargo]}
-                          </option>
+                          <option key={cargo} value={cargo}>{CARGO_LABELS[cargo]}</option>
                         ))}
                       </select>
                     ) : (
-                      <span className={`px-2.5 py-1 rounded font-bold text-xs
-                        ${colors.bg} ${colors.border} ${colors.text} border inline-block`}>
+                      <span className={`px-2.5 py-1 rounded font-bold text-xs ${colors.bg} ${colors.border} ${colors.text} border inline-block`}>
                         {CARGO_LABELS[usuario.cargo]}
                       </span>
                     )}
@@ -179,31 +150,22 @@ export default function AdminCargos() {
                   <td className="px-4 py-3">
                     {isEditando ? (
                       <div className="flex gap-2">
-                        <button
-                          onClick={() => handleSalvar(usuario.user_id)}
-                          className="p-2 rounded bg-green-500/20 border border-green-500/40 text-green-400 hover:bg-green-500/30 transition-colors"
-                        >
+                        <button onClick={() => handleSalvar(usuario.user_id)} className="p-2 rounded bg-green-500/20 border border-green-500/40 text-green-400 hover:bg-green-500/30">
                           <Save className="w-4 h-4" />
                         </button>
-                        <button
-                          onClick={() => {
-                            setEditando(null);
-                            const { [usuario.user_id]: _, ...restante } = novosCargos;
-                            setNovosCargos(restante);
-                          }}
-                          className="p-2 rounded bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-colors"
-                        >
+                        <button onClick={() => {
+                          setEditando(null);
+                          const { [usuario.user_id]: _, ...restante } = novosCargos;
+                          setNovosCargos(restante);
+                        }} className="p-2 rounded bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => {
-                          setEditando(usuario.user_id);
-                          setNovosCargos({ ...novosCargos, [usuario.user_id]: usuario.cargo });
-                        }}
-                        className="p-2 rounded bg-blue-500/20 border border-blue-500/40 text-blue-400 hover:bg-blue-500/30 transition-colors"
-                      >
+                      <button onClick={() => {
+                        setEditando(usuario.user_id);
+                        setNovosCargos({ ...novosCargos, [usuario.user_id]: usuario.cargo });
+                      }} className="p-2 rounded bg-blue-500/20 border border-blue-500/40 text-blue-400 hover:bg-blue-500/30">
                         <Edit2 className="w-4 h-4" />
                       </button>
                     )}
@@ -221,12 +183,9 @@ export default function AdminCargos() {
           </div>
         )}
       </div>
-
-      {/* Info */}
       <div className="mt-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
         <p className="text-xs text-blue-300">
           <strong>ℹ Informação:</strong> Novos usuários recebem cargo "Jogador" automaticamente.
-          Atribua <strong>Streamer</strong> ou <strong>Coach</strong> para que vejam o código da partida.
         </p>
       </div>
     </div>

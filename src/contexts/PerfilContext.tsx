@@ -20,6 +20,7 @@ interface PerfilContextType {
   perfil: PerfilData | null;
   loading: boolean;
   refetch: () => void;
+  refetchCargo: () => Promise<void>;
   desvincular: () => void;
 }
 
@@ -31,6 +32,7 @@ export function usePerfilSafe(): PerfilContextType {
       perfil: null,
       loading: true,
       refetch: () => {},
+      refetchCargo: async () => {},
       desvincular: () => {},
     };
   }
@@ -53,6 +55,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     try {
+      // ✅ Apenas 3 queries essenciais - ZERO overhead
       const [{ data: contaRiot }, { data: profile }, { data: saldoData }] = await Promise.all([
         supabase
           .from('contas_riot')
@@ -71,20 +74,6 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
           .maybeSingle(),
       ]);
 
-      // Puxar cargo só se existir (não jogador padrão) - reduz queries
-      let cargoData = null;
-      try {
-        const { data } = await supabase
-          .from('admin_usuarios')
-          .select('cargo')
-          .eq('user_id', user.id)
-          .maybeSingle();
-        cargoData = data;
-      } catch (err) {
-        // Ignorar erro - cargo padrão é jogador
-        console.debug('[PerfilContext] Cargo não encontrado, usando padrão');
-      }
-
       if (contaRiot) {
         const [nome, tag] = (contaRiot.riot_id || '').split('#');
         setPerfil({
@@ -100,7 +89,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
           contaVinculada: true,
           isVip: profile?.is_vip ?? false,
           saldo: saldoData?.saldo ?? 0,
-          cargo: cargoData?.cargo ?? 'jogador',
+          cargo: 'jogador',
         });
       } else {
         // Conta não vinculada - use dados do auth user
@@ -112,7 +101,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
           contaVinculada: false,
           isVip: profile?.is_vip ?? false,
           saldo: saldoData?.saldo ?? 0,
-          cargo: cargoData?.cargo ?? 'jogador',
+          cargo: 'jogador',
         });
       }
 
@@ -163,8 +152,25 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
     });
   }, [user]);
 
+  // ✅ Atualizar cargo quando admin avisar (zero overhead até haver mudança)
+  const refetchCargo = useCallback(async () => {
+    if (!user || !perfil) return;
+
+    try {
+      const { data: cargoData } = await supabase
+        .from('admin_usuarios')
+        .select('cargo')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      setPerfil((prev) => prev ? { ...prev, cargo: cargoData?.cargo ?? 'jogador' } : null);
+    } catch (err) {
+      console.error('[PerfilContext] Erro ao atualizar cargo:', err);
+    }
+  }, [user, perfil]);
+
   return (
-    <PerfilContext.Provider value={{ perfil, loading, refetch: carregarPerfil, desvincular }}>
+    <PerfilContext.Provider value={{ perfil, loading, refetch: carregarPerfil, refetchCargo, desvincular }}>
       {children}
     </PerfilContext.Provider>
   );

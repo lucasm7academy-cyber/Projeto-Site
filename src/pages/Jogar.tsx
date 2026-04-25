@@ -9,8 +9,8 @@ import {
 } from 'lucide-react';
 import {
   MODOS_JOGO, OPCOES_ELO, OPCOES_MPOINTS, getModoInfo, getMPointsInfo,
-  getMaxJogadoresPorModo, type ModoJogo,
-} from '../components/partidas/salaConfig';
+  getMaxJogadoresPorModo, type ModoJogo, type Sala,
+} from '../api/salamod1';
 import { criarSala } from '../api/salamod1';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -803,7 +803,7 @@ const Jogar = () => {
                 const modoInfo = getModoInfo(sala.modo);
                 const mpInfo = getMPointsInfo(sala.mpoints);
                 const estaCheia = (sala.jogadores || []).length >= sala.maxJogadores;
-                const jaEsta = (sala.jogadores || []).some(j => j.id === usuarioAtual.id);
+                const jaEsta = (sala.jogadores || []).some((j: any) => j.id === usuarioAtual.id);
 
                 return (
                   <div

@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { X, ShieldCheck, Medal, Calendar, Activity, Users, TrendingUp, Trophy, Gamepad2 } from 'lucide-react';
-import { buscarOuAtualizarStats } from '../../api/player';
-import { buildChampionIconUrl, buildProfileIconUrl } from '../../api/riot';
+import { X, ShieldCheck, Medal, Calendar, Users, TrendingUp, Trophy, Gamepad2 } from 'lucide-react';
+import { buildProfileIconUrl, buildChampionIconUrl } from '../../api/riot';
 
-// Tipos que precisam ser exportados
+// ── Tipos ──────────────────────────────────────────
 export type Role = 'TOP' | 'JG' | 'MID' | 'ADC' | 'SUP' | 'RES';
 export type EloType = 'Ferro' | 'Bronze' | 'Prata' | 'Ouro' | 'Platina' | 'Esmeralda' | 'Diamante' | 'Mestre' | 'Grão-Mestre' | 'Desafiante';
 
@@ -33,11 +32,11 @@ export interface Jogador {
   timeColor?: string;
   timeLogo?: string;
   timeId?: string | number;
-  mp?: number; // M7 Points (ranking)
-  mc?: number; // M7 Coins (moeda)
+  mp?: number;
+  mc?: number;
 }
 
-// Configurações que precisam ser exportadas
+// ── Configurações ──────────────────────────────────
 export const ROLE_CONFIG: Record<Role, { label: string; img: string; color: string; bg: string }> = {
   TOP: { label: 'TOP', img: '/lanes_brancas/Top_iconB.png', color: 'text-red-400', bg: 'bg-red-400/10' },
   JG: { label: 'JG', img: '/lanes_brancas/Jungle_iconB.png', color: 'text-green-400', bg: 'bg-green-400/10' },
@@ -70,31 +69,31 @@ export const TIER_MAP: Record<string, EloType> = {
 
 export const getIconeUrl = (iconeId: number) => buildProfileIconUrl(iconeId);
 
-// Componente ModalBase
-const ModalBase = ({ onClose, children, title, gradientFrom = '#FFB700' }: { 
-  onClose: () => void; 
-  children: React.ReactNode; 
+// ── ModalBase ───────────────────────────────────────
+const ModalBase = ({ onClose, children, title, gradientFrom = '#FFB700' }: {
+  onClose: () => void;
+  children: React.ReactNode;
   title?: string;
   gradientFrom?: string;
 }) => (
-  <motion.div 
-    initial={{ opacity: 0 }} 
-    animate={{ opacity: 1 }} 
-    exit={{ opacity: 0 }} 
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
     className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
     onClick={onClose}
   >
-    <motion.div 
+    <motion.div
       initial={{ opacity: 0, scale: 0.92, y: 20 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.92, y: 20 }}
       transition={{ type: 'spring', stiffness: 340, damping: 28 }}
       className="relative w-full max-w-2xl rounded-2xl overflow-hidden"
-      style={{ 
-        background: '#0d0d0d', 
+      style={{
+        background: '#0d0d0d',
         border: `2px solid transparent`,
         backgroundImage: `linear-gradient(#0d0d0d, #0d0d0d) padding-box, linear-gradient(135deg, ${gradientFrom}, ${gradientFrom}80) border-box`,
-        boxShadow: `0 0 45px -10px ${gradientFrom}60`
+        boxShadow: `0 0 45px -10px ${gradientFrom}60`,
       }}
       onClick={(e) => e.stopPropagation()}
     >
@@ -111,47 +110,19 @@ const ModalBase = ({ onClose, children, title, gradientFrom = '#FFB700' }: {
   </motion.div>
 );
 
-// Componente PlayerDetailModal
-export const PlayerDetailModal = ({ jogador, puuid, onClose }: { jogador: Jogador; puuid?: string; onClose: () => void }) => {
+// ── PlayerDetailModal ───────────────────────────────
+export const PlayerDetailModal = ({ jogador, onClose }: { jogador: Jogador; onClose: () => void }) => {
   const navigate = useNavigate();
-  const [liveElo, setLiveElo] = useState<{ display: string; elo: EloType; partidas: number; winRate: number } | null>(null);
-  const [loadingElo, setLoadingElo] = useState(!!puuid);
-  const [topChamps, setTopChamps] = useState<{ name: string; games: number; winrate: number }[]>([]);
-  const [loadingChamps, setLoadingChamps] = useState(!!puuid);
-
-  useEffect(() => {
-    if (!puuid) { setLoadingElo(false); setLoadingChamps(false); return; }
-
-    buscarOuAtualizarStats(puuid).then(({ soloQ, topChampions }) => {
-      if (soloQ) {
-        setLiveElo({
-          display:  soloQ.tier ? `${soloQ.tier} ${soloQ.rank} — ${soloQ.lp} LP` : 'Sem Rank',
-          elo:      TIER_MAP[soloQ.tier] ?? 'Ferro',
-          partidas: soloQ.partidas,
-          winRate:  soloQ.winRate,
-        });
-      }
-      setTopChamps(
-        topChampions.slice(0, 6).map((c) => ({ name: c.championName, games: c.games, winrate: c.winrate }))
-      );
-      setLoadingElo(false);
-      setLoadingChamps(false);
-    });
-  }, [puuid]);
-
-  const eloFinal   = liveElo?.elo ?? jogador.elo;
+  const eloFinal = jogador.elo;
   const roleConfig = ROLE_CONFIG[jogador.rolePrincipal];
-  const eloStyle   = ELO_STYLES[eloFinal];
-  const partidas   = liveElo?.partidas ?? jogador.partidas;
-  const winRate    = liveElo?.winRate  ?? jogador.winRate;
-  const winRateColor = winRate >= 50 ? '#4ade80' : '#ef4444';
-  
+  const eloStyle = ELO_STYLES[eloFinal];
+  const winRateColor = jogador.winRate >= 50 ? '#4ade80' : '#ef4444';
+
   return (
     <ModalBase onClose={onClose} title={jogador.nome} gradientFrom={eloStyle.border}>
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between gap-4">
-          {/* Esquerda: avatar + info */}
           <div className="flex items-center gap-4 min-w-0">
             <div className="relative shrink-0">
               <div className="absolute inset-0 rounded-full blur-xl" style={{ background: eloStyle.border }} />
@@ -165,21 +136,18 @@ export const PlayerDetailModal = ({ jogador, puuid, onClose }: { jogador: Jogado
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="text-xl font-black text-white truncate">{jogador.nome}</h3>
-                {jogador.isVerified && (
-                  <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: eloStyle.border }} />
-                )}
+                {jogador.isVerified && <ShieldCheck className="w-4 h-4 shrink-0" style={{ color: eloStyle.border }} />}
               </div>
               <p className="text-white/40 text-sm mb-2 truncate">{jogador.riotId}</p>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${eloStyle.bg} ${eloStyle.text}`}>
-                  {loadingElo ? '...' : (liveElo?.display ?? `${eloFinal}`)}
+                  {eloFinal} {jogador.eloPontos ? `${jogador.eloPontos} LP` : ''}
                 </span>
                 <span className="text-white/40 text-xs">Nível {jogador.nivel}</span>
               </div>
             </div>
           </div>
 
-          {/* Direita: logo/tag do time (se existir) */}
           {(jogador.timeLogo || jogador.timeTag) && (
             <div
               className={`flex flex-col items-center gap-1.5 shrink-0 ${jogador.timeId ? 'cursor-pointer group' : ''}`}
@@ -193,16 +161,10 @@ export const PlayerDetailModal = ({ jogador, puuid, onClose }: { jogador: Jogado
                 }}
               >
                 {jogador.timeLogo ? (
-                  <img
-                    src={jogador.timeLogo}
-                    alt={jogador.timeTag ?? 'Time'}
-                    className="w-full h-full object-cover"
-                    onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none'; }}
-                  />
+                  <img src={jogador.timeLogo} alt={jogador.timeTag ?? 'Time'} className="w-full h-full object-cover"
+                    onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none'; }} />
                 ) : (
-                  <span className="font-black text-xl tracking-widest" style={{ color: jogador.timeColor ?? '#fff' }}>
-                    {jogador.timeTag}
-                  </span>
+                  <span className="font-black text-xl tracking-widest" style={{ color: jogador.timeColor ?? '#fff' }}>{jogador.timeTag}</span>
                 )}
               </div>
               <span className="text-[11px] font-black tracking-widest group-hover:underline" style={{ color: jogador.timeColor ?? '#fff' }}>
@@ -215,11 +177,11 @@ export const PlayerDetailModal = ({ jogador, puuid, onClose }: { jogador: Jogado
         {/* Stats */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { icon: <Activity className="w-4 h-4" />, label: 'Partidas', value: loadingElo ? '...' : partidas.toLocaleString() },
-            { icon: <TrendingUp className="w-4 h-4" />, label: 'Win Rate', value: loadingElo ? '...' : `${winRate}%`, color: loadingElo ? undefined : winRateColor },
+            { icon: <Gamepad2 className="w-4 h-4" />, label: 'Partidas', value: jogador.partidas.toLocaleString() },
+            { icon: <TrendingUp className="w-4 h-4" />, label: 'Win Rate', value: `${jogador.winRate}%`, color: winRateColor },
             { icon: <Trophy className="w-4 h-4" />, label: 'Títulos', value: jogador.titulos },
             { icon: <Gamepad2 className="w-4 h-4" />, label: 'KDA', value: jogador.kda.toFixed(1) },
-            { icon: <Activity className="w-4 h-4" />, label: 'CS/min', value: jogador.csPorMinuto.toFixed(1) },
+            { icon: <Gamepad2 className="w-4 h-4" />, label: 'CS/min', value: jogador.csPorMinuto.toFixed(1) },
             { icon: <Users className="w-4 h-4" />, label: 'KP%', value: `${jogador.participacaoKill}%` },
           ].map((stat, idx) => (
             <div key={idx} className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
@@ -246,38 +208,6 @@ export const PlayerDetailModal = ({ jogador, puuid, onClose }: { jogador: Jogado
             </div>
           </div>
         </div>
-
-        {/* Campeões mais jogados */}
-        {(loadingChamps || topChamps.length > 0) && (
-          <div className="bg-white/5 rounded-xl p-4 border border-white/5">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-3">Campeões Mais Jogados</p>
-            <div className="flex gap-3">
-              {loadingChamps
-                ? Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="flex flex-col items-center gap-1.5">
-                      <div className="w-12 h-12 rounded-lg bg-white/10 animate-pulse" />
-                      <div className="h-2 w-10 bg-white/10 rounded animate-pulse" />
-                      <div className="h-2 w-6 bg-white/10 rounded animate-pulse" />
-                    </div>
-                  ))
-                : topChamps.map((champ: { name: string; games: number; winrate: number }) => (
-                    <div key={champ.name} className="flex flex-col items-center gap-1.5">
-                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/10 bg-black/40">
-                        <img
-                          src={buildChampionIconUrl(champ.name)}
-                          alt={champ.name}
-                          className="w-full h-full object-cover"
-                          onError={(e: React.SyntheticEvent<HTMLImageElement>) => { e.currentTarget.style.display = 'none'; }}
-                        />
-                      </div>
-                      <span className="text-[10px] text-white/50 font-medium truncate max-w-[48px] text-center">{champ.name}</span>
-                      <span className="text-[10px] text-white/30">{champ.games}j</span>
-                    </div>
-                  ))
-              }
-            </div>
-          </div>
-        )}
 
         {/* Conquistas */}
         <div className="bg-white/5 rounded-xl p-4 border border-white/5">

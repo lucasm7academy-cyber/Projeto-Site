@@ -11,7 +11,7 @@ import {
   ChevronRight, Medal, TrendingUp, TrendingDown, History,
   Target, Shield, Zap, Lock, Sparkles, Gem, ArrowRight
 } from 'lucide-react';
-import { getModoInfo, type ModoJogo } from '../components/partidas/salaConfig';
+import { getModoInfo, type ModoJogo } from '../api/salamod1';
 
 interface Partida {
   id: number;

@@ -1,13 +1,26 @@
 // src/api/users.ts
 // Operações relacionadas a usuários e cargos
+// ✅ VERSÃO OTIMIZADA
 
 import { supabase } from '../lib/supabase';
 import { type CargoAdmin } from '../config/adminPermissoes';
+import type { PerfilData } from '../contexts/PerfilContext';
+
+const IS_DEV = import.meta.env.DEV;
 
 // ============================================================
-// BUSCAR CARGO DO USUÁRIO
+// BUSCAR CARGO DO USUÁRIO (com fallback e cache opcional)
 // ============================================================
-export async function buscarCargoUsuario(userId: string): Promise<CargoAdmin | null> {
+export async function buscarCargoUsuario(
+  userId: string,
+  perfil?: PerfilData | null
+): Promise<CargoAdmin | null> {
+  // ✅ Se já temos o perfil e ele tem cargo, usa cache
+  if (perfil?.cargo && perfil.cargo !== 'jogador') {
+    if (IS_DEV) console.log(`[buscarCargoUsuario] Usando cache do perfil: ${perfil.cargo}`);
+    return perfil.cargo as CargoAdmin;
+  }
+
   try {
     const { data, error } = await supabase
       .from('admin_usuarios')
@@ -15,36 +28,33 @@ export async function buscarCargoUsuario(userId: string): Promise<CargoAdmin | n
       .eq('user_id', userId)
       .maybeSingle();
 
-    console.log(`[buscarCargoUsuario] userId: ${userId}, data:`, data, 'error:', error);
+    if (IS_DEV) console.log(`[buscarCargoUsuario] userId: ${userId}, cargo:`, data?.cargo);
 
     if (error || !data) {
-      // Usuário não é admin — retorna 'jogador' como padrão
-      console.log(`[buscarCargoUsuario] Retornando 'jogador' por padrão`);
       return 'jogador';
     }
 
-    const cargo = (data.cargo as CargoAdmin) ?? 'jogador';
-    console.log(`[buscarCargoUsuario] Cargo encontrado: ${cargo}`);
-    return cargo;
+    return (data.cargo as CargoAdmin) ?? 'jogador';
   } catch (error) {
-    console.error('Erro ao buscar cargo do usuário:', error);
+    if (IS_DEV) console.error('Erro ao buscar cargo do usuário:', error);
     return 'jogador';
   }
 }
 
 // ============================================================
-// VERIFICAR SE USUÁRIO TEM PERMISSÃO
+// VERIFICAR SE USUÁRIO TEM PERMISSÃO (com cache opcional)
 // ============================================================
 export async function temPermissaoPartida(
   userId: string,
   permissao: 'verCodigoPartida',
+  perfil?: PerfilData | null
 ): Promise<boolean> {
   try {
     const { temPermissao } = await import('../config/adminPermissoes');
-    const cargo = await buscarCargoUsuario(userId);
+    const cargo = await buscarCargoUsuario(userId, perfil);
     return temPermissao(cargo, permissao);
   } catch (error) {
-    console.error('Erro ao verificar permissão:', error);
+    if (IS_DEV) console.error('Erro ao verificar permissão:', error);
     return false;
   }
 }

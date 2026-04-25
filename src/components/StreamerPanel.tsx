@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Tv2, Send } from 'lucide-react';
+import { Tv2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { usePerfilSafe } from '../contexts/PerfilContext';
 
 interface StreamerPanelProps {
   usuarioId: string;
@@ -18,61 +19,40 @@ export function StreamerPanel({
   isTransmitting,
   onStatusChange,
 }: StreamerPanelProps) {
+  const { perfil } = usePerfilSafe();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleToggleStream = async () => {
+    if (!perfil || perfil.cargo !== 'streamer') return;
     setIsLoading(true);
     try {
-      // Buscar canal Twitch do usuário
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('twitch')
-        .eq('id', usuarioId)
-        .maybeSingle();
-
-      const twitchChannel = (profile as any)?.twitch;
-      if (!twitchChannel) {
-        alert('Você precisa cadastrar um canal Twitch no seu perfil');
-        return;
-      }
-
       if (isTransmitting) {
-        // Desativar transmissão
-        const { data: existing } = await supabase
+        await supabase
           .from('sala_streams')
-          .select('id')
+          .delete()
           .eq('sala_id', salaId)
-          .eq('user_id', usuarioId)
-          .maybeSingle();
-
-        if (existing) {
-          await supabase
-            .from('sala_streams')
-            .delete()
-            .eq('id', existing.id);
-        }
+          .eq('user_id', usuarioId);
         onStatusChange?.(false);
       } else {
-        // Ativar transmissão
         const { error } = await supabase
           .from('sala_streams')
           .insert({
             sala_id: salaId,
             user_id: usuarioId,
-            twitch_channel: twitchChannel,
+            twitch_channel: perfil.riotId || perfil.nome,
             ativo: true,
           });
-
         if (error) throw error;
         onStatusChange?.(true);
       }
     } catch (error) {
       console.error('Erro ao alternar transmissão:', error);
-      alert('Erro ao alternar transmissão');
     } finally {
       setIsLoading(false);
     }
   };
+
+  if (!perfil || perfil.cargo !== 'streamer') return null;
 
   return (
     <motion.div
