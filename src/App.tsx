@@ -12,6 +12,7 @@ import Jogar from "./pages/Jogar";
 import SalaPage from "./pages/SalaPage";
 import { VerificacaoProvider } from './contexts/VerificacaoContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { PerfilProvider } from './contexts/PerfilContext';
 import VerificacaoStatus from './components/VerificacaoStatus';
 import ResetHandler from "./pages/ResetHandler";
 
