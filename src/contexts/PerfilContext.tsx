@@ -53,7 +53,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     try {
-      const [{ data: contaRiot }, { data: profile }, { data: saldoData }, { data: cargoData }] = await Promise.all([
+      const [{ data: contaRiot }, { data: profile }, { data: saldoData }] = await Promise.all([
         supabase
           .from('contas_riot')
           .select('riot_id, profile_icon_id, elo_cache')
@@ -69,12 +69,21 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
           .select('saldo')
           .eq('user_id', user.id)
           .maybeSingle(),
-        supabase
+      ]);
+
+      // Puxar cargo só se existir (não jogador padrão) - reduz queries
+      let cargoData = null;
+      try {
+        const { data } = await supabase
           .from('admin_usuarios')
           .select('cargo')
           .eq('user_id', user.id)
-          .maybeSingle(),
-      ]);
+          .maybeSingle();
+        cargoData = data;
+      } catch (err) {
+        // Ignorar erro - cargo padrão é jogador
+        console.debug('[PerfilContext] Cargo não encontrado, usando padrão');
+      }
 
       if (contaRiot) {
         const [nome, tag] = (contaRiot.riot_id || '').split('#');
@@ -107,7 +116,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      // Realtime subscriptions para manter dados atualizados
+      // Realtime subscription apenas para saldos (cargo exige F5 do user)
       const saldosChannel = supabase
         .channel(`saldos-user-${user.id}`)
         .on('postgres_changes', {
@@ -120,21 +129,8 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
         })
         .subscribe();
 
-      const cargoChannel = supabase
-        .channel(`cargo-user-${user.id}`)
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'admin_usuarios',
-          filter: `user_id=eq.${user.id}`,
-        }, (payload: any) => {
-          setPerfil((prev) => prev ? { ...prev, cargo: payload.new.cargo } : null);
-        })
-        .subscribe();
-
       return () => {
         supabase.removeChannel(saldosChannel);
-        supabase.removeChannel(cargoChannel);
       };
     } catch (err) {
       console.error('[PerfilContext] Erro ao carregar perfil:', err);
