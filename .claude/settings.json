@@ -7,7 +7,8 @@
       "Bash(xargs grep *)",
       "Bash(grep -v '//')",
       "Bash(git config *)",
-      "Read(//c/Users/78787/**)"
+      "Read(//c/Users/78787/**)",
+      "Bash(git checkout *)"
     ]
   }
 }

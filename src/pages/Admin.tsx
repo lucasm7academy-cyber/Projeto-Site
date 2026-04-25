@@ -10,7 +10,6 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { atualizarPontosPartida } from '../api/player';
-import { resolverPartidaTravada, deletarSala, buscarSalaCompleta } from '../api/salas';
 import {
   type CargoAdmin,
   CARGO_LABELS, CARGO_COLORS,
@@ -329,21 +328,42 @@ function AbaSalas({ adminCargo }: { adminCargo: CargoAdmin }) {
         setPopup({ tipo: 'sucesso', msg: 'Sala deletada com sucesso!' });
       } else {
         // Buscar dados completos da sala com jogadores
-        const salaCompleta = await buscarSalaCompleta(confirmacao.salaId);
-        if (!salaCompleta) throw new Error('Sala não encontrada');
+        const { data: salaData, error: salaErr } = await supabase
+          .from('salas')
+          .select('*, sala_jogadores(*)')
+          .eq('id', confirmacao.salaId)
+          .single();
 
-        const { sucesso, erro } = await resolverPartidaTravada(
-          confirmacao.salaId,
-          confirmacao.vencedor || 'cancelada',
-          salaCompleta.modo,
-          salaCompleta.jogadores.map(j => ({
-            id: j.id,
-            nome: j.nome,
-            isTimeA: j.isTimeA,
-            role: j.role,
-          }))
-        );
-        if (!sucesso) throw new Error(erro || 'Erro ao resolver');
+        if (salaErr || !salaData) throw new Error('Sala não encontrada');
+
+        // 1. Atualizar pontos se não foi cancelado
+        if (confirmacao.vencedor !== 'cancelada') {
+          try {
+            await atualizarPontosPartida({
+              salaId: confirmacao.salaId,
+              modo: salaData.modo,
+              vencedor: confirmacao.vencedor || 'time_a',
+              jogadores: (salaData.sala_jogadores || []).map((j: any) => ({
+                userId: j.user_id,
+                isTimeA: j.is_time_a,
+                nome: j.nome,
+              })),
+            });
+          } catch (e) {
+            console.warn('Erro ao atualizar pontos:', e);
+          }
+        }
+
+        // 3. Encerrar sala
+        await supabase.from('salas').update({
+          estado: 'encerrada',
+          vencedor: confirmacao.vencedor === 'cancelada' ? null : (confirmacao.vencedor === 'time_a' ? 'A' : 'B'),
+          updated_at: new Date().toISOString(),
+        }).eq('id', confirmacao.salaId);
+
+        // 4. Desvinculação completa
+        await supabase.from('sala_jogadores').delete().eq('sala_id', confirmacao.salaId);
+
         setPopup({ tipo: 'sucesso', msg: 'Sala finalizada com sucesso!' });
       }
       carregar();
@@ -656,22 +676,39 @@ function AbaPartidasTravadas({ adminCargo }: { adminCargo: CargoAdmin }) {
     setResolvendo(confirmacao.salaId);
     const partida = partidas.find(p => p.id === confirmacao.salaId)!;
 
-    const { sucesso, erro } = await resolverPartidaTravada(
-      confirmacao.salaId,
-      vencedor,
-      partida.modo,
-      partida.jogadores
-    );
+    try {
+      // Atualizar pontos se não foi cancelado
+      if (vencedor !== 'cancelada') {
+        await atualizarPontosPartida({
+          salaId: confirmacao.salaId,
+          modo: partida.modo,
+          vencedor,
+          jogadores: partida.jogadores.map((j: any) => ({
+            userId: j.id,
+            isTimeA: j.isTimeA,
+            nome: j.nome,
+          })),
+        }).catch(() => {});
+      }
+
+      // Encerrar sala
+      await supabase.from('salas').update({
+        estado: 'encerrada',
+        vencedor: vencedor === 'cancelada' ? null : (vencedor === 'time_a' ? 'A' : 'B'),
+        updated_at: new Date().toISOString(),
+      }).eq('id', confirmacao.salaId);
+
+      // Desvinculação completa
+      await supabase.from('sala_jogadores').delete().eq('sala_id', confirmacao.salaId);
+
+      setPopup({ tipo: 'sucesso', msg: vencedor === 'cancelada' ? 'Partida cancelada!' : `${vencedor === 'time_a' ? 'Time A' : 'Time B'} definido como vencedor!` });
+      carregar();
+    } catch (err: any) {
+      setPopup({ tipo: 'erro', msg: err?.message || 'Erro ao resolver partida' });
+    }
 
     setResolvendo(null);
     setConfirmacao(null);
-
-    if (sucesso) {
-      setPopup({ tipo: 'sucesso', msg: vencedor === 'cancelada' ? 'Partida cancelada!' : `${vencedor === 'time_a' ? 'Time A' : 'Time B'} definido como vencedor!` });
-      carregar();
-    } else {
-      setPopup({ tipo: 'erro', msg: erro || 'Erro ao resolver partida' });
-    }
     setTimeout(() => setPopup(null), 3000);
   };
 
