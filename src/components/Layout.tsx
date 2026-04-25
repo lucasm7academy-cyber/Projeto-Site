@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { buildProfileIconUrl } from '../api/riot';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -25,6 +24,8 @@ import {
 import { supabase } from '../lib/supabase';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSound } from '../hooks/useSound';
+import { useAuth } from '../contexts/AuthContext';
+import { usePerfil } from '../contexts/PerfilContext';
 import NotificationBell from './NotificationBell';
 import DepositModal from './DepositModal';
 import VipModal from './VipModal';
@@ -39,22 +40,21 @@ const getImageUrl = (fileName: string) => {
 const LOGO_URL = getImageUrl('logo-m7.png');
 
 export default function Layout() {
+  const { user, isLoading: authLoading } = useAuth(); // ✅ Única fonte do usuário
+  const { perfil } = usePerfil(); // ✅ Dados da conta Riot
   const navigate = useNavigate();
   const location = useLocation();
   const isSalaPage = location.pathname.startsWith('/sala/');
   const isDraftPage = location.pathname.startsWith('/draft/');
-  const isGamePage = isSalaPage || isDraftPage; // Colapsível em salas e drafts
+  const isGamePage = isSalaPage || isDraftPage;
   const { playSound } = useSound();
+  
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(!isGamePage); // Começa fechada em salas
+  const [isSidebarOpen, setIsSidebarOpen] = useState(!isGamePage);
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [isVipModalOpen, setIsVipModalOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [contaRiot, setContaRiot] = useState<any>(null);
-  const [balance, setBalance] = useState(0);
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [hideLinkPrompt, setHideLinkPrompt] = useState(false);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const navigateWithSound = (path: string) => {
@@ -64,84 +64,22 @@ export default function Layout() {
 
   const handleLogoutWithSound = async () => {
     playSound('click');
-    if (supabase) {
-      await supabase.auth.signOut();
-    }
+    await supabase.auth.signOut();
     navigate('/');
   };
 
-  // Fechar sidebar ao entrar em página de jogo
+  // ✅ Fechar sidebar ao entrar em página de jogo
   useEffect(() => {
-    if (isGamePage) {
-      setIsSidebarOpen(false);
-    } else {
-      setIsSidebarOpen(true);
-    }
+    setIsSidebarOpen(!isGamePage);
   }, [isGamePage]);
 
+  // ✅ Fechar dropdown ao clicar fora
   useEffect(() => {
-    let userRef: any = null;
-    let saldoChannel: ReturnType<typeof supabase.channel> | null = null;
-
-    // 🛡️ Carregar dados QUANDO houver sessão (via auth listener)
-    const carregarDados = async (user: any) => {
-      if (!user) {
-        setLoadingUser(false);
-        return;
-      }
-
-      const [{ data: saldoData }, { data: riotData }] = await Promise.all([
-        supabase.from('saldos').select('saldo').eq('user_id', user.id).maybeSingle(),
-        supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle(),
-      ]);
-
-      if (saldoData) setBalance(saldoData.saldo ?? 0);
-      setContaRiot(riotData);
-      setLoadingUser(false);
-    };
-
-    // 🛡️ Usar onAuthStateChange como única fonte de verdade (evita getSession duplicada)
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session: any) => {
-      userRef = session?.user ?? null;
-      setUser(userRef);
-      if (event === 'SIGNED_OUT') navigate('/');
-
-      // 🛡️ Setup realtime AQUI com a sessão que já temos
-      if (userRef?.id) {
-        if (saldoChannel) supabase.removeChannel(saldoChannel);
-        saldoChannel = supabase
-          .channel(`saldo_${userRef.id}`)
-        .on('postgres_changes', {
-          event: 'UPDATE', schema: 'public', table: 'saldos',
-          filter: `user_id=eq.${userRef.id}`,
-        }, (payload) => {
-          setBalance((payload.new as any).saldo ?? 0);
-        })
-        .on('postgres_changes', {
-          event: 'INSERT', schema: 'public', table: 'saldos',
-          filter: `user_id=eq.${userRef.id}`,
-        }, (payload) => {
-          setBalance((payload.new as any).saldo ?? 0);
-        })
-        .subscribe();
-      }
-
-      // Carregar dados do usuário quando houver sessão
-      carregarDados(userRef);
-    });
-
-    return () => {
-      authListener.subscription.unsubscribe();
-      if (saldoChannel) supabase.removeChannel(saldoChannel);
-    };
-  }, [navigate]);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
       }
-    }
+    };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
@@ -165,26 +103,27 @@ export default function Layout() {
     { label: 'Políticas', icon: ShieldCheck, path: '/politicas' },
   ];
 
-  // Em salas/drafts: colapsível em qualquer tamanho | Fora de salas: padrão responsivo
   const sidebarWidths = isGamePage
     ? `${isSidebarOpen ? 'w-[220px] xl:w-[240px] 2xl:w-[200px]' : 'w-0'} shrink-0 transition-all duration-300 ease-out`
     : "hidden lg:flex lg:w-[220px] xl:w-[240px] 2xl:w-[200px] shrink-0";
 
-  const riotIconUrl = contaRiot?.profile_icon_id
-    ? buildProfileIconUrl(contaRiot.profile_icon_id)
-    : null;
+  // Loading inicial
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#050506] flex items-center justify-center">
+        <div className="animate-pulse text-primary">Carregando...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#050506]">
-      {/* Header Responsivo */}
+      {/* Header */}
       <header className="bg-black/60 backdrop-blur-sm fixed top-0 z-50 w-full h-14 md:h-16 border-b border-primary shadow-lg">
-        {/* Linha amarela na base */}
         <div className="absolute bottom-0 left-0 w-full h-0 bg-primary shadow-[0_0_10px_rgba(255,255,0,0.5)] z-50"></div>
         
         <div className="flex justify-between items-center h-full px-3 md:px-6">
-          {/* Lado esquerdo - Mobile: apenas menu hambúrguer | Desktop: menu + logo + nome + bem-vindo */}
           <div className="flex items-center gap-2 md:gap-4">
-            {/* Menu Hamburguer - visível em mobile/tablet OU sidebar toggle em salas */}
             <button
               className={`text-white/80 hover:text-primary transition-colors p-1.5 md:p-2 rounded-lg hover:bg-white/5 ${isGamePage ? '' : 'lg:hidden'}`}
               onClick={() => {
@@ -195,12 +134,10 @@ export default function Layout() {
                   setIsMobileMenuOpen(!isMobileMenuOpen);
                 }
               }}
-              title={isGamePage ? 'Toggle Sidebar' : 'Menu'}
             >
               <Menu size={18} className="md:w-5 md:h-5" />
             </button>
 
-            {/* Logo e Nome - APENAS DESKTOP (lg pra cima) */}
             <Link 
               to="/lobby" 
               onClick={() => playSound('click')}
@@ -223,18 +160,17 @@ export default function Layout() {
               </div>
             </Link>
           
-            {/* Bem-vindo - apenas desktop grande */}
             <div className="hidden xl:flex items-center gap-3 ml-2">
               <div className="w-[1px] h-5 bg-white/20"></div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
-                  {loadingUser ? (
+                  {!perfil ? (
                     <div className="h-4 w-36 bg-white/10 rounded animate-pulse" />
                   ) : (
                     <h2 className="font-body text-sm font-light tracking-wide">
                       <span className="text-primary font-semibold">Bem-vindo,</span>
                       <span className="text-white/80 ml-1">
-                        {contaRiot ? contaRiot.riot_id?.split('#')[0] : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jogador')}
+                        {perfil.riotId ? perfil.riotId.split('#')[0] : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jogador')}
                       </span>
                     </h2>
                   )}
@@ -243,10 +179,8 @@ export default function Layout() {
             </div>
           </div>
 
-          {/* Lado direito - elementos responsivos */}
           <div className="flex items-center gap-2 md:gap-3 lg:gap-5">
-            {/* Saldo */}
-            <button 
+            <button
               onClick={() => playSound('click')}
               className="flex items-center gap-1 md:gap-2 px-2 md:px-3 py-1 md:py-1.5 bg-black/40 backdrop-blur-sm border border-white/10 rounded-full hover:border-primary/30 transition-all duration-150"
             >
@@ -254,11 +188,10 @@ export default function Layout() {
                 <Wallet className="text-primary w-3 h-3 md:w-3.5 md:h-3.5" />
               </div>
               <span className="text-xs md:text-sm font-bold text-white tracking-tight">
-                MC {balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                MC {(perfil?.saldo ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </span>
             </button>
 
-            {/* Botão Depositar - Mobile: "DEP" | Desktop: "DEPOSITAR" */}
             <button 
               onClick={() => {
                 playSound('click');
@@ -271,124 +204,89 @@ export default function Layout() {
               <span className="sm:hidden">Carteira</span>
             </button>
 
-            {/* Notification Bell */}
-            <div>
-              <NotificationBell />
-            </div>
+            <NotificationBell />
+            {/* ✅ ADICIONAR O PERFIL COM SETA AQUI ✅ */}
+  <div className="relative" ref={dropdownRef}>
+    <button
+      onClick={() => setIsProfileOpen(!isProfileOpen)}
+      className="relative group flex items-center gap-1 md:gap-2 p-0.5 md:p-1 rounded-xl hover:bg-white/5 transition-all"
+    >
+      <div className="relative">
+        <div className="relative w-7 h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 rounded-full overflow-hidden border-2 border-primary shadow-[0_0_10px_rgba(255,255,0,0.3)]">
+          {!perfil ? (
+            <div className="w-full h-full bg-white/10 animate-pulse" />
+          ) : (
+            <img
+              alt="Avatar"
+              className="w-full h-full object-cover"
+              src={perfil.avatar || user?.user_metadata?.avatar_url || "https://ui-avatars.com/api/?background=FFB800&color=000&name=User"}
+            />
+          )}
+        </div>
+      </div>
+      {/* SETA PARA BAIXO */}
+      <ChevronDown className="text-white/40 w-2.5 h-2.5 md:w-3 md:h-3 lg:w-3.5 lg:h-3.5 group-hover:text-primary transition-colors" />
+    </button>
 
-            {/* Profile Dropdown */}
-            <div className="relative ml-0 md:ml-1" ref={dropdownRef}>
+    {/* Dropdown Menu */}
+    <AnimatePresence>
+      {isProfileOpen && (
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 10 }}
+          className="absolute right-0 mt-2 w-72 bg-[#0a0b0f]/95 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden z-[60]"
+        >
+          <div className="flex flex-col items-center pt-6 pb-4 px-4">
+            <div className="w-16 h-16 rounded-full border-2 border-primary overflow-hidden">
+              <img src={perfil?.avatar || user?.user_metadata?.avatar_url} className="w-full h-full object-cover" />
+            </div>
+            <h2 className="text-white font-bold text-base mt-3">
+              {perfil?.riotId || user?.email?.split('@')[0] || 'Jogador'}
+            </h2>
+            {perfil?.elo && perfil.elo !== 'Sem Elo' && (
+              <p className="text-primary text-xs uppercase font-semibold">{perfil.elo}</p>
+            )}
+          </div>
+
+          <div className="px-3 pb-5 space-y-1">
+            {profileMenuItems.map((item) => (
               <button 
+                key={item.label}
                 onClick={() => {
-                  playSound('click');
-                  setIsProfileOpen(!isProfileOpen);
+                  navigateWithSound(item.path);
+                  setIsProfileOpen(false);
                 }}
-                className="relative group flex items-center gap-1 md:gap-2 p-0.5 md:p-1 rounded-xl hover:bg-white/5 transition-all"
+                className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-white/70 hover:text-primary hover:bg-white/5 transition-all"
               >
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-full bg-primary/20 blur-md group-hover:blur-lg transition-all"></div>
-                  {loadingUser ? (
-                    <div className="relative w-7 h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 rounded-full bg-white/10 animate-pulse border-2 border-primary/30" />
-                  ) : (
-                    <div className="relative w-7 h-7 md:w-8 md:h-8 lg:w-9 lg:h-9 rounded-full overflow-hidden border-2 border-primary shadow-[0_0_10px_rgba(255,255,0,0.3)] transition-all hover:scale-105">
-                      <img
-                        alt="User Profile Avatar"
-                        className="w-full h-full object-cover"
-                        src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
-                        onError={(e) => {
-                          e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <ChevronDown className="text-white/40 w-2.5 h-2.5 md:w-3 md:h-3 lg:w-3.5 lg:h-3.5 group-hover:text-primary transition-colors" />
+                <item.icon className="w-4 h-4" />
+                <span className="text-sm">{item.label}</span>
               </button>
+            ))}
+            <div className="h-px bg-white/10 my-2"></div>
+            <button 
+              onClick={handleLogoutWithSound}
+              className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all"
+            >
+              <LogOut className="w-4 h-4" />
+              <span className="text-sm">Sair</span>
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  </div>
 
-              <AnimatePresence>
-                {isProfileOpen && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 10 }}
-                    transition={{ duration: 0.1 }}
-                    className="absolute right-0 mt-2 w-72 md:w-80 bg-[#0a0b0f]/95 backdrop-blur-xl border border-white/10 shadow-2xl z-[60] rounded-2xl overflow-hidden"
-                  >
-                    <div className="relative">
-                      <div className="absolute top-0 left-0 w-full h-20 bg-gradient-to-b from-primary/20 to-transparent"></div>
-                      <div className="flex flex-col items-center pt-6 pb-4 px-4 relative">
-                        <div className="w-16 h-16 md:w-20 md:h-20 rounded-full border-3 border-primary overflow-hidden shadow-xl shadow-primary/30">
-                          <img 
-                            alt="User Profile Avatar" 
-                            className="w-full h-full object-cover" 
-                            src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
-                          />
-                        </div>
-                        <div className="mt-3 text-center">
-                          {loadingUser ? (
-                            <>
-                              <div className="h-5 w-32 bg-white/10 rounded animate-pulse mx-auto" />
-                              <div className="h-3 w-20 bg-white/10 rounded animate-pulse mx-auto mt-2" />
-                            </>
-                          ) : (
-                            <>
-                              <h2 className="text-white font-headline font-bold text-base md:text-lg">
-                                {contaRiot ? contaRiot.riot_id : (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Jogador')}
-                              </h2>
-                              {contaRiot ? (
-                                <p className="text-primary font-headline text-xs md:text-sm tracking-[0.1em] uppercase font-semibold mt-1">
-                                  {contaRiot.elo || 'SEM RANQUEADA'}
-                                </p>
-                              ) : (
-                                <p className="text-white/40 font-headline text-[10px] md:text-xs tracking-[0.1em] uppercase mt-1">
-                                  Conta riot não vinculada
-                                </p>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="px-3 pb-5 space-y-1">
-                      {profileMenuItems.map((item) => (
-                        <button 
-                          key={item.label}
-                          onClick={() => {
-                            playSound('click');
-                            navigateWithSound(item.path);
-                            setIsProfileOpen(false);
-                          }}
-                          className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-white/70 hover:text-primary hover:bg-white/5 transition-all group text-left"
-                        >
-                          <item.icon className="w-4 h-4 opacity-60 group-hover:opacity-100 group-hover:text-primary transition-all" />
-                          <span className="text-sm font-body font-medium">{item.label}</span>
-                        </button>
-                      ))}
-                      <div className="h-px bg-white/10 my-2"></div>
-                      <button 
-                        onClick={handleLogoutWithSound}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-red-400/80 hover:text-red-400 hover:bg-red-500/10 transition-all group"
-                      >
-                        <LogOut className="w-4 h-4 opacity-60 group-hover:opacity-100" />
-                        <span className="text-sm font-body font-medium">Sair</span>
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
           </div>
         </div>
       </header>
+      
 
-      {/* Layout Principal */}
       <div className="flex h-full pt-14 md:pt-16">
         {/* Sidebar Desktop */}
         <aside className={`${sidebarWidths} ${isGamePage ? 'flex' : 'hidden lg:flex'} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex-col z-[50] h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 overflow-hidden`}>
-          {/* Top Section - Profile/Link */}
           <div className="py-6 px-3 relative z-[60]">
-            {contaRiot ? (
+            {perfil?.contaVinculada ? (
               <Link
                 to="/perfil"
                 onClick={() => playSound('click')}
@@ -400,7 +298,7 @@ export default function Layout() {
                     <img
                       alt="User Profile Avatar"
                       className="w-full h-full object-cover transition-transform duration-500 group-hover/profile:scale-110"
-                      src={riotIconUrl || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
+                      src={perfil.avatar || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
                       onError={(e) => {
                         e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
                       }}
@@ -409,95 +307,41 @@ export default function Layout() {
                   <div className="absolute bottom-1 right-1 w-3.5 h-3.5 md:w-4 md:h-4 bg-green-500 border-2 border-[#050505] rounded-full z-10 shadow-[0_0_8px_rgba(34,197,94,0.3)]"></div>
                 </div>
                 <h3 className="text-white font-headline font-bold text-xs text-center transition-colors truncate max-w-full px-2">
-                  {contaRiot.riot_id}
+                  {perfil.riotId?.split('#')[0]}
                 </h3>
               </Link>
             ) : (
               <>
-                {createPortal(
-                  user && !contaRiot && !loadingUser && (
+                {user && perfil && !perfil.contaVinculada && (
+                  <Link
+                    to="/vincular"
+                    onClick={() => playSound('click')}
+                    className="block w-full"
+                  >
                     <motion.div
-                      initial={{ opacity: 0, x: -20, scale: 0.9 }}
                       animate={{
-                        opacity: 1,
-                        x: [0, -6, 0],
-                        scale: 1
+                        y: [0, 3, 0],
+                        boxShadow: [
+                          "0 4px 0 0 rgba(0,0,0,0.3)",
+                          "0 1px 0 0 rgba(0,0,0,0.3)",
+                          "0 4px 0 0 rgba(0,0,0,0.3)"
+                        ]
                       }}
                       transition={{
-                        x: {
-                          duration: 1.5,
-                          repeat: Infinity,
-                          ease: "easeInOut"
-                        },
-                        opacity: { duration: 0.3 },
-                        scale: { duration: 0.3 }
+                        duration: 1.5,
+                        repeat: Infinity,
+                        ease: "easeInOut"
                       }}
-                      className="fixed left-[200px] top-20 w-52 z-[9999]"
+                      className="bg-primary text-black text-[10px] font-black uppercase tracking-[0.15em] py-4 px-3 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2 border-b-4 border-black/20"
                     >
-                      <div className="bg-[#1a1b23] border-2 border-primary/50 rounded-2xl p-3 shadow-[0_0_30px_rgba(255,255,0,0.25)] relative flex items-center gap-3">
-                        <motion.img
-                          src="/images/poro1.png"
-                          alt="Poro"
-                          className="w-14 h-14 object-contain shrink-0"
-                          animate={{
-                            scale: [1, 1.15, 1, 1.15, 1, 1],
-                          }}
-                          transition={{
-                            duration: 2.5,
-                            times: [0, 0.1, 0.2, 0.3, 0.4, 1],
-                            repeat: Infinity,
-                            ease: "easeInOut"
-                          }}
-                        />
-                        <div className="text-left">
-                          <p
-                            className="text-[10px] font-black uppercase tracking-tighter text-white leading-tight"
-                            style={{
-                              textShadow: '1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000'
-                            }}
-                          >
-                            Ei, você ainda não<br/>
-                            vinculou sua conta.
-                          </p>
-                        </div>
-                        <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-[#1a1b23] border-l-2 border-b-2 border-primary/50 rotate-45 z-0"></div>
-                      </div>
+                      <span className="leading-tight text-[10px]">Vincular Conta Riot</span>
                     </motion.div>
-                  ),
-                  document.body
+                  </Link>
                 )}
-                <Link
-                  to="/vincular"
-                  onClick={() => {
-                    playSound('click');
-                    setHideLinkPrompt(true);
-                  }}
-                  className="block w-full"
-                >
-                  <motion.div
-                    animate={{
-                      y: [0, 3, 0],
-                      boxShadow: [
-                        "0 4px 0 0 rgba(0,0,0,0.3)",
-                        "0 1px 0 0 rgba(0,0,0,0.3)",
-                        "0 4px 0 0 rgba(0,0,0,0.3)"
-                      ]
-                    }}
-                    transition={{
-                      duration: 1.5,
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                    className="bg-primary text-black text-[10px] font-black uppercase tracking-[0.15em] py-4 px-3 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2 border-b-4 border-black/20"
-                  >
-                    <span className="leading-tight text-[10px]">Vincular Conta Riot</span>
-                  </motion.div>
-                </Link>
               </>
             )}
           </div>
 
-          {/* Middle Section - Navigation (Scrollable) */}
           <div className="flex-1 overflow-y-auto px-2 custom-scrollbar">
             <nav className="space-y-1">
               {navItems.map((item) => {
@@ -527,7 +371,6 @@ export default function Layout() {
             </nav>
           </div>
 
-          {/* Bottom Section - Actions (Non-scrolling) */}
           <div className="px-3 py-6 space-y-3 border-t border-white/5">
             <button
               onClick={() => {
@@ -586,83 +429,26 @@ export default function Layout() {
                   </button>
                 </div>
                 
-                {/* Perfil Mobile */}
-                {contaRiot ? (
+                {perfil?.contaVinculada && (
                   <div className="px-5 mb-6 pb-4 border-b border-white/10">
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-primary">
-                        <img src={riotIconUrl || user?.user_metadata?.avatar_url} className="w-full h-full object-cover" alt="" />
+                        <img src={perfil.avatar || user?.user_metadata?.avatar_url} className="w-full h-full object-cover" alt="" />
                       </div>
                       <div>
-                        <p className="text-white font-bold text-sm">{contaRiot.riot_id}</p>
-                        <p className="text-primary text-[10px] uppercase">{contaRiot.elo || 'SEM RANQUEADA'}</p>
+                        <p className="text-white font-bold text-sm">{perfil.riotId?.split('#')[0]}</p>
+                        <p className="text-primary text-[10px] uppercase">{perfil.elo !== 'Sem Elo' ? perfil.elo : 'SEM RANQUEADA'}</p>
                       </div>
                     </div>
                   </div>
-                ) : (!hideLinkPrompt && location.pathname !== '/vincular') ? (
+                )}
+                {user && perfil && !perfil.contaVinculada && (
                   <div className="px-5 mb-6">
-                    {/* Poro Prompt Balloon Mobile */}
-                    <AnimatePresence>
-                      {user && !contaRiot && !loadingUser && (
-                        <motion.div
-                          initial={{ opacity: 0, y: 10, scale: 0.9 }}
-                          animate={{ 
-                            opacity: 1, 
-                            y: [0, 6, 0],
-                            scale: 1 
-                          }}
-                          transition={{
-                            y: {
-                              duration: 1.5,
-                              repeat: Infinity,
-                              ease: "easeInOut"
-                            },
-                            opacity: { duration: 0.3 },
-                            scale: { duration: 0.3 }
-                          }}
-                          className="mb-4 relative"
-                        >
-                          <div className="bg-[#1a1b23] border-2 border-primary/50 rounded-2xl p-3 shadow-[0_0_20px_rgba(255,255,0,0.15)] relative">
-                            <div className="flex flex-col items-center gap-2">
-                              <motion.img 
-                                src="/images/poro1.png"
-                                alt="Poro"
-                                className="w-14 h-14 object-contain"
-                                animate={{ 
-                                  scale: [1, 1.15, 1, 1.15, 1, 1],
-                                }}
-                                transition={{ 
-                                  duration: 2.5,
-                                  times: [0, 0.1, 0.2, 0.3, 0.4, 1],
-                                  repeat: Infinity,
-                                  ease: "easeInOut"
-                                }}
-                              />
-                              <div className="text-center">
-                                <p 
-                                  className="text-[10px] font-black uppercase tracking-tighter text-white leading-tight"
-                                  style={{ 
-                                    textShadow: '1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000' 
-                                  }}
-                                >
-                                  Ei, você ainda não<br/>
-                                  vinculou sua conta.
-                                </p>
-                              </div>
-                            </div>
-                            {/* Arrow pointing down */}
-                            <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a1b23] border-r-2 border-b-2 border-primary/50 rotate-45 z-0"></div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
                     <Link to="/vincular" onClick={() => {
                       setIsMobileMenuOpen(false);
-                      setHideLinkPrompt(true);
                       playSound('click');
                     }}>
-                      <motion.div 
+                      <motion.div
                         animate={{
                           y: [0, 2, 0],
                           boxShadow: [
@@ -682,7 +468,7 @@ export default function Layout() {
                       </motion.div>
                     </Link>
                   </div>
-                ) : null}
+                )}
                 
                 <nav className="flex-1 px-3 space-y-1">
                   {navItems.map((item) => (
@@ -716,7 +502,6 @@ export default function Layout() {
                   >
                     TORNE-SE VIP
                   </button>
-                  {/* Suporte centralizado abaixo do botão VIP */}
                   <button 
                     onClick={() => {
                       navigateWithSound('/suporte');
@@ -747,17 +532,8 @@ export default function Layout() {
         </main>
       </div>
 
-      {/* Modal de Depósito PIX */}
-      <DepositModal
-        isOpen={isDepositModalOpen}
-        onClose={() => setIsDepositModalOpen(false)}
-      />
-
-      {/* Modal de Assinatura VIP */}
-      <VipModal
-        isOpen={isVipModalOpen}
-        onClose={() => setIsVipModalOpen(false)}
-      />
+      <DepositModal isOpen={isDepositModalOpen} onClose={() => setIsDepositModalOpen(false)} />
+      <VipModal isOpen={isVipModalOpen} onClose={() => setIsVipModalOpen(false)} />
     </div>
   );
 }
