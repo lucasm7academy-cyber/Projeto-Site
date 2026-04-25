@@ -281,115 +281,156 @@ export default function Layout() {
         </div>
       </header>
       
-
-      <div className="flex h-full pt-14 md:pt-16">
-        {/* Sidebar Desktop */}
-        <aside className={`${sidebarWidths} ${isGamePage ? 'flex' : 'hidden lg:flex'} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex-col z-[50] h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 overflow-hidden`}>
-          <div className="py-6 px-3 relative z-[60]">
-            {perfil?.contaVinculada ? (
-              <Link
-                to="/perfil"
-                onClick={() => playSound('click')}
-                className="flex flex-col items-center group/profile cursor-pointer"
-              >
-                <div className="relative mb-3 md:mb-4">
-                  <div className="absolute inset-0 rounded-full bg-primary/10 blur-lg transition-all"></div>
-                  <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-primary shadow-[0_0_15px_rgba(255,255,0,0.2)] transition-all">
-                    <img
-                      alt="User Profile Avatar"
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover/profile:scale-110"
-                      src={perfil.avatar || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
-                      onError={(e) => {
-                        e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
-                      }}
-                    />
-                  </div>
-                  <div className="absolute bottom-1 right-1 w-3.5 h-3.5 md:w-4 md:h-4 bg-green-500 border-2 border-[#050505] rounded-full z-10 shadow-[0_0_8px_rgba(34,197,94,0.3)]"></div>
-                </div>
-                <h3 className="text-white font-headline font-bold text-xs text-center transition-colors truncate max-w-full px-2">
-                  {perfil.riotId?.split('#')[0]}
-                </h3>
-              </Link>
-            ) : (
-              <>
-                {user && perfil && !perfil.contaVinculada && (
-                  <Link
-                    to="/vincular"
-                    onClick={() => playSound('click')}
-                    className="block w-full"
-                  >
-                    <motion.div
-                      animate={{
-                        y: [0, 3, 0],
-                        boxShadow: [
-                          "0 4px 0 0 rgba(0,0,0,0.3)",
-                          "0 1px 0 0 rgba(0,0,0,0.3)",
-                          "0 4px 0 0 rgba(0,0,0,0.3)"
-                        ]
-                      }}
-                      transition={{
-                        duration: 1.5,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                      }}
-                      className="bg-primary text-black text-[10px] font-black uppercase tracking-[0.15em] py-4 px-3 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2 border-b-4 border-black/20"
-                    >
-                      <span className="leading-tight text-[10px]">Vincular Conta Riot</span>
-                    </motion.div>
-                  </Link>
-                )}
-              </>
-            )}
+     <div className="flex h-full pt-14 md:pt-16">
+  {/* Sidebar Desktop */}
+  <aside className={`${sidebarWidths} ${isGamePage ? 'flex' : 'hidden lg:flex'} bg-[#050505]/90 backdrop-blur-md border-r border-white/5 flex-col z-[50] h-[calc(100vh-3.5rem)] md:h-[calc(100vh-4rem)] sticky top-14 md:top-16 overflow-visible`}>
+    <div className="py-6 px-3 relative z-[60]">
+      {perfil?.contaVinculada ? (
+        <Link
+          to="/perfil"
+          onClick={() => playSound('click')}
+          className="flex flex-col items-center group/profile cursor-pointer"
+        >
+          <div className="relative mb-3 md:mb-4">
+            <div className="absolute inset-0 rounded-full bg-primary/10 blur-lg transition-all"></div>
+            <div className="relative w-20 h-20 md:w-24 md:h-24 rounded-full overflow-hidden border-4 border-primary shadow-[0_0_15px_rgba(255,255,0,0.2)] transition-all">
+              <img
+                alt="User Profile Avatar"
+                className="w-full h-full object-cover transition-transform duration-500 group-hover/profile:scale-110"
+                src={perfil.avatar || user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"}
+                onError={(e) => {
+                  e.currentTarget.src = user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU";
+                }}
+              />
+            </div>
+            <div className="absolute bottom-1 right-1 w-3.5 h-3.5 md:w-4 md:h-4 bg-green-500 border-2 border-[#050505] rounded-full z-10 shadow-[0_0_8px_rgba(34,197,94,0.3)]"></div>
           </div>
-
-          <div className="flex-1 overflow-y-auto px-2 custom-scrollbar">
-            <nav className="space-y-1">
-              {navItems.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <button 
-                    key={item.label}
-                    onClick={() => navigateWithSound(item.path)}
-                    className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-r-sm font-headline font-bold text-sm uppercase tracking-wider transition-all duration-100 w-full ${
-                      isActive 
-                        ? 'text-primary bg-primary/20 shadow-lg shadow-primary/5' 
-                        : 'text-white/50 hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    {isActive && (
-                      <motion.div 
-                        layoutId="activeTab"
-                        className="absolute left-0 w-1 h-8 bg-primary rounded"
-                        transition={{ type: "spring", duration: 0.3, bounce: 0.2 }}
-                      />
-                    )}
-                    <item.icon className={`w-4 h-4 transition-all ${isActive ? 'text-primary' : 'group-hover:text-primary'}`} />
-                    <span>{item.label}</span>
-                  </button>
-                );
-              })}
-            </nav>
-          </div>
-
-          <div className="px-3 py-6 space-y-3 border-t border-white/5">
-            <button
-              onClick={() => {
-                playSound('click');
-                setIsVipModalOpen(true);
+          <h3 className="text-white font-headline font-bold text-xs text-center transition-colors truncate max-w-full px-2">
+            {perfil.riotId?.split('#')[0]}
+          </h3>
+        </Link>
+      ) : (
+        <>
+          {/* BALÃO DO PORO ANIMADO */}
+          {perfil && (
+            <motion.div
+              initial={{ opacity: 0, x: -20, scale: 0.9 }}
+              animate={{
+                opacity: 1,
+                x: [0, -6, 0, -6, 0],
+                scale: 1
               }}
-              className="w-full py-2.5 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-headline text-[10px] uppercase tracking-[0.2em] font-black hover:brightness-110 transition-all shadow-lg shadow-primary/20"
+              transition={{
+                x: {
+                  duration: 2.5,
+                  repeat: Infinity,
+                  ease: "easeInOut"
+                },
+                opacity: { duration: 0.3 },
+                scale: { duration: 0.3 }
+              }}
+              className="absolute top-4 -right-64 w-56 z-[60]"
             >
-              TORNE-SE VIP
-            </button>
+              <div className="bg-[#1a1b23] border-2 border-primary/50 rounded-2xl p-3 shadow-[0_0_30px_rgba(255,255,0,0.25)] relative">
+                <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-[#1a1b23] border-l-2 border-t-2 border-primary/50 -rotate-45 z-0"></div>
+                <div className="flex items-center gap-3 relative z-10">
+                  <motion.img
+                    src="/images/poro1.png"
+                    alt="Poro"
+                    className="w-14 h-14 object-contain shrink-0"
+                    animate={{
+                      scale: [1, 1.2, 1, 1.2, 1],
+                    }}
+                    transition={{
+                      duration: 2,
+                      times: [0, 0.15, 0.3, 0.45, 0.6],
+                      repeat: Infinity,
+                      ease: "easeInOut"
+                    }}
+                  />
+                  <div className="text-left">
+                    <p
+                      className="text-[11px] font-black uppercase tracking-tighter text-white leading-tight"
+                      style={{
+                        textShadow: '1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000'
+                      }}
+                    >
+                      Ei, você ainda não<br/>
+                      vinculou sua conta!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Botão Vincular Conta */}
+          <Link
+            to="/vincular"
+            onClick={() => playSound('click')}
+            className="block w-full"
+          >
+            <div className="bg-primary hover:bg-yellow-500 text-black text-[10px] font-black uppercase tracking-[0.15em] py-5 px-3 rounded-xl text-center transition-all flex flex-col items-center justify-center gap-2 border-b-4 border-black/20">
+              <div className="flex items-center gap-2">
+                <LinkIcon className="w-4 h-4" />
+                <span className="leading-tight">Vincular Conta</span>
+              </div>
+            </div>
+          </Link>
+        </>
+      )}
+    </div>
+
+    {/* ✅ NAVEGAÇÃO - Menu da Sidebar */}
+    <div className="flex-1 overflow-y-auto px-2 custom-scrollbar">
+      <nav className="space-y-1">
+        {navItems.map((item) => {
+          const isActive = location.pathname === item.path;
+          return (
             <button 
-              onClick={() => navigateWithSound('/suporte')}
-              className="flex items-center justify-center gap-2 text-white/40 hover:text-primary py-2 text-[10px] uppercase tracking-widest font-headline transition-colors w-full"
+              key={item.label}
+              onClick={() => navigateWithSound(item.path)}
+              className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-r-sm font-headline font-bold text-sm uppercase tracking-wider transition-all duration-100 w-full ${
+                isActive 
+                  ? 'text-primary bg-primary/20 shadow-lg shadow-primary/5' 
+                  : 'text-white/50 hover:text-white hover:bg-white/5'
+              }`}
             >
-              <Headset className="w-3.5 h-3.5" />
-              <span>Suporte</span>
+              {isActive && (
+                <motion.div 
+                  layoutId="activeTab"
+                  className="absolute left-0 w-1 h-8 bg-primary rounded"
+                  transition={{ type: "spring", duration: 0.3, bounce: 0.2 }}
+                />
+              )}
+              <item.icon className={`w-4 h-4 transition-all ${isActive ? 'text-primary' : 'group-hover:text-primary'}`} />
+              <span>{item.label}</span>
             </button>
-          </div>
-        </aside>
+          );
+        })}
+      </nav>
+    </div>
+
+    {/* ✅ BOTÕES INFERIORES */}
+    <div className="px-3 py-6 space-y-3 border-t border-white/5">
+      <button
+        onClick={() => {
+          playSound('click');
+          setIsVipModalOpen(true);
+        }}
+        className="w-full py-2.5 bg-gradient-to-r from-primary to-[#E6A600] text-black rounded-xl font-headline text-[10px] uppercase tracking-[0.2em] font-black hover:brightness-110 transition-all shadow-lg shadow-primary/20"
+      >
+        TORNE-SE VIP
+      </button>
+      <button 
+        onClick={() => navigateWithSound('/suporte')}
+        className="flex items-center justify-center gap-2 text-white/40 hover:text-primary py-2 text-[10px] uppercase tracking-widest font-headline transition-colors w-full"
+      >
+        <Headset className="w-3.5 h-3.5" />
+        <span>Suporte</span>
+      </button>
+    </div>
+  </aside>
 
         {/* Mobile Menu Overlay */}
         <AnimatePresence>

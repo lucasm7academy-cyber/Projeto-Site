@@ -13,6 +13,7 @@ export interface PerfilData {
   contaVinculada: boolean;
   isVip: boolean;
   saldo: number;
+  cargo: string;
 }
 
 interface PerfilContextType {
@@ -52,7 +53,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     try {
-      const [{ data: contaRiot }, { data: profile }, { data: saldoData }] = await Promise.all([
+      const [{ data: contaRiot }, { data: profile }, { data: saldoData }, { data: cargoData }] = await Promise.all([
         supabase
           .from('contas_riot')
           .select('riot_id, profile_icon_id, elo_cache')
@@ -66,6 +67,11 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
         supabase
           .from('saldos')
           .select('saldo')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('admin_usuarios')
+          .select('cargo')
           .eq('user_id', user.id)
           .maybeSingle(),
       ]);
@@ -85,6 +91,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
           contaVinculada: true,
           isVip: profile?.is_vip ?? false,
           saldo: saldoData?.saldo ?? 0,
+          cargo: cargoData?.cargo ?? 'jogador',
         });
       } else {
         // Conta não vinculada - use dados do auth user
@@ -96,11 +103,12 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
           contaVinculada: false,
           isVip: profile?.is_vip ?? false,
           saldo: saldoData?.saldo ?? 0,
+          cargo: cargoData?.cargo ?? 'jogador',
         });
       }
 
-      // Realtime subscription em saldos para manter saldo atualizado
-      const channel = supabase
+      // Realtime subscriptions para manter dados atualizados
+      const saldosChannel = supabase
         .channel(`saldos-user-${user.id}`)
         .on('postgres_changes', {
           event: 'UPDATE',
@@ -112,8 +120,21 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
         })
         .subscribe();
 
+      const cargoChannel = supabase
+        .channel(`cargo-user-${user.id}`)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'admin_usuarios',
+          filter: `user_id=eq.${user.id}`,
+        }, (payload: any) => {
+          setPerfil((prev) => prev ? { ...prev, cargo: payload.new.cargo } : null);
+        })
+        .subscribe();
+
       return () => {
-        supabase.removeChannel(channel);
+        supabase.removeChannel(saldosChannel);
+        supabase.removeChannel(cargoChannel);
       };
     } catch (err) {
       console.error('[PerfilContext] Erro ao carregar perfil:', err);
@@ -142,6 +163,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
       contaVinculada: false,
       isVip: false,
       saldo: 0,
+      cargo: 'jogador',
     });
   }, [user]);
 
