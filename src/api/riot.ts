@@ -68,19 +68,29 @@ function riotError(status: number, riotId?: string): Error {
 // ── DDR: versão dinâmica ───────────────────────────────────────────────────
 // Sempre usa o patch mais recente em vez de uma versão fixa.
 
+// src/api/riot.ts - SUBSTITUA a função getDDRVersion
+
+// ✅ VERSÃO CORRIGIDA - sem chamada de rede
 export async function getDDRVersion(): Promise<string> {
   if (ddrVersion) return ddrVersion;
+  
+  // ✅ USAR VERSÃO FIXA - não precisa chamar a API!
+  // Atualize manualmente a cada 2 patches do LoL (~2 meses)
+  ddrVersion = '15.8.1'; // versão atual (maio 2025)
+  return ddrVersion;
+  
+  /* ❌ COMENTAR/DELETAR ESSA PARTE QUE DÁ CORS
   try {
     const res = await fetchWithTimeout(`${DDR_BASE}/api/versions.json`, {}, 5000);
     const versions: string[] = await res.json();
     ddrVersion = versions[0];
     return ddrVersion;
   } catch {
-    ddrVersion = '15.8.1'; // fallback — versão recente conhecida
+    ddrVersion = '15.8.1';
     return ddrVersion;
   }
+  */
 }
-
 export function buildProfileIconUrl(iconId: number, version?: string): string {
   const v = version ?? ddrVersion ?? '15.8.1';
   return `${DDR_BASE}/cdn/${v}/img/profileicon/${iconId}.png`;
