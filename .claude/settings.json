@@ -4,7 +4,10 @@
       "Bash(ls -la \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\supabase\\\\\\\\\")",
       "Bash(ls -la \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\supabase\\\\\\\\functions\\\\\\\\\")",
       "Bash(ls -la \"c:\\\\\\\\Users\\\\\\\\78787\\\\\\\\Documents\\\\\\\\PROJETO SITE\\\\\\\\supabase\\\\\\\\migrations\\\\\\\\\")",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(grep -v '//')",
+      "Bash(git config *)",
+      "Read(//c/Users/78787/**)"
     ]
   }
 }

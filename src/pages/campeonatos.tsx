@@ -9,7 +9,7 @@ import {
   ChevronLeft, ChevronRight, Timer, Sparkles, Target, Swords, Shield
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { getCachedUser } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 
 // ============================================
 // TIPOS
@@ -117,21 +117,8 @@ const destaquesCards = [
 
 const Campeonatos = () => {
   const navigate = useNavigate();
+  const { user, isLoading } = useAuth();
   const [activeHero, setActiveHero] = useState(0);
-  const [usuarioAtual, setUsuarioAtual] = useState<any>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
-
-  // Carregar usuário
-  useEffect(() => {
-    const carregarUsuario = async () => {
-      const user = await getCachedUser();
-      if (user) {
-        setUsuarioAtual(user);
-      }
-      setLoadingUser(false);
-    };
-    carregarUsuario();
-  }, []);
 
   // Hero navigation
   const nextHero = () => setActiveHero((prev) => (prev + 1) % heroSlides.length);
@@ -143,7 +130,7 @@ const Campeonatos = () => {
     return () => clearInterval(interval);
   }, []);
 
-  if (loadingUser) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <div className="text-center">

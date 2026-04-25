@@ -6,63 +6,55 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { getCachedUser } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
+import { usePerfil } from '../contexts/PerfilContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSound } from '../hooks/useSound';
 
-// 🛡️ Flag global para evitar múltiplas cargas simultâneas (React Strict Mode fix)
-let carregandoNotificacoes = false;
-
 export default function NotificationBell() {
+  const { user } = useAuth(); // ✅ Única fonte do usuário
+  const { perfil } = usePerfil(); // ✅ Dados do perfil (sem query duplicada)
   const { playSound } = useSound();
-  const [user, setUser] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
-  const loadTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
+  const channelRef = useRef<any>(null);
+  const loadingRef = useRef(false);
 
-  // ── Carrega notificações com debounce 500ms + proteção contra duplicação ────
   const carregarNotificacoes = async (userId: string) => {
-    if (carregandoNotificacoes) {
-      console.log('🛡️ [NotificationBell] Carga já em andamento - ignorando duplicata');
-      return;
-    }
-    carregandoNotificacoes = true;
+    if (loadingRef.current) return;
+    loadingRef.current = true;
 
     try {
-      const allNotifs: any[] = [];
-
-      // ✅ OTIMIZADO: Combinar 3 queries em 1 com .or() — reduz de 3 para 1 query
-      const { data: todos, error: errTodos } = await supabase
+      const { data: convites, error } = await supabase
         .from('time_convites')
         .select('id, time_id, de_user_id, para_user_id, tipo, status, riot_id, role, mensagem, criado_em')
         .or(`para_user_id.eq.${userId},de_user_id.eq.${userId}`)
         .order('criado_em', { ascending: false })
         .limit(50);
 
-      if (errTodos) {
-        console.error('[NotificationBell] Erro ao carregar convites:', errTodos);
-        return;
-      }
-
-      if (!todos || todos.length === 0) {
+      if (error) throw error;
+      
+      if (!convites || convites.length === 0) {
         setNotifications([]);
         return;
       }
 
-      // Buscar times em 1 query (em vez de 3)
-      const teamIds = [...new Set(todos.map((r: any) => r.time_id))];
-      const { data: timesData } = await supabase
-        .from('times')
-        .select('id, nome')
-        .in('id', teamIds);
-      const teamMap: Record<string, string> = {};
-      (timesData || []).forEach((t: any) => { teamMap[t.id] = t.nome; });
+      const teamIds = [...new Set(convites.map((r: any) => r.time_id).filter(Boolean))];
+      let teamMap: Record<string, string> = {};
+      
+      if (teamIds.length > 0) {
+        const { data: times } = await supabase
+          .from('times')
+          .select('id, nome')
+          .in('id', teamIds);
+        teamMap = Object.fromEntries((times || []).map((t: any) => [t.id, t.nome]));
+      }
 
-      // Processar todos os convites uma vez, separando por tipo/status
-      todos.forEach((r: any) => {
-        // 1. Solicitações pendentes para o usuário (é o capitão, recebe solicitação)
+      const allNotifs: any[] = [];
+
+      convites.forEach((r: any) => {
         if (r.tipo === 'solicitacao' && r.status === 'pendente' && r.para_user_id === userId) {
           allNotifs.push({
             id: r.id,
@@ -78,7 +70,6 @@ export default function NotificationBell() {
           });
         }
 
-        // 2. Status dos meus convites/solicitações (enviei, recebi resposta)
         if (r.de_user_id === userId && (r.status === 'aceito' || r.status === 'recusado')) {
           allNotifs.push({
             id: r.id + '_status',
@@ -94,7 +85,6 @@ export default function NotificationBell() {
           });
         }
 
-        // 3. Convites recebidos pendentes (capitão convidou)
         if (r.tipo === 'convite' && r.status === 'pendente' && r.para_user_id === userId) {
           allNotifs.push({
             id: r.id + '_invite',
@@ -110,20 +100,13 @@ export default function NotificationBell() {
       });
 
       setNotifications(allNotifs);
+    } catch (err) {
+      console.error('[NotificationBell] Erro:', err);
     } finally {
-      carregandoNotificacoes = false;
+      loadingRef.current = false;
     }
   };
 
-  // ── Debounce wrapper: 500ms ────────────────────────────────────────────────
-  const carregarNotificacoesDebounced = (userId: string) => {
-    if (loadTimeoutRef.current) clearTimeout(loadTimeoutRef.current);
-    loadTimeoutRef.current = setTimeout(() => {
-      carregarNotificacoes(userId);
-    }, 500);
-  };
-
-  // ── Ações ─────────────────────────────────────────────────────────────────
   const handleAcceptInvite = async (notif: any) => {
     if (!user) return;
 
@@ -139,25 +122,22 @@ export default function NotificationBell() {
       return;
     }
 
-    // 🛡️ Lazy load contas_riot só quando necessário (não na init)
-    const { data: riotData } = await supabase
-      .from('contas_riot')
-      .select('riot_id')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
+    // ✅ Usar riot_id do PerfilContext (sem query duplicada)
     const { error: errInsert } = await supabase.from('time_membros').insert({
-      time_id:   notif.time_id,
-      user_id:   user.id,
-      riot_id:   riotData?.riot_id || 'Jogador',
-      cargo:     'jogador',
-      role:      notif.role,
+      time_id: notif.time_id,
+      user_id: user.id,
+      riot_id: perfil?.riotId || 'Jogador',
+      cargo: 'jogador',
+      role: notif.role,
       is_leader: false,
-      elo:       '',
-      balance:   0,
+      elo: '',
+      balance: 0,
     });
 
-    if (errInsert) { console.error('Erro ao aceitar convite:', errInsert); return; }
+    if (errInsert) {
+      console.error('Erro ao aceitar convite:', errInsert);
+      return;
+    }
 
     await supabase.from('time_convites').update({ status: 'aceito' }).eq('id', notif.convite_id);
     setNotifications(prev => prev.filter((n: any) => n.id !== notif.id));
@@ -184,25 +164,22 @@ export default function NotificationBell() {
     }
 
     const { error: errInsert } = await supabase.from('time_membros').insert({
-      time_id:   notif.time_id,
-      user_id:   notif.de_user_id,
-      riot_id:   notif.player_riot_id,
-      cargo:     'jogador',
-      role:      notif.role,
+      time_id: notif.time_id,
+      user_id: notif.de_user_id,
+      riot_id: notif.player_riot_id,
+      cargo: 'jogador',
+      role: notif.role,
       is_leader: false,
-      elo:       '',
-      balance:   0,
+      elo: '',
+      balance: 0,
     });
 
-    if (errInsert) { console.error('Erro ao aceitar solicitação:', errInsert); return; }
+    if (errInsert) {
+      console.error('Erro ao aceitar solicitação:', errInsert);
+      return;
+    }
 
-    const { error: errUpdate } = await supabase
-      .from('time_convites')
-      .update({ status: 'aceito' })
-      .eq('id', notif.convite_id);
-
-    if (errUpdate) { console.error('Erro ao atualizar convite:', errUpdate); return; }
-
+    await supabase.from('time_convites').update({ status: 'aceito' }).eq('id', notif.convite_id);
     setNotifications(prev => prev.filter((n: any) => n.id !== notif.id));
     playSound('success');
   };
@@ -225,60 +202,31 @@ export default function NotificationBell() {
     setNotifications([]);
   };
 
-  // ── Auth + Realtime ────────────────────────────────────────────────────────
+  // ✅ Realtime SEM timeout desnecessário
   useEffect(() => {
-    let channel: any = null;
+    if (!user) return;
 
-    const init = async () => {
-      const u = await getCachedUser();
-      if (!u) return;
-      setUser(u);
+    carregarNotificacoes(user.id);
 
-      carregarNotificacoes(u.id);
-
-      // ✅ Filtro por userId + debounce 500ms — reduz broadcasts para apenas este usuário
-      channel = supabase
-        .channel('notif-bell-' + u.id)
-        .on('postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'time_convites',
-            filter: `or(para_user_id.eq.${u.id},de_user_id.eq.${u.id})`
-          },
-          () => carregarNotificacoesDebounced(u.id)
-        )
-        .on('postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'time_convites',
-            filter: `or(para_user_id.eq.${u.id},de_user_id.eq.${u.id})`
-          },
-          () => carregarNotificacoesDebounced(u.id)
-        )
-        .subscribe();
-    };
-
-    init();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      // ✅ Remover TOKEN_REFRESHED: evita recarregar a cada token refresh (frequente)
-      if (u && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
-        carregarNotificacoes(u.id);
-      }
-      if (event === 'SIGNED_OUT') setNotifications([]);
-    });
+    if (channelRef.current) supabase.removeChannel(channelRef.current);
+    channelRef.current = supabase
+      .channel(`notif-bell-${user.id}`)
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'time_convites',
+          filter: `or(para_user_id.eq.${user.id},de_user_id.eq.${user.id})`
+        },
+        () => carregarNotificacoes(user.id)
+      )
+      .subscribe();
 
     return () => {
-      authListener.subscription.unsubscribe();
-      if (channel) supabase.removeChannel(channel);
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
     };
-  }, []);
+  }, [user]);
 
-  // ── Fechar ao clicar fora ─────────────────────────────────────────────────
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -289,13 +237,12 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // ── JSX ───────────────────────────────────────────────────────────────────
   return (
     <div className="relative" ref={ref}>
       <button
         onClick={() => {
           playSound('click');
-          if (user) carregarNotificacoesDebounced(user.id);
+          if (user) carregarNotificacoes(user.id);
           setIsOpen(prev => !prev);
         }}
         className="relative p-2 transition-all duration-150 group"

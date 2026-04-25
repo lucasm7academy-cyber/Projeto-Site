@@ -7,7 +7,8 @@ import { buscarJogadorCompleto, buscarSugestoes, buildProfileIconUrl } from '../
 import { motion, AnimatePresence } from 'motion/react';
 import { useVerificacao } from '../contexts/VerificacaoContext';
 import { supabase } from '../lib/supabase';
-import { getCachedUser } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
+import { usePerfil } from '../contexts/PerfilContext';
 import { useNavigate } from 'react-router-dom';
 import { useSound } from '../hooks/useSound';
 
@@ -16,6 +17,8 @@ const ICONES_PADRAO = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 export default function Vincular() {
   const navigate = useNavigate();
   const { playSound } = useSound();
+  const { user } = useAuth();
+  const { desvincular } = usePerfil();
   const [searchTerm, setSearchTerm] = useState('');
   const [sugestoes, setSugestoes] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -40,7 +43,6 @@ export default function Vincular() {
     const carregarContaVinculada = async () => {
       if (!supabase) { setCarregandoInicial(false); return; }
 
-      const user = await getCachedUser();
       if (user) {
         const { data, error } = await supabase
           .from('contas_riot')
@@ -89,7 +91,7 @@ export default function Vincular() {
     };
 
     carregarContaVinculada();
-  }, []);
+  }, [user]);
 
   // Função para desvincular conta
   const handleDesvincular = async () => {
@@ -116,7 +118,10 @@ export default function Vincular() {
           type: 'success',
           message: '✅ Conta desvinculada com sucesso!'
         });
-        
+
+        // Atualizar contexto global de perfil
+        desvincular();
+
         // Resetar estados
         setContaVinculada(null);
         setInvocador(null);
@@ -160,7 +165,6 @@ export default function Vincular() {
   useEffect(() => {
     const handleConcluida = async () => {
       if (supabase) {
-        const user = await getCachedUser();
         if (user) {
           const { data, error } = await supabase
             .from('contas_riot')
@@ -212,7 +216,7 @@ export default function Vincular() {
       window.removeEventListener('verificacao_erro_salvar', handleErroSalvar as EventListener);
       window.removeEventListener('verificacao_timeout', handleTimeout as EventListener);
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

@@ -19,54 +19,46 @@ import {
   X
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { getCachedUser } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user: authUser } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [balance, setBalance] = useState(2450.00); // Default placeholder, will be fetched from Supabase
+  const [balance, setBalance] = useState(2450.00);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const getUser = async () => {
-      if (!supabase) return;
-      
-      const user = await getCachedUser();
-      setUser(user);
-      
-      if (user) {
-        // Fetch balance from a hypothetical 'profiles' table
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('balance')
-          .eq('id', user.id)
-          .single();
-        
-        if (data && !error) {
-          setBalance(data.balance);
-        }
-      }
-    };
-
-    getUser();
-
-    if (supabase) {
-      const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-        setUser(session?.user ?? null);
+    if (authUser) {
+      const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
         if (event === 'SIGNED_OUT') {
           navigate('/');
         }
       });
-
       return () => {
         authListener.subscription.unsubscribe();
       };
     }
-  }, [navigate]);
+  }, [authUser, navigate]);
+
+  useEffect(() => {
+    if (authUser) {
+      const fetchBalance = async () => {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('balance')
+          .eq('id', authUser.id)
+          .single();
+        if (data && !error) {
+          setBalance(data.balance);
+        }
+      };
+      fetchBalance();
+    }
+  }, [authUser]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -133,7 +125,7 @@ export default function Layout() {
             <div className="hidden md:flex items-center gap-4 ml-4">
               <div className="w-[1px] h-6 bg-white/20"></div>
               <h2 className="text-white font-headline font-light text-lg tracking-wide">
-                Bem-vindo, <span className="font-medium text-primary">{user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'NickName'}</span>
+                Bem-vindo, <span className="font-medium text-primary">{authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'NickName'}</span>
               </h2>
             </div>
           </div>
@@ -158,7 +150,7 @@ export default function Layout() {
                 <img 
                   alt="User Profile Avatar" 
                   className="w-full h-full object-cover" 
-                  src={user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"} 
+                  src={authUser?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"} 
                 />
               </button>
 
@@ -175,12 +167,12 @@ export default function Layout() {
                         <img 
                           alt="User Profile Avatar" 
                           className="w-full h-full object-cover" 
-                          src={user?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"} 
+                          src={authUser?.user_metadata?.avatar_url || "https://lh3.googleusercontent.com/aida-public/AB6AXuA3y1n-s4DdI4Kf-xz0_5u_qEqNG4W9WI5aJdr0i-Z3m7Z4317zP4538rQEmRpmB9118rfgmhHyLb-pof7HyYfxNL8gzzpmOfI4aMaQxsJYMSpOeWKvYOT8VNdkz8MZ2WF5CWsh7m0eixv8iejVdJsNvy16S0GPdQ3l1ysUH-fqpuyt2PQFVIYDIFCZ0Ec5esgw2u9JZTg1FZMvobP91cIwi3gnTHGPr0s6PNIoKwNsf_Tp3CfuC2ts8k_7HKcFrfnuJ7t2E3zs4MU"} 
                         />
                       </div>
                       <div className="mt-4 text-center">
                         <h3 className="text-white font-headline font-bold text-xl">
-                          {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'NickName'}
+                          {authUser?.user_metadata?.full_name || authUser?.email?.split('@')[0] || 'NickName'}
                         </h3>
                         <p className="text-primary font-headline text-sm tracking-[0.2em] uppercase mt-2">PLATINA III</p>
                       </div>

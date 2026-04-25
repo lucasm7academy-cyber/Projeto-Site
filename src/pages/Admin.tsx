@@ -8,7 +8,7 @@ import {
   ChevronDown, RefreshCw, Ban, Users, Crown,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { getCachedUser } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { atualizarPontosPartida } from '../api/player';
 import { resolverPartidaTravada, deletarSala, buscarSalaCompleta } from '../api/salas';
 import {
@@ -108,7 +108,6 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
 
   const resolver = async (id: number, decisao: 'time_a' | 'time_b' | 'cancelado') => {
     setResolvendo(id);
-    const user = await getCachedUser();
     const partida = partidas.find(p => p.id === id)!;
     const vencedorNome = decisao === 'cancelado' ? 'Cancelado'
       : partida.vencedorNome ?? decisao;
@@ -118,7 +117,7 @@ function AbaDisputas({ adminCargo }: { adminCargo: CargoAdmin }) {
       .update({
         vencedor:      decisao,
         vencedor_nome: vencedorNome,
-        resolvido_por: user?.id,
+        resolvido_por: user?.id ?? null,
         resolvido_em:  new Date().toISOString(),
       })
       .eq('id', id);
@@ -927,9 +926,8 @@ function AbaSaldos({ adminCargo }: { adminCargo: CargoAdmin }) {
 
     if (!error) {
       // Log da operação
-      const user = await getCachedUser();
       await supabase.from('admin_logs').insert({
-        admin_id:  user?.id,
+        admin_id:  user?.id ?? null,
         acao:      `saldo_${operacao}`,
         alvo_id:   selecionado.userId,
         detalhes:  { valor: qtd, saldo_anterior: selecionado.saldo, saldo_novo: novoSaldo, motivo },
@@ -1157,13 +1155,13 @@ function AbaSaldos({ adminCargo }: { adminCargo: CargoAdmin }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Admin() {
+  const { user } = useAuth();
   const [adminInfo, setAdminInfo]   = useState<AdminUser | null>(null);
   const [loading, setLoading]       = useState(true);
   const [abaAtiva, setAbaAtiva]     = useState<Aba>('salas');
 
   useEffect(() => {
     const verificar = async () => {
-      const user = await getCachedUser();
       if (!user) { setLoading(false); return; }
 
       const { data } = await supabase
@@ -1190,7 +1188,7 @@ export default function Admin() {
       setLoading(false);
     };
     verificar();
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (

@@ -7,7 +7,7 @@ import {
   UserPlus, UserX, Check, Plus, RefreshCw, X, Search, Upload,
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { getCachedUser } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { buildProfileIconUrl, buscarElo } from '../api/riot';
 import { useSound } from '../hooks/useSound';
 import { AnimatePresence as AP } from 'motion/react';
@@ -180,6 +180,7 @@ const COLOR_THEMES = [
 // ── Modais ──────────────────────────────────────────────────────────────────
 const InvitePlayerModal = ({ team, onClose }: { team: TimeData; onClose: () => void }) => {
   const { playSound } = useSound();
+  const { user } = useAuth();
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
@@ -211,7 +212,6 @@ const InvitePlayerModal = ({ team, onClose }: { team: TimeData; onClose: () => v
       if (team.membros.filter(m => m.role === 'RES').length >= 2) { setError('Máximo de 2 reservas atingido'); return; }
     }
     setSending(true);
-    const user = await getCachedUser();
     if (!user) { setSending(false); return; }
     const { error: insertError } = await supabase.from('time_convites').insert({
       time_id: team.id, de_user_id: user.id, para_user_id: selectedPlayer.user_id,
@@ -339,6 +339,7 @@ const InvitePlayerModal = ({ team, onClose }: { team: TimeData; onClose: () => v
 
 const RequestEntryModal = ({ team, onClose }: { team: TimeData; onClose: () => void }) => {
   const { playSound } = useSound();
+  const { user } = useAuth();
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [message, setMessage] = useState('');
   const [sent, setSent] = useState(false);
@@ -348,13 +349,12 @@ const RequestEntryModal = ({ team, onClose }: { team: TimeData; onClose: () => v
 
   useEffect(() => {
     const fetchMyAccount = async () => {
-      const user = await getCachedUser();
       if (!user) return;
       const { data } = await supabase.from('contas_riot').select('*').eq('user_id', user.id).maybeSingle();
       setMyRiotAccount(data);
     };
     fetchMyAccount();
-  }, []);
+  }, [user]);
 
   const handleRequest = async () => {
     if (!selectedRole) return;
@@ -364,7 +364,6 @@ const RequestEntryModal = ({ team, onClose }: { team: TimeData; onClose: () => v
     }
     
     setSending(true);
-    const user = await getCachedUser();
     if (!user) { setSending(false); return; }
 
     const { error: insertError } = await supabase.from('time_convites').insert({
@@ -806,6 +805,7 @@ export default function TimePage() {
   const { id }    = useParams<{ id: string }>();
   const navigate  = useNavigate();
   const { playSound } = useSound();
+  const { user } = useAuth();
 
   const [time,    setTime]    = useState<TimeData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -824,7 +824,6 @@ export default function TimePage() {
   // ── carregar ────────────────────────────────────────────────────────────────
   const load = async () => {
     if (!id) return;
-    const user = await getCachedUser();
     const uid = user?.id ?? null;
     setCurrentUserId(uid);
 
@@ -896,7 +895,7 @@ export default function TimePage() {
 
   useEffect(() => {
     load();
-  }, [id]);
+  }, [id, user]);
 
   // Busca elo real dos membros em background após carregar o time
   useEffect(() => {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Loader, CheckCircle2, Copy, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from '../contexts/AuthContext';
 import toast from 'react-hot-toast';
 
 interface PackageOption {
@@ -28,16 +29,12 @@ const GoldEssenceIcon = ({ size = 24, className = "" }: { size?: number; classNa
     className={className}
   >
     <g filter="url(#glow)">
-      {/* Central Crystal Body */}
       <path
         d="M16 2L22 16L16 30L10 16L16 2Z"
         fill="url(#essence_grad)"
       />
-      {/* Facets for 3D look */}
       <path d="M16 2L16 30L10 16L16 2Z" fill="white" fillOpacity="0.2" />
       <path d="M16 2L22 16L16 16L16 2Z" fill="white" fillOpacity="0.1" />
-      
-      {/* Floating Sparkles/Shards */}
       <path d="M25 10L28 13L24 14L25 10Z" fill="#FFD700" />
       <path d="M7 20L4 23L8 24L7 20Z" fill="#E6A600" />
       <path d="M23 24L25 27L21 28L23 24Z" fill="#FFD700" opacity="0.6" />
@@ -107,6 +104,7 @@ interface PaymentData {
 }
 
 export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
+  const { user } = useAuth(); // ✅ Única fonte do usuário
   const [selectedPackage, setSelectedPackage] = useState<PackageOption | null>(null);
   const [loading, setLoading] = useState(false);
   const [paymentData, setPaymentData] = useState<PaymentData | null>(null);
@@ -117,15 +115,17 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
 
   const handleBuyClick = async () => {
     if (!selectedPackage) return;
+    if (!user) {
+      toast.error('Você precisa estar logado para comprar MCs');
+      return;
+    }
 
     setLoading(true);
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
+      const { data: { session } } = await supabase.auth.getSession();
+      
       if (!session) {
-        toast.error('Você precisa estar logado para comprar MCs');
+        toast.error('Sessão expirada. Faça login novamente.');
         setLoading(false);
         return;
       }
@@ -142,7 +142,7 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            userId: session.user.id,
+            userId: user.id,
             productId: selectedPackage.productId,
             amount: selectedPackage.priceInReais,
             mcs: selectedPackage.mcs,
@@ -191,7 +191,6 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
           className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-[#050505]/95 backdrop-blur-[12px]"
           onClick={handleClose}
         >
-          {/* Animated Background Orbs */}
           <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
             <motion.div 
               animate={{ 
@@ -224,13 +223,10 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
             className="relative w-full max-w-xl mx-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Background with Glass Effect and Clipping */}
             <div className="absolute inset-0 rounded-[40px] bg-[#111111]/40 border border-white/[0.08] backdrop-blur-[40px] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.8)] overflow-hidden pointer-events-none">
-              {/* Header Glow */}
               <div className="absolute top-0 left-0 w-full h-[120px] bg-gradient-to-b from-[#E6A600]/10 to-transparent pointer-events-none" />
             </div>
 
-            {/* Character Image (3D Effect - Bottom Aligned, Behind Content) */}
             <motion.img 
               initial={{ x: 30, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
@@ -242,7 +238,6 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
             />
 
             <div className="relative p-10 md:p-12 z-10">
-              {/* Close Button */}
               <button
                 onClick={handleClose}
                 className="absolute top-8 right-8 w-10 h-10 bg-white/5 border border-white/[0.05] rounded-full text-white/40 hover:text-white transition-all flex items-center justify-center hover:bg-white/10"
@@ -251,7 +246,6 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
                 <X size={18} />
               </button>
 
-              {/* Title Section */}
               <div className="mb-10">
                 <motion.h2 
                   initial={{ opacity: 0, x: -20 }}
@@ -308,7 +302,6 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
                           </div>
                         </div>
 
-                        {/* Animated Glow on Select */}
                         {selectedPackage?.id === pkg.id && (
                           <motion.div 
                             layoutId="package-glow"
@@ -370,7 +363,6 @@ export default function DepositModal({ isOpen, onClose }: DepositModalProps) {
                       </span>
                     )}
                     
-                    {/* Animated Shine Effect */}
                     {selectedPackage && !loading && (
                       <motion.div 
                         animate={{ x: ['100%', '-100%'] }}
