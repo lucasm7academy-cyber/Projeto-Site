@@ -68,12 +68,23 @@ export default function SalaMod1() {
     const { user } = useAuth();
     const { perfil } = usePerfil();
 
-    const usuarioAtual = perfil || {
+    const usuarioAtual = perfil ? {
+        ...perfil,
+        avatar: perfil.avatar,
+    } : {
         id: user?.id || '',
         nome: user?.email?.split('@')[0] || 'Jogador',
         tag: '',
         elo: 'Sem Elo',
+        avatar: undefined,
     };
+
+    console.log(`👤 [SalaMod1] usuarioAtual:`, {
+        id: usuarioAtual.id,
+        nome: usuarioAtual.nome,
+        avatar: usuarioAtual.avatar,
+        perfilLoading: !perfil,
+    });
 
     if (!user) return <div className="flex-1 bg-[#050505] flex items-center justify-center text-white">Faça login</div>;
 
@@ -237,9 +248,20 @@ export default function SalaMod1() {
                         <div className="flex flex-col gap-[1.5vmin]">
                             {roles.map((role) => {
                                 const jogador = timeA.find((j: any) => j.role === role);
+                                const isAtual = jogador?.user_id === usuarioAtual.id;
+                                const avatar = isAtual ? perfil?.avatar : jogador?.avatar;
+                                if (jogador) {
+                                    console.log(`🔵 [TimeA-${role}] ${jogador.nome}:`, {
+                                        user_id: jogador.user_id,
+                                        isAtual,
+                                        avatarBanco: jogador.avatar,
+                                        avatarPerfil: perfil?.avatar,
+                                        avatarFinal: avatar,
+                                    });
+                                }
                                 return (
                                     <VagaSlot key={`A-${role}`} ocupada={!!jogador}
-                                        nome={jogador?.nome} tag={jogador?.tag} icone={jogador?.avatar}
+                                        nome={jogador?.nome} tag={jogador?.tag} icone={avatar}
                                         isTimeA={true} role={role as any} isConfirmado={jogador?.confirmado}
                                         aoEntrar={() => entrar(role, true)} roleIconImg={ROLE_CONFIG[role].img} />
                                 );
@@ -259,9 +281,20 @@ export default function SalaMod1() {
                         <div className="flex flex-col gap-[1.5vmin]">
                             {roles.map((role) => {
                                 const jogador = timeB.find((j: any) => j.role === role);
+                                const isAtual = jogador?.user_id === usuarioAtual.id;
+                                const avatar = isAtual ? perfil?.avatar : jogador?.avatar;
+                                if (jogador) {
+                                    console.log(`🔴 [TimeB-${role}] ${jogador.nome}:`, {
+                                        user_id: jogador.user_id,
+                                        isAtual,
+                                        avatarBanco: jogador.avatar,
+                                        avatarPerfil: perfil?.avatar,
+                                        avatarFinal: avatar,
+                                    });
+                                }
                                 return (
                                     <VagaSlot key={`B-${role}`} ocupada={!!jogador}
-                                        nome={jogador?.nome} tag={jogador?.tag} icone={jogador?.avatar}
+                                        nome={jogador?.nome} tag={jogador?.tag} icone={avatar}
                                         isTimeA={false} role={role as any} isConfirmado={jogador?.confirmado}
                                         aoEntrar={() => entrar(role, false)} roleIconImg={ROLE_CONFIG[role].img} />
                                 );

@@ -37,8 +37,16 @@ export async function entrarNaVaga(
     tag: string,
     elo: string,
     role: string,
-    isTimeA: boolean
+    isTimeA: boolean,
+    avatar?: string
 ) {
+    console.log(`📝 [entrarNaVaga] Salvando na sala ${salaId}:`, {
+        nome,
+        role,
+        avatar,
+        avatarLength: avatar?.length || 0,
+    });
+
     const { error } = await supabase
         .from('sala_jogadores')
         .insert({
@@ -49,15 +57,17 @@ export async function entrarNaVaga(
             elo: elo,
             role: role,
             is_time_a: isTimeA,
+            avatar: avatar || null,
             confirmado: false,
             vinculado: false,
         });
 
     if (error) {
-        console.error('Erro ao entrar na vaga:', error);
+        console.error('❌ [entrarNaVaga] Erro:', error);
         return false;
     }
 
+    console.log(`✅ [entrarNaVaga] Salvo com sucesso`);
     return true;
 }
 

@@ -333,9 +333,13 @@ export function useSalaSimples(
                 await sairDaVaga(salaId, usuarioAtual.id);
             }
 
+            console.log(`🟢 [entrar] Passando avatar:`, {
+                nome: usuarioAtual.nome,
+                avatar: usuarioAtual.avatar,
+            });
             const sucesso = await entrarNaVaga(
                 salaId, usuarioAtual.id, usuarioAtual.nome,
-                usuarioAtual.tag, usuarioAtual.elo, role, isTimeA
+                usuarioAtual.tag, usuarioAtual.elo, role, isTimeA, usuarioAtual.avatar
             );
 
             if (sucesso) {

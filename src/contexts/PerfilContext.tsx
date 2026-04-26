@@ -76,14 +76,22 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
 
       if (contaRiot) {
         const [nome, tag] = (contaRiot.riot_id || '').split('#');
+        const avatarUrl = contaRiot.profile_icon_id
+          ? `https://ddragon.leagueoflegends.com/cdn/14.8.1/img/profileicon/${contaRiot.profile_icon_id}.png`
+          : undefined;
+
+        console.log(`🎭 [PerfilContext] Carregando com conta vinculada:`, {
+          nome,
+          profile_icon_id: contaRiot.profile_icon_id,
+          avatarUrl,
+        });
+
         setPerfil({
           id: user.id,
           nome: nome || user.email?.split('@')[0] || 'Jogador',
           tag: tag ? `#${tag}` : '',
           elo: contaRiot.elo_cache?.soloQ?.tier || 'Sem Elo',
-          avatar: contaRiot.profile_icon_id
-            ? `https://ddragon.leagueoflegends.com/cdn/14.8.1/img/profileicon/${contaRiot.profile_icon_id}.png`
-            : undefined,
+          avatar: avatarUrl,
           riotId: contaRiot.riot_id,
           iconId: contaRiot.profile_icon_id,
           contaVinculada: true,
@@ -93,6 +101,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
         });
       } else {
         // Conta não vinculada - use dados do auth user
+        console.log(`🎭 [PerfilContext] Carregando SEM conta vinculada`);
         setPerfil({
           id: user.id,
           nome: user.email?.split('@')[0] || 'Jogador',
