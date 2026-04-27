@@ -11,39 +11,67 @@ import { usePerfil } from '../contexts/PerfilContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useSound } from '../hooks/useSound';
 
+const IS_DEV = import.meta.env.DEV;
+
 export default function NotificationBell() {
-  const { user } = useAuth(); // ✅ Única fonte do usuário
-  const { perfil } = usePerfil(); // ✅ Dados do perfil (sem query duplicada)
+  const { user } = useAuth();
+  const { perfil } = usePerfil();
   const { playSound } = useSound();
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const channelRef = useRef<any>(null);
-  const loadingRef = useRef(false);
 
-  const carregarNotificacoes = async (userId: string) => {
-    if (loadingRef.current) return;
-    loadingRef.current = true;
+  // ✅ CARREGA COUNT ao montar (apenas 1 query leve)
+  useEffect(() => {
+    if (!user) return;
+
+    const carregarCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from('time_convites')
+          .select('id', { count: 'exact', head: true })
+          .or(`para_user_id.eq.${user.id},de_user_id.eq.${user.id}`)
+          .eq('status', 'pendente');
+
+        if (!error) {
+          setNotificationCount(count || 0);
+          if (IS_DEV) console.log(`🔔 [NotificationBell] ${count} notificações pendentes`);
+        }
+      } catch (err) {
+        if (IS_DEV) console.error('[NotificationBell] Erro ao carregar count:', err);
+      }
+    };
+
+    carregarCount();
+  }, [user]);
+
+  // ✅ CARREGA NOTIFICAÇÕES COMPLETAS quando clica no sino
+  const carregarNotificacoes = async () => {
+    if (!user || isLoading) return;
+    setIsLoading(true);
 
     try {
       const { data: convites, error } = await supabase
         .from('time_convites')
         .select('id, time_id, de_user_id, para_user_id, tipo, status, riot_id, role, mensagem, criado_em')
-        .or(`para_user_id.eq.${userId},de_user_id.eq.${userId}`)
+        .or(`para_user_id.eq.${user.id},de_user_id.eq.${user.id}`)
         .order('criado_em', { ascending: false })
         .limit(50);
 
       if (error) throw error;
-      
+
       if (!convites || convites.length === 0) {
         setNotifications([]);
         return;
       }
 
+      // Buscar nomes dos times
       const teamIds = [...new Set(convites.map((r: any) => r.time_id).filter(Boolean))];
       let teamMap: Record<string, string> = {};
-      
+
       if (teamIds.length > 0) {
         const { data: times } = await supabase
           .from('times')
@@ -52,10 +80,12 @@ export default function NotificationBell() {
         teamMap = Object.fromEntries((times || []).map((t: any) => [t.id, t.nome]));
       }
 
+      // Processar notificações
       const allNotifs: any[] = [];
 
       convites.forEach((r: any) => {
-        if (r.tipo === 'solicitacao' && r.status === 'pendente' && r.para_user_id === userId) {
+        // Solicitação de entrada (alguém quer entrar no seu time)
+        if (r.tipo === 'solicitacao' && r.status === 'pendente' && r.para_user_id === user.id) {
           allNotifs.push({
             id: r.id,
             type: 'join_request',
@@ -70,7 +100,8 @@ export default function NotificationBell() {
           });
         }
 
-        if (r.de_user_id === userId && (r.status === 'aceito' || r.status === 'recusado')) {
+        // Resposta à solicitação/convite que você enviou
+        if (r.de_user_id === user.id && (r.status === 'aceito' || r.status === 'recusado')) {
           allNotifs.push({
             id: r.id + '_status',
             type: 'status_update',
@@ -85,7 +116,8 @@ export default function NotificationBell() {
           });
         }
 
-        if (r.tipo === 'convite' && r.status === 'pendente' && r.para_user_id === userId) {
+        // Convite para entrar em um time
+        if (r.tipo === 'convite' && r.status === 'pendente' && r.para_user_id === user.id) {
           allNotifs.push({
             id: r.id + '_invite',
             type: 'invite_received',
@@ -100,13 +132,27 @@ export default function NotificationBell() {
       });
 
       setNotifications(allNotifs);
+      setNotificationCount(0); // Limpa badge após abrir
+      if (IS_DEV) console.log(`📋 [NotificationBell] ${allNotifs.length} notificações carregadas`);
     } catch (err) {
-      console.error('[NotificationBell] Erro:', err);
+      if (IS_DEV) console.error('[NotificationBell] Erro:', err);
     } finally {
-      loadingRef.current = false;
+      setIsLoading(false);
     }
   };
 
+  // ✅ Click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // ✅ Handlers
   const handleAcceptInvite = async (notif: any) => {
     if (!user) return;
 
@@ -122,7 +168,6 @@ export default function NotificationBell() {
       return;
     }
 
-    // ✅ Usar riot_id do PerfilContext (sem query duplicada)
     const { error: errInsert } = await supabase.from('time_membros').insert({
       time_id: notif.time_id,
       user_id: user.id,
@@ -202,54 +247,27 @@ export default function NotificationBell() {
     setNotifications([]);
   };
 
-  // ✅ Realtime SEM timeout desnecessário
-  useEffect(() => {
-    if (!user) return;
+  // ✅ Handler do sino - LAZY LOAD ao abrir
+  const handleToggleBell = async () => {
+    playSound('click');
 
-    carregarNotificacoes(user.id);
+    if (!isOpen) {
+      // Abrindo agora - carrega notificações
+      await carregarNotificacoes();
+    }
 
-    if (channelRef.current) supabase.removeChannel(channelRef.current);
-    channelRef.current = supabase
-      .channel(`notif-bell-${user.id}`)
-      .on('postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'time_convites',
-          filter: `or(para_user_id.eq.${user.id},de_user_id.eq.${user.id})`
-        },
-        () => carregarNotificacoes(user.id)
-      )
-      .subscribe();
-
-    return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current);
-    };
-  }, [user]);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    setIsOpen(prev => !prev);
+  };
 
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={() => {
-          playSound('click');
-          if (user) carregarNotificacoes(user.id);
-          setIsOpen(prev => !prev);
-        }}
+        onClick={handleToggleBell}
         className="relative p-2 transition-all duration-150 group"
       >
         <div className="absolute inset-0 bg-primary/10 blur-lg rounded-full group-hover:bg-primary/20 transition-all" />
-        <Bell className={`w-5 h-5 relative z-10 ${notifications.length > 0 ? 'text-primary' : 'text-white/60'} group-hover:text-primary transition-colors drop-shadow-[0_0_8px_rgba(255,215,0,0.3)]`} />
-        {notifications.length > 0 && (
+        <Bell className={`w-5 h-5 relative z-10 ${notificationCount > 0 ? 'text-primary' : 'text-white/60'} group-hover:text-primary transition-colors drop-shadow-[0_0_8px_rgba(255,215,0,0.3)]`} />
+        {notificationCount > 0 && (
           <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#0a0b0f] animate-pulse z-20 shadow-[0_0_8px_rgba(239,68,68,0.8)]" />
         )}
       </button>
@@ -257,130 +275,111 @@ export default function NotificationBell() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.1 }}
-            className="absolute right-0 mt-3 w-80 bg-[#0a0b0f]/95 backdrop-blur-xl border border-white/10 shadow-2xl z-[60] rounded-2xl overflow-hidden"
+            initial={{ opacity: 0, scale: 0.95, y: -10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: -10 }}
+            className="absolute right-0 mt-2 w-96 max-h-96 bg-[#0a0b0f] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-50"
           >
-            <div className="p-4 border-b border-white/5 flex justify-between items-center">
-              <h3 className="text-white font-bold text-sm uppercase tracking-wider">Notificações</h3>
-              <span className="text-[10px] text-white/40 uppercase font-semibold">Recentes</span>
-            </div>
-            <AnimatePresence>
-              {errorMsg && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="px-4 py-2 bg-red-500/15 border-b border-red-500/20 flex items-center gap-2"
+            {/* Header */}
+            <div className="sticky top-0 bg-[#0a0b0f] border-b border-white/10 p-4 flex items-center justify-between">
+              <h3 className="text-white font-black uppercase tracking-widest text-sm">Notificações</h3>
+              {notifications.length > 0 && (
+                <button
+                  onClick={handleClearAll}
+                  className="text-[0.75rem] text-white/40 hover:text-white/80 transition-colors font-bold uppercase"
                 >
-                  <AlertCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                  <p className="text-red-400 text-[11px] font-medium">{errorMsg}</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            <div className="max-h-[440px] overflow-y-auto">
-              {notifications.length > 0 ? (
-                <div className="p-2 space-y-1">
-                  {notifications.map((notif: any) => (
-                    <div key={notif.id} className="p-3 rounded-xl hover:bg-white/5 transition-colors border border-transparent hover:border-white/5">
-                      {notif.type === 'join_request' ? (
-                        <div className="space-y-2">
-                          <div className="flex gap-3">
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                              <Users className="w-4 h-4 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-white text-xs font-medium leading-relaxed">
-                                <span className="text-primary font-bold">{notif.player_riot_id}</span>
-                                {' '}quer entrar no time{' '}
-                                <span className="font-bold">{notif.team_name}</span>
-                                {' '}como{' '}
-                                <span className="text-primary font-bold">{notif.role}</span>
-                              </p>
-                              {notif.message && (
-                                <p className="text-white/30 text-[10px] mt-1 italic truncate">"{notif.message}"</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2 ml-11">
-                            <button onClick={() => handleAcceptRequest(notif)} className="flex-1 py-1.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-[10px] font-bold rounded-lg transition-colors uppercase tracking-wider">Aceitar</button>
-                            <button onClick={() => handleDeclineRequest(notif)} className="flex-1 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-[10px] font-bold rounded-lg transition-colors uppercase tracking-wider">Recusar</button>
-                          </div>
-                        </div>
-                      ) : notif.type === 'invite_received' ? (
-                        <div className="space-y-2">
-                          <div className="flex gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-500/15 flex items-center justify-center shrink-0 mt-0.5">
-                              <Users className="w-4 h-4 text-blue-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-white text-xs font-medium leading-relaxed">
-                                Você foi convidado para o time{' '}
-                                <span className="text-primary font-bold">{notif.team_name}</span>
-                                {' '}como{' '}
-                                <span className="text-blue-400 font-bold">{notif.role}</span>
-                              </p>
-                              {notif.message && (
-                                <p className="text-white/30 text-[10px] mt-1 italic truncate">"{notif.message}"</p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex gap-2 ml-11">
-                            <button onClick={() => handleAcceptInvite(notif)} className="flex-1 py-1.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-[10px] font-bold rounded-lg transition-colors uppercase tracking-wider">Aceitar</button>
-                            <button onClick={() => handleDeclineInvite(notif)} className="flex-1 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-[10px] font-bold rounded-lg transition-colors uppercase tracking-wider">Recusar</button>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="flex gap-3">
-                          <div className="mt-1 shrink-0">
-                            {notif.subtype === 'aceito'
-                              ? <CheckCircle2 className="w-4 h-4 text-green-500" />
-                              : <AlertCircle className="w-4 h-4 text-red-400" />
-                            }
-                          </div>
-                          <div>
-                            <p className="text-white text-xs font-medium leading-relaxed">
-                              {notif.convite_tipo === 'convite'
-                                ? notif.subtype === 'aceito'
-                                  ? <><span className="text-primary font-bold">{notif.player_riot_id}</span> aceitou seu convite para o time <span className="font-bold">{notif.team_name}</span>!</>
-                                  : <><span className="text-primary font-bold">{notif.player_riot_id}</span> recusou seu convite para o time <span className="font-bold">{notif.team_name}</span></>
-                                : notif.subtype === 'aceito'
-                                  ? <>Agora você faz parte do time <span className="text-primary font-bold">{notif.team_name}</span>!</>
-                                  : <>Solicitação para <span className="font-bold">{notif.team_name}</span> foi recusada</>
-                              }
-                            </p>
-                            <p className="text-[10px] text-white/30 mt-1 uppercase tracking-tighter">
-                              {new Date(notif.criado_em).toLocaleDateString('pt-BR')}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="py-12 px-6 text-center">
-                  <div className="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Bell className="w-6 h-6 text-white/20" />
-                  </div>
-                  <p className="text-white/60 text-sm font-medium">Nenhuma notificação</p>
-                  <p className="text-white/30 text-[10px] mt-2 leading-relaxed uppercase tracking-widest">
-                    Este é o lugar onde você receberá suas notificações e aprovações.
-                  </p>
-                </div>
+                  Limpar
+                </button>
               )}
             </div>
 
-            {notifications.length > 0 && (
-              <button
-                onClick={handleClearAll}
-                className="w-full py-3 text-[10px] text-primary font-bold uppercase tracking-widest hover:bg-primary/5 transition-colors border-t border-white/5"
-              >
-                Limpar tudo
-              </button>
+            {/* Content */}
+            <div className="overflow-y-auto max-h-80 space-y-2 p-3">
+              {isLoading ? (
+                <div className="text-center py-8 text-white/40 text-sm">Carregando...</div>
+              ) : notifications.length === 0 ? (
+                <div className="text-center py-8 text-white/40 text-sm">Sem notificações</div>
+              ) : (
+                notifications.map((notif) => (
+                  <div
+                    key={notif.id}
+                    className="p-3 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-all"
+                  >
+                    {notif.type === 'join_request' && (
+                      <>
+                        <div className="flex items-center gap-2 mb-2">
+                          <Users className="w-4 h-4 text-yellow-400" />
+                          <p className="text-xs font-bold text-white/60 uppercase">Solicitação de entrada</p>
+                        </div>
+                        <p className="text-sm text-white mb-2">
+                          <span className="font-black">{notif.player_riot_id}</span> quer entrar em <span className="text-primary">{notif.team_name}</span> como <span className="text-yellow-400">{notif.role}</span>
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAcceptRequest(notif)}
+                            className="flex-1 px-3 py-1.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg text-xs font-bold hover:bg-green-500/30 transition-all"
+                          >
+                            Aceitar
+                          </button>
+                          <button
+                            onClick={() => handleDeclineRequest(notif)}
+                            className="flex-1 px-3 py-1.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/30 transition-all"
+                          >
+                            Recusar
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {notif.type === 'invite_received' && (
+                      <>
+                        <div className="flex items-center gap-2 mb-2">
+                          <CheckCircle2 className="w-4 h-4 text-blue-400" />
+                          <p className="text-xs font-bold text-white/60 uppercase">Convite de time</p>
+                        </div>
+                        <p className="text-sm text-white mb-2">
+                          Você foi convidado para <span className="text-primary font-black">{notif.team_name}</span> como <span className="text-blue-400">{notif.role}</span>
+                        </p>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleAcceptInvite(notif)}
+                            className="flex-1 px-3 py-1.5 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg text-xs font-bold hover:bg-green-500/30 transition-all"
+                          >
+                            Aceitar
+                          </button>
+                          <button
+                            onClick={() => handleDeclineInvite(notif)}
+                            className="flex-1 px-3 py-1.5 bg-red-500/20 border border-red-500/40 text-red-400 rounded-lg text-xs font-bold hover:bg-red-500/30 transition-all"
+                          >
+                            Recusar
+                          </button>
+                        </div>
+                      </>
+                    )}
+
+                    {notif.type === 'status_update' && (
+                      <>
+                        <div className="flex items-center gap-2 mb-2">
+                          <AlertCircle className={`w-4 h-4 ${notif.subtype === 'aceito' ? 'text-green-400' : 'text-red-400'}`} />
+                          <p className="text-xs font-bold text-white/60 uppercase">
+                            {notif.subtype === 'aceito' ? 'Convite aceito' : 'Convite recusado'}
+                          </p>
+                        </div>
+                        <p className="text-sm text-white">
+                          <span className="font-black">{notif.player_riot_id}</span> {notif.subtype === 'aceito' ? 'aceitou seu convite' : 'recusou seu convite'} para <span className="text-primary">{notif.team_name}</span>
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Error message */}
+            {errorMsg && (
+              <div className="border-t border-white/10 bg-red-500/10 text-red-300 text-xs p-3 text-center">
+                {errorMsg}
+              </div>
             )}
           </motion.div>
         )}

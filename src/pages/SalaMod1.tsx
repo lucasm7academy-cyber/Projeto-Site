@@ -79,13 +79,6 @@ export default function SalaMod1() {
         avatar: undefined,
     };
 
-    console.log(`👤 [SalaMod1] usuarioAtual:`, {
-        id: usuarioAtual.id,
-        nome: usuarioAtual.nome,
-        avatar: usuarioAtual.avatar,
-        perfilLoading: !perfil,
-    });
-
     if (!user) return <div className="flex-1 bg-[#050505] flex items-center justify-center text-white">Faça login</div>;
 
     const {
@@ -133,9 +126,9 @@ export default function SalaMod1() {
     const votosB = votos.filter((v: any) => v.opcao === 'time_b').length;
 
     const coresModo: Record<string, string> = {
-        '1v1': 'text-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]', 
-        'aram': 'text-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.4)]', 
-        '5v5': 'text-green-400 shadow-[0_0_8px_rgba(74,222,128,0.4)]',
+        '1v1': 'text-red-500', 
+        'aram': 'text-blue-400', 
+        '5v5': 'text-green-400',
     };
 
     return (
@@ -181,22 +174,20 @@ export default function SalaMod1() {
                         </motion.button>
                         <div className="flex flex-col">
                             <h1 className="text-[2.2vmin] font-black tracking-widest text-white uppercase leading-none">{sala.nome}</h1>
-                            <span className="text-[1.8vmin] font-black text-[#FFB700] tracking-widest mt-1">PK-#{String(sala.id).padStart(6, '0')}</span>
+                            <span className="text-[1.8vmin] font-black text-[#FFB700] tracking-widest mt-1">#{String(sala.id).padStart(6, '0')}</span>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-[4vmin]">
-                        <div className="flex items-center gap-[1.5vmin] px-[2.5vmin] py-[1.2vmin] bg-white/[0.03] rounded-xl border border-white/[0.05]">
+                        <div className="flex items-center gap-[3vmin]">
                             <div className="flex flex-col">
                                 <span className="text-[1vmin] font-bold text-white/40 uppercase tracking-widest">Estado</span>
                                 <span className="text-[1.4vmin] font-black text-[#FFB700] uppercase tracking-widest">{sala.estado.replace('_', ' ')}</span>
                             </div>
-                            <div className="w-[1px] h-[3vmin] bg-white/10 mx-2" />
                             <div className="flex flex-col">
                                 <span className="text-[1vmin] font-bold text-white/40 uppercase tracking-widest">Modo</span>
                                 <span className={`text-[1.4vmin] font-black uppercase tracking-widest ${coresModo[sala.modo] || 'text-white'}`}>{sala.modo}</span>
                             </div>
-                            <div className="w-[1px] h-[3vmin] bg-white/10 mx-2" />
                             <div className="flex flex-col">
                                 <span className="text-[1vmin] font-bold text-white/40 uppercase tracking-widest">Premiação</span>
                                 <span className="text-[1.4vmin] font-black text-green-400 uppercase tracking-widest">{sala.mpoints || 0} MC</span>
@@ -243,22 +234,13 @@ export default function SalaMod1() {
                                 initial={{ width: 0 }} animate={{ width: '100%' }}
                                 className="absolute inset-0 bg-[#3B82F6]/10 skew-x-[-15deg] border-l-[6px] border-[#3B82F6] shadow-[0_0_30px_rgba(59,130,246,0.2)]" 
                             />
-                            <span className="relative z-10 px-8 py-2 block text-[2vmin] font-black text-[#3B82F6] uppercase tracking-[0.5em]">LADO AZUL</span>
+                            <span className="relative z-10 px-8 py-2 block text-[2vmin] font-black text-[#3B82F6] uppercase tracking-[0.5em]">Blue-Side</span>
                         </div>
                         <div className="flex flex-col gap-[1.5vmin]">
                             {roles.map((role) => {
                                 const jogador = timeA.find((j: any) => j.role === role);
                                 const isAtual = jogador?.user_id === usuarioAtual.id;
                                 const avatar = isAtual ? perfil?.avatar : jogador?.avatar;
-                                if (jogador) {
-                                    console.log(`🔵 [TimeA-${role}] ${jogador.nome}:`, {
-                                        user_id: jogador.user_id,
-                                        isAtual,
-                                        avatarBanco: jogador.avatar,
-                                        avatarPerfil: perfil?.avatar,
-                                        avatarFinal: avatar,
-                                    });
-                                }
                                 return (
                                     <VagaSlot key={`A-${role}`} ocupada={!!jogador}
                                         nome={jogador?.nome} tag={jogador?.tag} icone={avatar}
@@ -276,22 +258,13 @@ export default function SalaMod1() {
                                  initial={{ width: 0 }} animate={{ width: '100%' }}
                                 className="absolute inset-0 bg-[#ef4444]/10 skew-x-[15deg] border-r-[6px] border-[#ef4444] shadow-[0_0_30px_rgba(239,68,68,0.2)]" 
                             />
-                            <span className="relative z-10 px-8 py-2 block text-[2vmin] font-black text-[#ef4444] uppercase tracking-[0.5em]">LADO VERMELHO</span>
+                            <span className="relative z-10 px-8 py-2 block text-[2vmin] font-black text-[#ef4444] uppercase tracking-[0.5em]">Red-Side</span>
                         </div>
                         <div className="flex flex-col gap-[1.5vmin]">
                             {roles.map((role) => {
                                 const jogador = timeB.find((j: any) => j.role === role);
                                 const isAtual = jogador?.user_id === usuarioAtual.id;
                                 const avatar = isAtual ? perfil?.avatar : jogador?.avatar;
-                                if (jogador) {
-                                    console.log(`🔴 [TimeB-${role}] ${jogador.nome}:`, {
-                                        user_id: jogador.user_id,
-                                        isAtual,
-                                        avatarBanco: jogador.avatar,
-                                        avatarPerfil: perfil?.avatar,
-                                        avatarFinal: avatar,
-                                    });
-                                }
                                 return (
                                     <VagaSlot key={`B-${role}`} ocupada={!!jogador}
                                         nome={jogador?.nome} tag={jogador?.tag} icone={avatar}
@@ -395,16 +368,19 @@ export default function SalaMod1() {
                                         onClick={() => {
                                             navigator.clipboard.writeText(codigoPartida);
                                         }}
-                                        className="group flex flex-col items-center gap-2 px-[4vmin] py-[2vmin] rounded-2xl bg-[#FFB700]/10 border-2 border-[#FFB700]/30 transition-all shadow-[0_0_30px_rgba(255,183,0,0.1)]"
+                                        className="group flex flex-col items-center gap-[2vmin] px-[6vmin] py-[3vmin] rounded-2xl bg-[#FFB700]/10 border-2 border-[#FFB700]/30 transition-all shadow-[0_0_50px_rgba(255,183,0,0.2)]"
                                     >
-                                        <span className="text-[0.9vmin] font-black text-[#FFB700]/60 uppercase tracking-widest group-hover:text-[#FFB700]">Clique para Copiar</span>
                                         <div className="flex items-center gap-3">
-                                            <span className="text-[2.5vmin] font-black text-white tracking-[0.2em]">{codigoPartida}</span>
-                                            <Copy className="w-[2vmin] h-[2vmin] text-[#FFB700]" />
+                                            <span className="text-[3vmin] font-black text-white tracking-[0.2em]">{codigoPartida}</span>
+                                            <Copy className="w-[2.5vmin] h-[2.5vmin] text-[#FFB700]" />
                                         </div>
+                                        <span className="text-[1.2vmin] font-black text-[#FFB700] uppercase tracking-[0.5em] group-hover:text-white transition-colors">Copiar Código da Sala</span>
                                     </motion.button>
                                 ) : (
-                                    <div className="text-white/20 animate-pulse font-black text-[1.8vmin] uppercase tracking-widest">Gerando Chave...</div>
+                                    <div className="flex flex-col items-center gap-4">
+                                        <div className="w-[10vmin] h-[2px] bg-gradient-to-r from-transparent via-[#FFB700] to-transparent animate-pulse" />
+                                        <div className="text-[#FFB700]/40 font-black text-[1.8vmin] uppercase tracking-[0.8em] animate-pulse">Gerando Chave...</div>
+                                    </div>
                                 )}
                             </motion.div>
                         </motion.div>
@@ -418,19 +394,30 @@ export default function SalaMod1() {
                             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[55vmin] h-[55vmin] rounded-full bg-black/80 backdrop-blur-xl z-[60] flex flex-col items-center justify-center p-[5vmin] text-center border border-white/10"
                         >
                             {meuVoto ? (
-                                <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center gap-4">
-                                    <div className="w-[10vmin] h-[10vmin] rounded-full bg-green-500/10 border-2 border-green-500/40 flex items-center justify-center shadow-[0_0_40px_rgba(34,197,94,0.2)]">
-                                        <Check className="w-[5vmin] h-[5vmin] text-green-400 stroke-[3px]" />
+                                <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center gap-6">
+                                    <div className="flex flex-col items-center gap-4">
+                                        <div className="w-[10vmin] h-[10vmin] rounded-full bg-green-500/10 border-2 border-green-500/40 flex items-center justify-center shadow-[0_0_40px_rgba(34,197,94,0.2)]">
+                                            <Check className="w-[5vmin] h-[5vmin] text-green-400 stroke-[3px]" />
+                                        </div>
+                                        <div className="flex flex-col gap-1 items-center">
+                                            <p className="text-white font-black text-[2vmin] uppercase tracking-widest text-center">Justiça Aplicada</p>
+                                            <p className="text-green-500/60 font-bold text-[1.2vmin] uppercase tracking-[0.3em] text-center">Voto Computado</p>
+                                        </div>
                                     </div>
-                                    <div className="flex flex-col gap-1">
-                                        <p className="text-white font-black text-[2vmin] uppercase tracking-widest">Justiça Aplicada</p>
-                                        <p className="text-green-500/60 font-bold text-[1.2vmin] uppercase tracking-[0.3em]">Voto Computado</p>
-                                    </div>
+                                    
+                                    <motion.button
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={() => navigate('/jogar')}
+                                        className="px-[6vmin] py-[2vmin] rounded-xl bg-white/[0.05] border border-white/10 text-white font-black text-[1.4vmin] uppercase tracking-widest hover:bg-[#FFB700] hover:text-black hover:border-[#FFB700] transition-all shadow-xl"
+                                    >
+                                        Sair da Sala
+                                    </motion.button>
                                 </motion.div>
                             ) : (
                                 <div className="flex flex-col items-center gap-6 w-full">
                                     <div className="flex flex-col gap-2">
-                                        <p className="text-[2.5vmin] font-black text-white uppercase tracking-[0.4em]">Fim da Linha</p>
+                                        <p className="text-[2.5vmin] font-black text-white uppercase tracking-[0.4em]">FINALIZAR PARTIDA</p>
                                         <p className="text-[1.2vmin] font-bold text-white/40 uppercase tracking-[0.4em]">Quem venceu?</p>
                                     </div>
 
@@ -441,8 +428,7 @@ export default function SalaMod1() {
                                             onClick={() => votar('time_a')}
                                             className="flex-1 py-4 rounded-2xl border-2 border-blue-500/30 bg-blue-500/5 hover:bg-blue-500/20 transition-all flex flex-col items-center gap-1 group shadow-[0_0_30px_rgba(59,130,246,0.1)]"
                                         >
-                                            <span className="text-[1.8vmin] font-black text-blue-400 uppercase tracking-widest group-hover:text-blue-300">{sala.timeANome || 'Azul'}</span>
-                                            <span className="px-2 py-0.5 bg-blue-500/20 rounded-full text-[1vmin] font-black text-blue-400/80">{votosA} Votos</span>
+                                            <span className="text-[1.8vmin] font-black text-blue-400 uppercase tracking-widest group-hover:text-blue-300">Blue-Side</span>
                                         </motion.button>
                                         <motion.button 
                                             whileHover={{ scale: 1.05 }}
@@ -450,8 +436,7 @@ export default function SalaMod1() {
                                             onClick={() => votar('time_b')}
                                             className="flex-1 py-4 rounded-2xl border-2 border-red-500/30 bg-red-500/5 hover:bg-red-500/20 transition-all flex flex-col items-center gap-1 group shadow-[0_0_30px_rgba(239,68,68,0.1)]"
                                         >
-                                            <span className="text-[1.8vmin] font-black text-red-500 uppercase tracking-widest group-hover:text-red-400">{sala.timeBNome || 'Red'}</span>
-                                            <span className="px-2 py-0.5 bg-red-500/20 rounded-full text-[1vmin] font-black text-red-500/80">{votosB} Votos</span>
+                                            <span className="text-[1.8vmin] font-black text-red-500 uppercase tracking-widest group-hover:text-red-400">Red-Side</span>
                                         </motion.button>
                                     </div>
 
@@ -485,28 +470,17 @@ export default function SalaMod1() {
                     {sala.estado === 'aguardando_inicio' && jogadorAtual && (
                         <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 50, opacity: 0 }}>
                             <motion.button 
-                                whileHover={{ scale: 1.05, y: -5 }}
+                                whileHover={{ scale: 1.05, y: -5, backgroundColor: 'rgba(249, 115, 22, 1)', borderColor: 'rgba(249, 115, 22, 0.4)' }}
                                 whileTap={{ scale: 0.95 }}
                                 onClick={solicitarFinalizacao}
-                                className="pointer-events-auto px-[12vmin] py-[2.5vmin] font-black uppercase tracking-[0.5em] text-[1.8vmin] rounded-2xl bg-orange-500/10 border-2 border-orange-500/40 text-orange-400 hover:bg-orange-500 hover:text-white transition-all shadow-2xl"
+                                className="pointer-events-auto px-[12vmin] py-[2.5vmin] font-black uppercase tracking-[0.5em] text-[1.8vmin] rounded-2xl bg-red-600 border-2 border-red-500/40 text-white transition-all shadow-[0_20px_50px_rgba(220,38,38,0.3)]"
                             >
-                                Encerrar Partida
+                                Finalizar Partida
                             </motion.button>
                         </motion.div>
                     )}
                 </AnimatePresence>
 
-                {/* Status Bar */}
-                <div className="mt-8 flex items-center gap-[4vmin] opacity-20 hover:opacity-100 transition-opacity duration-500">
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        <span className="text-[1vmin] font-black uppercase tracking-widest text-white">Servidor BR</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-                        <span className="text-[1vmin] font-black uppercase tracking-widest text-white">Ping: 12ms</span>
-                    </div>
-                </div>
             </div>
 
             {/* Edge Fog */}

@@ -52,7 +52,7 @@ export const VagaSlot: React.FC<VagaSlotProps> = ({
                     <motion.div 
                         initial={{ scale: 0 }} 
                         animate={{ scale: 1 }}
-                        className={`absolute top-[-1.2vmin] ${isTimeA ? 'left-[-1.2vmin]' : 'right-[-1.2vmin]'} z-20`}
+                        className={`absolute mid-[0vmin] ${isTimeA ? 'right-[2.7vmin]' : 'left-[2.7vmin]'} z-20`}
                     >
                         <div className="w-[3.5vmin] h-[3.5vmin] bg-green-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(34,197,94,0.6)] border-[3px] border-[#050505]">
                             <Check className="w-[2vmin] h-[2vmin] text-black stroke-[3px]" />
@@ -61,9 +61,7 @@ export const VagaSlot: React.FC<VagaSlotProps> = ({
                 )}
                 
                 <div className={`flex items-center gap-[2.5vmin] flex-1 overflow-hidden ${isTimeA ? 'flex-row' : 'flex-row-reverse'}`}>
-                    <div className="shrink-0 flex items-center justify-center w-[6vmin] h-[6vmin] bg-white/5 rounded-xl border border-white/10 relative group-hover:bg-white/10 transition-colors">
-                        <img src={roleIconImg} alt={role} className="w-[2.5vmin] h-[2.5vmin] object-contain brightness-0 invert opacity-40 group-hover:opacity-100 transition-opacity" />
-                    </div>
+                    <img src={roleIconImg} alt={role} className="w-[6vmin] h-[6vmin] object-contain brightness-0 invert opacity-80 group-hover:opacity-100 transition-opacity" />
                     {avatarEl}
                     <div className={`flex flex-col min-w-0 ${isTimeA ? 'text-left' : 'text-right'}`}>
                         <div className="flex items-center gap-2">
@@ -71,8 +69,8 @@ export const VagaSlot: React.FC<VagaSlotProps> = ({
                                 {nome}
                             </span>
                         </div>
-                        <span className="text-[1.3vmin] font-bold text-white/30 uppercase tracking-[0.2em] leading-none mt-1">
-                            #{tag}
+                        <span className="text-[1.3vmin] font-bold text-white/40 uppercase tracking-[0.2em] leading-none mt-1">
+                            {tag}
                         </span>
                     </div>
                 </div>
@@ -92,7 +90,7 @@ export const VagaSlot: React.FC<VagaSlotProps> = ({
                 ${isTimeA ? 'flex-row' : 'flex-row-reverse'}
             `}
         >
-            <div className="w-[6vmin] h-[6vmin] rounded-xl border border-white/10 bg-white/5 flex items-center justify-center group-hover:scale-110 group-hover:border-white/30 transition-all duration-300">
+            <div className="w-[6vmin] h-[6vmin] rounded-xl border border-white/10 bg-white/5 flex items-center justify-center group-hover:scale-103 group-hover:border-white/30 transition-all duration-300">
                 <UserPlus className="w-[2.5vmin] h-[2.5vmin] text-white/10 group-hover:text-white/60 transition-colors" />    
             </div>
             <div className={`flex flex-col ${isTimeA ? 'items-start' : 'items-end'}`}>
@@ -108,3 +106,6 @@ export const VagaSlot: React.FC<VagaSlotProps> = ({
         </motion.button>
     );
 }
+
+
+
