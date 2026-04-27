@@ -124,11 +124,6 @@ const Campeonatos = () => {
   const nextHero = () => setActiveHero((prev) => (prev + 1) % heroSlides.length);
   const prevHero = () => setActiveHero((prev) => (prev === 0 ? heroSlides.length - 1 : prev - 1));
 
-  // Auto-advance hero slides every 8 seconds
-  useEffect(() => {
-    const interval = setInterval(nextHero, 8000);
-    return () => clearInterval(interval);
-  }, []);
 
   if (isLoading) {
     return (

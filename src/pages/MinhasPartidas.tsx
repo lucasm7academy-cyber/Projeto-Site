@@ -32,7 +32,6 @@ export default function MinhasPartidas() {
   const [stats, setStats] = useState({ vitorias: 0, derrotas: 0, winRate: 0 });
   const [isVip, setIsVip] = useState(false);
   const [loadingVip, setLoadingVip] = useState(true);
-  const reloadTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const carregarDados = React.useCallback(async () => {
     if (!user) return;
@@ -105,34 +104,6 @@ export default function MinhasPartidas() {
     }
   }, [user]);
 
-  useEffect(() => {
-    carregarDados();
-  }, [carregarDados]);
-
-  // ✅ Realtime listener — atualiza quando novas partidas são criadas
-  useEffect(() => {
-    if (!user) return;
-
-    const channel = supabase
-      .channel('minhas_partidas_updates')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'resultados_partidas',
-      }, () => {
-        // Debounce 500ms para evitar múltiplas refetch rápidas
-        if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
-        reloadTimeoutRef.current = setTimeout(() => {
-          carregarDados();
-        }, 500);
-      })
-      .subscribe();
-
-    return () => {
-      if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
-      supabase.removeChannel(channel);
-    };
-  }, [user, carregarDados]);
 
   const isVitoria = (partida: Partida, userId: string): boolean => {
     const jogador = partida.jogadores.find((j) => j.id === userId);
@@ -272,8 +243,8 @@ export default function MinhasPartidas() {
         {/* ============================================ */}
         {/* LISTA DE PARTIDAS */}
         {/* ============================================ */}
-        {partidas.length === 0 ? (
-          <motion.div 
+        {partidas.length === 0 && !loading ? (
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             className="relative rounded-2xl overflow-hidden border border-white/10 p-16 text-center"
@@ -286,18 +257,27 @@ export default function MinhasPartidas() {
               <History className="w-10 h-10 text-white/20" />
             </div>
             <h3 className="text-2xl font-black text-white uppercase mb-3">
-              Nenhuma partida ainda
+              Carregue seu histórico
             </h3>
             <p className="text-white/40 text-sm max-w-md mx-auto mb-6">
-              Suas partidas finalizadas aparecerão aqui. Que tal criar uma sala e começar a jogar?
+              Clique para visualizar suas partidas finalizadas.
             </p>
-            <button
-              onClick={() => navigate('/jogar')}
-              className="px-6 py-3 rounded-xl bg-[#FFB700] text-black font-black text-sm uppercase hover:bg-[#e0a000] transition-all inline-flex items-center gap-2"
-            >
-              <Swords className="w-4 h-4" />
-              Encontrar Partida
-            </button>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => carregarDados()}
+                className="px-6 py-3 rounded-xl bg-[#FFB700] text-black font-black text-sm uppercase hover:bg-[#e0a000] transition-all inline-flex items-center gap-2"
+              >
+                <History className="w-4 h-4" />
+                Carregar Histórico
+              </button>
+              <button
+                onClick={() => navigate('/jogar')}
+                className="px-6 py-3 rounded-xl bg-white/10 border border-white/20 text-white font-black text-sm uppercase hover:bg-white/20 transition-all inline-flex items-center gap-2"
+              >
+                <Swords className="w-4 h-4" />
+                Encontrar Partida
+              </button>
+            </div>
           </motion.div>
         ) : (
           <div className="relative">

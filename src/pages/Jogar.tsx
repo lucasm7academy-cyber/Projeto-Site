@@ -549,13 +549,6 @@ const Jogar = () => {
     return () => observer.disconnect();
   }, [carregouFinalizadas, carregarFinalizadas]);
 
-  // Hero auto-advance
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveHero(prev => (prev + 1) % heroSlides.length);
-    }, 8000);
-    return () => clearInterval(interval);
-  }, []);
 
   // Scroll para finalizadas se view=finalizadas
   useEffect(() => {
