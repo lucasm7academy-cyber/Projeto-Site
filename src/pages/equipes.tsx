@@ -553,7 +553,6 @@ export default function Equipes() {
   const fetchingRef = useRef<boolean>(false);
   const temMaisRef = useRef<boolean>(true);
   const userIdRef = useRef<string | null>(null);
-  const reloadTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const [appliedSearch, setAppliedSearch] = useState<string>('');
 
@@ -585,29 +584,8 @@ export default function Equipes() {
 
     loadInitialData();
 
-    const channel = supabase
-      .channel('equipes-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'times' }, () => {
-        if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
-        reloadTimeoutRef.current = setTimeout(async () => {
-          const uid = userIdRef.current;
-          const [meuTime, { teams: reloaded }] = await Promise.all([
-            uid ? carregarMeuTime(uid) : Promise.resolve(null),
-            carregarTimesDoSupabase(uid, 0, arenaOffsetRef.current),
-          ]);
-          if (isMounted) {
-            setMyTeam(meuTime);
-            setArenaTeams(reloaded);
-          }
-          reloadTimeoutRef.current = undefined;
-        }, 300);
-      })
-      .subscribe();
-
     return () => {
       isMounted = false;
-      supabase.removeChannel(channel);
-      if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };
   }, [user]);
