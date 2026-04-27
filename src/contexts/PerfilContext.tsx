@@ -55,7 +55,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
 
     setLoading(true);
     try {
-      // ✅ Apenas 3 queries essenciais - ZERO overhead
+      // ✅ Apenas 3 queries essenciais - Load once on app init
       const [{ data: contaRiot }, { data: profile }, { data: saldoData }] = await Promise.all([
         supabase
           .from('contas_riot')
@@ -80,10 +80,10 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
           ? `https://ddragon.leagueoflegends.com/cdn/14.8.1/img/profileicon/${contaRiot.profile_icon_id}.png`
           : undefined;
 
-        console.log(`🎭 [PerfilContext] Carregando com conta vinculada:`, {
+        console.log(`🎭 [PerfilContext] Conta vinculada carregada:`, {
           nome,
-          profile_icon_id: contaRiot.profile_icon_id,
-          avatarUrl,
+          iconId: contaRiot.profile_icon_id,
+          elo: contaRiot.elo_cache?.soloQ?.tier,
         });
 
         setPerfil({
@@ -100,8 +100,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
           cargo: 'jogador',
         });
       } else {
-        // Conta não vinculada - use dados do auth user
-        console.log(`🎭 [PerfilContext] Carregando SEM conta vinculada`);
+        console.log(`🎭 [PerfilContext] Carregado sem conta vinculada`);
         setPerfil({
           id: user.id,
           nome: user.email?.split('@')[0] || 'Jogador',
@@ -114,7 +113,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      // Realtime subscription apenas para saldos (cargo exige F5 do user)
+      // Realtime subscription apenas para saldos (keeps saldo updated in real-time)
       const saldosChannel = supabase
         .channel(`saldos-user-${user.id}`)
         .on('postgres_changes', {
@@ -137,15 +136,23 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user]);
 
+  // Load perfil once on user change, cache across all routes
   useEffect(() => {
+    if (!user) {
+      setPerfil(null);
+      setLoading(false);
+      return;
+    }
+
     let unsubscribe: (() => void) | undefined;
     carregarPerfil().then((cleanup) => {
       unsubscribe = cleanup;
     });
+
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [carregarPerfil]);
+  }, [user?.id]); // Only reload when user ID changes (login/logout)
 
   const desvincular = useCallback(() => {
     if (!user) return;
