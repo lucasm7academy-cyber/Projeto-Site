@@ -37,7 +37,6 @@ interface StreamCard extends TwitchLiveStream {
 export default function Streamers() {
   const [streams, setStreams] = useState<StreamCard[]>([]);
   const [loading, setLoading] = useState(true);
-  const fetchTimeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
 
   const fetchStreams = React.useCallback(async () => {
     try {
@@ -116,38 +115,9 @@ export default function Streamers() {
   }, []);
 
   useEffect(() => {
-    // Initial fetch on mount
+    // Load streams when page is accessed
     setLoading(true);
     fetchStreams().then(() => setLoading(false));
-
-    // Subscribe to realtime updates with debounce
-    const subscription = supabase
-      .channel('sala_streams_updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sala_streams',
-        },
-        () => {
-          // Debounce to prevent multiple rapid refetches
-          if (fetchTimeoutRef.current) {
-            clearTimeout(fetchTimeoutRef.current);
-          }
-          fetchTimeoutRef.current = setTimeout(() => {
-            fetchStreams();
-          }, 300);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-      subscription.unsubscribe();
-    };
   }, [fetchStreams]);
 
   return (

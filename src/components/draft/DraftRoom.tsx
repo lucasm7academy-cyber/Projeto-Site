@@ -15,7 +15,6 @@ import {
   banirCampeao,
   pickarCampeao,
   podeControlarDraft,
-  inscreverDraftRealtime,
 } from '../../api/draft';
 import { getTurnOrder, type DraftState, type Champion } from './draftTypes';
 import { StreamModal } from '../StreamModal';
@@ -178,48 +177,13 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
     });
   }, [draft?.current_turn, draft?.status, modo, jogadoresDaSala.length]);
 
-  // ============================================================
-  // REALTIME
-  // ============================================================
-  useEffect(() => {
-    if (!draft) return;
-    const channel = inscreverDraftRealtime(salaId, (novoDraft) => {
-      // Verificar se timer expirou enquanto aba estava inativa
-      const agora = Date.now();
-      const tempoRestante = Math.max(0, Math.floor(((novoDraft.timer_end || agora) - agora) / 1000));
-
-      // Se timer zerou e a ação ainda não foi tomada, executar automaticamente
-      if (tempoRestante === 0 && novoDraft.status === 'ongoing' && !timerFrozen) {
-        const turnOrder = getTurnOrder(modo);
-        const ehMeuTurno = turnOrder[novoDraft.current_turn]?.team === meuTime;
-
-        if (ehMeuTurno && possoJogar && meuTime) {
-          console.log('[DraftRoom] ⏱️ Timer expirou - executando ação automática');
-          if (novoDraft.current_phase === 'ban') {
-            console.log('[DraftRoom] Ban automático em branco');
-            banirCampeao(novoDraft, '', novoDraft.current_team, modo);
-          } else {
-            console.log('[DraftRoom] Pick timeout - cancelando draft');
-            onPickTimeout?.(usuarioId);
-          }
-          setTimerFrozen(true);
-        }
-      }
-
-      draftRef.current = novoDraft;  // ✅ Atualizar ref sempre que draft muda
-      setDraft(novoDraft);
-      if (novoDraft.status === 'finished') onDraftFinalizado?.(novoDraft);
-    });
-    return () => { if (channel) supabase.removeChannel(channel); };
-  }, [salaId, draft?.id, onDraftFinalizado, meuTime, possoJogar, timerFrozen, modo, onPickTimeout, usuarioId]);
 
   // ============================================================
-  // REALTIME STREAMS
+  // CARREGAR STREAM ATIVA (sem Realtime)
   // ============================================================
   useEffect(() => {
     const loadActiveStream = async () => {
       try {
-        console.log('[DraftRoom] Carregando stream ativa para sala:', salaId);
         const { data, error } = await supabase
           .from('sala_streams')
           .select('*')
@@ -228,52 +192,17 @@ export const DraftRoom: React.FC<DraftRoomProps> = ({
           .maybeSingle();
 
         if (error) {
-          console.error('[DraftRoom] ❌ Erro ao carregar stream:', error);
+          console.error('[DraftRoom] Erro ao carregar stream:', error);
           return;
         }
 
-        console.log('[DraftRoom] ✅ Stream ativa carregada:', data);
         setSalaStreamAtiva(data);
       } catch (err) {
-        console.error('[DraftRoom] ❌ Exception ao carregar stream:', err);
+        console.error('[DraftRoom] Exception ao carregar stream:', err);
       }
     };
 
     loadActiveStream();
-
-    const subscription = supabase
-      .channel(`sala_streams_${salaId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'sala_streams',
-          filter: `sala_id=eq.${salaId}`,
-        },
-        (payload: any) => {
-          console.log('[DraftRoom] Realtime stream update - event:', payload.event);
-          const eventType = payload.event?.toUpperCase() || payload.eventType?.toUpperCase();
-
-          if (eventType === 'INSERT' || eventType === 'UPDATE') {
-            const newStream = payload.new as any;
-            if (newStream?.ativo) {
-              console.log('[DraftRoom] ✅ Stream ativa para todos:', newStream);
-              setSalaStreamAtiva(newStream);
-            } else {
-              console.log('[DraftRoom] ⚠️ Stream não está ativo');
-            }
-          } else if (eventType === 'DELETE') {
-            console.log('[DraftRoom] ❌ Stream desativada');
-            setSalaStreamAtiva(null);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, [salaId]);
 
   // ============================================================

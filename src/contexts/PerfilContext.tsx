@@ -113,22 +113,6 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      // Realtime subscription apenas para saldos (keeps saldo updated in real-time)
-      const saldosChannel = supabase
-        .channel(`saldos-user-${user.id}`)
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'saldos',
-          filter: `user_id=eq.${user.id}`,
-        }, (payload: any) => {
-          setPerfil((prev) => prev ? { ...prev, saldo: payload.new.saldo } : null);
-        })
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(saldosChannel);
-      };
     } catch (err) {
       console.error('[PerfilContext] Erro ao carregar perfil:', err);
     } finally {
@@ -144,14 +128,7 @@ export function PerfilProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    let unsubscribe: (() => void) | undefined;
-    carregarPerfil().then((cleanup) => {
-      unsubscribe = cleanup;
-    });
-
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
+    carregarPerfil();
   }, [user?.id]); // Only reload when user ID changes (login/logout)
 
   const desvincular = useCallback(() => {
