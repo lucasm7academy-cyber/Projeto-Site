@@ -193,7 +193,6 @@ export default function App() {
   const fetchingRef = useRef(false);
   const temMaisRef = useRef(true);
   const readyRef = useRef(false);
-  const todosJogadoresRef = useRef<Jogador[]>([]);
   const filterTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
 
   const carregarMais = async () => {
@@ -247,28 +246,6 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
 
-  // Sincronizar ref
-  useEffect(() => {
-    todosJogadoresRef.current = todosJogadores;
-  }, [todosJogadores]);
-
-  // Realtime para atualização de elos
-  useEffect(() => {
-    const channel = supabase
-      .channel('players_elos')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'contas_riot' }, (payload: any) => {
-        const jogador = todosJogadoresRef.current.find(j => j.id === payload.new?.user_id);
-        if (jogador) {
-          setTodosJogadores(prev => prev.map(j =>
-            j.id === jogador.id
-              ? { ...j, elo: TIER_MAP[payload.new?.tier] ?? 'Ferro', nivel: payload.new?.level ?? j.nivel }
-              : j
-          ));
-        }
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
 
   // Popup auto-dismiss
   useEffect(() => {
