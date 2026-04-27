@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Play, ChevronLeft, ChevronRight, Trophy, Users, Coins,
   Search, Lock, Zap, Crown, X, LogIn, Plus, SlidersHorizontal,
-  Sword, Shield, Swords, Gem, Snowflake, Tv2
+  Sword, Shield, Swords, Gem, Snowflake, Tv2, RefreshCw
 } from 'lucide-react';
 import {
   MODOS_JOGO, OPCOES_ELO, OPCOES_MPOINTS, getModoInfo, getMPointsInfo,
@@ -403,6 +403,7 @@ const Jogar = () => {
   // Estados das salas
   const [salas, setSalas] = useState<Sala[]>([]);
   const [loadingSalas, setLoadingSalas] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [busca, setBusca] = useState('');
   const [filtroModo, setFiltroModo] = useState<ModoJogo | 'todos'>('todos');
 
@@ -517,19 +518,10 @@ const Jogar = () => {
     setCarregouFinalizadas(true);
   }, [carregouFinalizadas]);
 
-  // ── REALTIME (SIMPLES, 1 CANAL) ────────────────────
+  // ── LOAD SALAS ON MOUNT ────────────────────────────
   useEffect(() => {
     carregarSalasLista();
-
-    const channel = supabase
-      .channel('salas_jogar_leve')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'salas' },
-        () => carregarSalasLista()
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [carregarSalasLista]);
+  }, []);
 
   // ── LAZY LOAD FINALIZADAS AO SCROLLAR ──────────────
   useEffect(() => {
@@ -600,6 +592,12 @@ const Jogar = () => {
   const abrirModalCriar = (modo: ModoJogo) => {
     setModoSelecionado(modo);
     setShowCriarModal(true);
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await carregarSalasLista();
+    setRefreshing(false);
   };
 
   if (!usuarioAtual) {
@@ -743,24 +741,34 @@ const Jogar = () => {
         {/* BARRA DE BUSCA E FILTROS */}
         {/* ============================================ */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
                 <Search className="w-4 h-4 text-[#FFB700]" />
               </div>
               <h2 className="text-xl font-black text-white uppercase tracking-widest">Salas Disponíveis</h2>
             </div>
-            <select
-              value={filtroModo}
-              onChange={(e) => setFiltroModo(e.target.value as ModoJogo | 'todos')}
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold uppercase tracking-wider"
-            >
-              <option value="todos" className="bg-black">Todos Modos</option>
-              <option value="5v5" className="bg-black">5v5 Clássico</option>
-              <option value="aram" className="bg-black">ARAM</option>
-              <option value="1v1" className="bg-black">1v1</option>
-              <option value="time_vs_time" className="bg-black">Time vs Time</option>
-            </select>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleRefresh}
+                disabled={refreshing || loadingSalas}
+                className="p-2 rounded-lg bg-white/5 border border-white/10 text-white hover:border-[#FFB700]/50 hover:text-[#FFB700] transition-all disabled:opacity-50"
+                title="Atualizar salas"
+              >
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+              </button>
+              <select
+                value={filtroModo}
+                onChange={(e) => setFiltroModo(e.target.value as ModoJogo | 'todos')}
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-xs font-bold uppercase tracking-wider"
+              >
+                <option value="todos" className="bg-black">Todos Modos</option>
+                <option value="5v5" className="bg-black">5v5 Clássico</option>
+                <option value="aram" className="bg-black">ARAM</option>
+                <option value="1v1" className="bg-black">1v1</option>
+                <option value="time_vs_time" className="bg-black">Time vs Time</option>
+              </select>
+            </div>
           </div>
 
           <div className="relative">
