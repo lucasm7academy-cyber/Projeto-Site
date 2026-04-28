@@ -1,5 +1,6 @@
 // src/hooks/useSalaSimples.ts
-// ✅ VERSÃO CORRIGIDA - SEM LOOP INFINITO
+// ✅ VERSÃO CORRIGIDA - TRANSICAO FUNCIONANDO
+
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import {
@@ -12,6 +13,8 @@ import {
     buscarVotos,
     encerrarSala,
 } from '../api/salamod1';
+
+const IS_DEV = import.meta.env.DEV;
 
 export function useSalaSimples(
     salaId: number,
@@ -43,8 +46,9 @@ export function useSalaSimples(
     const resetandoRef = useRef(false);
     const confirmacaoResolvidaRef = useRef(false);
     const falhaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const processandoRealtimeRef = useRef(false); // ✅ NOVO: trava do Realtime
-    const carregandoVotosRef = useRef(false); // ✅ NOVO: trava de votos
+    const processandoRealtimeRef = useRef(false);
+    const carregandoVotosRef = useRef(false);
+    const ultimoEstadoRef = useRef<string>(''); // ✅ NOVO: controle de estado
 
     useEffect(() => { jogadoresRef.current = jogadores; }, [jogadores]);
 
@@ -74,6 +78,7 @@ export function useSalaSimples(
             }
             setSala(dadosSala);
             setCodigoPartida(dadosSala.codigo_partida || null);
+            ultimoEstadoRef.current = dadosSala.estado;
 
             if (dadosSala.estado === 'confirmacao' && dadosSala.confirmacao_expires_at) {
                 const restante = Math.max(0, Math.round(
@@ -105,13 +110,11 @@ export function useSalaSimples(
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'sala_jogadores', filter: `sala_id=eq.${salaId}` },
                 async () => {
-                    // ✅ TRAVA: evita loop infinito
                     if (processandoRealtimeRef.current) return;
                     processandoRealtimeRef.current = true;
                     
                     try {
                         const dadosJogadores = await buscarJogadores(salaId);
-                        // ✅ Só atualiza se realmente mudou
                         setJogadores(prev => {
                             if (JSON.stringify(prev) === JSON.stringify(dadosJogadores)) return prev;
                             return dadosJogadores;
@@ -124,14 +127,23 @@ export function useSalaSimples(
             .on('postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'salas', filter: `id=eq.${salaId}` },
                 (payload: any) => {
-                    if (transicionandoRef.current) return; // ✅ evita loop de transição
+                    if (transicionandoRef.current) return;
+                    
+                    const novoEstado = payload.new.estado;
+                    if (IS_DEV) console.log(`📡 [Realtime] Sala ${salaId}: ${ultimoEstadoRef.current} → ${novoEstado}`);
+                    ultimoEstadoRef.current = novoEstado;
+                    
                     setSala(payload.new);
                     setCodigoPartida(payload.new.codigo_partida || null);
+                    
                     if (payload.new.estado === 'confirmacao' && payload.new.confirmacao_expires_at) {
                         const restante = Math.max(0, Math.round(
                             (new Date(payload.new.confirmacao_expires_at).getTime() - Date.now()) / 1000
                         ));
                         setTimer(restante > 0 ? restante : 40);
+
+                        // ✅ Reset confirmado quando entra em confirmacao
+                        setJogadores(prev => prev.map(j => ({ ...j, confirmado: false })));
                     }
                     if (payload.new.estado !== 'confirmacao') {
                         confirmacaoResolvidaRef.current = false;
@@ -154,6 +166,7 @@ export function useSalaSimples(
         const estadoConfirmacao = sala?.estado === 'confirmacao';
 
         if (todosOcupados && estadoConfirmacao && !timerRef.current) {
+            if (IS_DEV) console.log(`⏰ [Timer] Iniciando timer de confirmação`);
             timerRef.current = setInterval(() => {
                 setTimer(prev => {
                     if (prev <= 1) {
@@ -223,9 +236,11 @@ export function useSalaSimples(
         };
     }, [sala?.estado, votos]);
 
-    // ── AUTO-TRANSIÇÕES (COM TRAVA) ───────────────────
+    // ── AUTO-TRANSIÇÕES (CORRIGIDA) ───────────────────
     useEffect(() => {
-        if (!sala || transicionandoRef.current) return;
+        if (!sala) return;
+        if (transicionandoRef.current) return;
+        
 
         const estado = sala.estado;
         const total = jogadores.length;
@@ -235,43 +250,63 @@ export function useSalaSimples(
         async function transicionar(novoEstado: string, extras?: Record<string, any>) {
             if (transicionandoRef.current) return;
             transicionandoRef.current = true;
+            
+            if (IS_DEV) console.log(`🔄 [Transição] ${estado} → ${novoEstado}`);
+            
             const update: Record<string, any> = { estado: novoEstado, updated_at: new Date().toISOString(), ...extras };
             await supabase.from('salas').update(update).eq('id', salaId);
+            
             setTimeout(() => { transicionandoRef.current = false; }, 500);
         }
 
+        // ✅ REGRA 1: Aberta → Preenchendo (quando alguém entra)
         if (estado === 'aberta' && total > 0 && !transicionandoRef.current) {
             transicionar('preenchendo');
+            return;
         }
 
+        // ✅ REGRA 2: Preenchendo → Confirmacao (quando todas as vagas preenchidas)
         if (estado === 'preenchendo' && total === max && !transicionandoRef.current) {
             const expiresAt = new Date(Date.now() + 40 * 1000).toISOString();
             transicionar('confirmacao', { confirmacao_expires_at: expiresAt });
             setTimer(40);
             confirmacaoResolvidaRef.current = false;
+            return;
         }
 
+        // ✅ REGRA 3: Preenchendo → Aberta (quando todo mundo sai)
         if (estado === 'preenchendo' && total === 0 && !transicionandoRef.current) {
             transicionar('aberta');
+            return;
         }
 
+        // ✅ REGRA 4: Confirmacao → Preenchendo (alguém saiu)
         if (estado === 'confirmacao' && total < max && !confirmacaoResolvidaRef.current && !transicionandoRef.current) {
             confirmacaoResolvidaRef.current = true;
+            if (IS_DEV) console.log(`⚠️ [Transição] Alguém saiu na confirmação, voltando para preenchendo`);
             transicionar('preenchendo');
             setTimer(40);
+            return;
         }
 
+        // ✅ REGRA 5: Confirmacao → Aguardando Inicio (todos confirmaram)
         if (estado === 'confirmacao' && todosConfirmaram && !confirmacaoResolvidaRef.current && !transicionandoRef.current) {
             confirmacaoResolvidaRef.current = true;
+            if (IS_DEV) console.log(`✅ [Transição] Todos confirmaram! Iniciando partida`);
             transicionar('aguardando_inicio');
             if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+            
+            // Marcar todos como vinculados
             supabase.from('sala_jogadores').update({ vinculado: true }).eq('sala_id', salaId);
+            
             if (!codigoPartida) {
                 const codigo = 'LOL-' + Math.random().toString(36).substring(2, 8).toUpperCase();
                 supabase.from('salas').update({ codigo_partida: codigo }).eq('id', salaId);
             }
+            return;
         }
 
+        // ✅ REGRA 6: Finalizacao → Carregar votos
         if (estado === 'finalizacao' && votos.length === 0 && !carregandoVotosRef.current) {
             carregarVotos();
         }
@@ -281,6 +316,8 @@ export function useSalaSimples(
     async function resetarNaoConfirmados() {
         if (resetandoRef.current) return;
         resetandoRef.current = true;
+        
+        if (IS_DEV) console.log(`🔄 [Reset] Resetando não confirmados...`);
 
         try {
             const naoConfirmados = jogadores.filter(j => !j.confirmado);
@@ -313,6 +350,7 @@ export function useSalaSimples(
 
     // ── ENCERRAR PARTIDA ─────────────────────────────
     async function encerrarPartida(vencedor: 'A' | 'B' | 'empate') {
+        if (IS_DEV) console.log(`🏆 [Partida] Encerrando com vencedor: ${vencedor}`);
         if (timerFinRef.current) { clearInterval(timerFinRef.current); timerFinRef.current = null; }
         await encerrarSala(salaId, vencedor);
         await supabase.from('sala_jogadores').update({ vinculado: false }).eq('sala_id', salaId);
