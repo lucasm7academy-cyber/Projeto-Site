@@ -52,10 +52,10 @@ export const VagaSlot: React.FC<VagaSlotProps> = ({
                     <motion.div 
                         initial={{ scale: 0 }} 
                         animate={{ scale: 1 }}
-                        className={`absolute mid-[0vmin] ${isTimeA ? 'right-[2.7vmin]' : 'left-[2.7vmin]'} z-20`}
+                        className={`absolute mid-[0vmin] ${isTimeA ? 'right-[3.5vmin]' : 'left-[3.5vmin]'} z-20`}
                     >
                         <div className="w-[3.5vmin] h-[3.5vmin] bg-green-500 rounded-full flex items-center justify-center shadow-[0_0_20px_rgba(34,197,94,0.6)] border-[3px] border-[#050505]">
-                            <Check className="w-[2vmin] h-[2vmin] text-black stroke-[3px]" />
+                            <Check className="w-[1.8vmin] h-[1.8vmin] text-black stroke-[3px]" />
                         </div>
                     </motion.div>
                 )}

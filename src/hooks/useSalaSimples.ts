@@ -1,5 +1,5 @@
 // src/hooks/useSalaSimples.ts
-// ✅ VERSÃO FINAL CORRIGIDA - 4 bugs resolvidos
+// ✅ VERSÃO CORRIGIDA - SEM LOOP INFINITO
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import {
@@ -34,6 +34,7 @@ export function useSalaSimples(
     const [timerFinalizacao, setTimerFinalizacao] = useState(180);
     const [mostrarFalha, setMostrarFalha] = useState(false);
 
+    // Refs para controle de loops
     const timerRef = useRef<NodeJS.Timeout | null>(null);
     const timerFinRef = useRef<NodeJS.Timeout | null>(null);
     const transicionandoRef = useRef(false);
@@ -42,6 +43,8 @@ export function useSalaSimples(
     const resetandoRef = useRef(false);
     const confirmacaoResolvidaRef = useRef(false);
     const falhaTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const processandoRealtimeRef = useRef(false); // ✅ NOVO: trava do Realtime
+    const carregandoVotosRef = useRef(false); // ✅ NOVO: trava de votos
 
     useEffect(() => { jogadoresRef.current = jogadores; }, [jogadores]);
 
@@ -52,6 +55,9 @@ export function useSalaSimples(
             if (jogador && !jogador.vinculado && !jogador.confirmado) {
                 sairDaVaga(salaId, usuarioAtual.id).catch(() => {});
             }
+            if (timerRef.current) clearInterval(timerRef.current);
+            if (timerFinRef.current) clearInterval(timerFinRef.current);
+            if (falhaTimeoutRef.current) clearTimeout(falhaTimeoutRef.current);
         };
     }, [salaId, usuarioAtual.id]);
 
@@ -92,20 +98,33 @@ export function useSalaSimples(
         return () => { mounted = false; };
     }, [salaId]);
 
-    // ── REALTIME ──────────────────────────────────────
+    // ── REALTIME (COM TRAVA DE LOOP) ─────────────────
     useEffect(() => {
         const channel = supabase
             .channel(`sala_${salaId}`)
             .on('postgres_changes',
                 { event: '*', schema: 'public', table: 'sala_jogadores', filter: `sala_id=eq.${salaId}` },
                 async () => {
-                    const dadosJogadores = await buscarJogadores(salaId);
-                    setJogadores(dadosJogadores);
+                    // ✅ TRAVA: evita loop infinito
+                    if (processandoRealtimeRef.current) return;
+                    processandoRealtimeRef.current = true;
+                    
+                    try {
+                        const dadosJogadores = await buscarJogadores(salaId);
+                        // ✅ Só atualiza se realmente mudou
+                        setJogadores(prev => {
+                            if (JSON.stringify(prev) === JSON.stringify(dadosJogadores)) return prev;
+                            return dadosJogadores;
+                        });
+                    } finally {
+                        setTimeout(() => { processandoRealtimeRef.current = false; }, 300);
+                    }
                 }
             )
             .on('postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'salas', filter: `id=eq.${salaId}` },
                 (payload: any) => {
+                    if (transicionandoRef.current) return; // ✅ evita loop de transição
                     setSala(payload.new);
                     setCodigoPartida(payload.new.codigo_partida || null);
                     if (payload.new.estado === 'confirmacao' && payload.new.confirmacao_expires_at) {
@@ -128,13 +147,12 @@ export function useSalaSimples(
         return () => { supabase.removeChannel(channel); };
     }, [salaId]);
 
-    // ── TIMER DE CONFIRMAÇÃO (CORRIGIDO) ──────────────
+    // ── TIMER DE CONFIRMAÇÃO ──────────────────────────
     useEffect(() => {
         const max = sala?.max_jogadores ?? 10;
         const todosOcupados = jogadores.length === max;
         const estadoConfirmacao = sala?.estado === 'confirmacao';
 
-        // ✅ BUG #1 CORRIGIDO: Só cria intervalo se NÃO existe um rodando
         if (todosOcupados && estadoConfirmacao && !timerRef.current) {
             timerRef.current = setInterval(() => {
                 setTimer(prev => {
@@ -143,7 +161,6 @@ export function useSalaSimples(
                             clearInterval(timerRef.current);
                             timerRef.current = null;
                         }
-                        // ✅ BUG #2 CORRIGIDO: Trava impede execução paralela
                         if (!resetandoRef.current) {
                             resetarNaoConfirmados();
                         }
@@ -206,7 +223,7 @@ export function useSalaSimples(
         };
     }, [sala?.estado, votos]);
 
-    // ── AUTO-TRANSIÇÕES ──────────────────────────────
+    // ── AUTO-TRANSIÇÕES (COM TRAVA) ───────────────────
     useEffect(() => {
         if (!sala || transicionandoRef.current) return;
 
@@ -216,34 +233,35 @@ export function useSalaSimples(
         const todosConfirmaram = total === max && total > 0 && jogadores.every(j => j.confirmado);
 
         async function transicionar(novoEstado: string, extras?: Record<string, any>) {
+            if (transicionandoRef.current) return;
             transicionandoRef.current = true;
             const update: Record<string, any> = { estado: novoEstado, updated_at: new Date().toISOString(), ...extras };
             await supabase.from('salas').update(update).eq('id', salaId);
-            transicionandoRef.current = false;
+            setTimeout(() => { transicionandoRef.current = false; }, 500);
         }
 
-        if (estado === 'aberta' && total > 0) {
+        if (estado === 'aberta' && total > 0 && !transicionandoRef.current) {
             transicionar('preenchendo');
         }
 
-        if (estado === 'preenchendo' && total === max) {
+        if (estado === 'preenchendo' && total === max && !transicionandoRef.current) {
             const expiresAt = new Date(Date.now() + 40 * 1000).toISOString();
             transicionar('confirmacao', { confirmacao_expires_at: expiresAt });
             setTimer(40);
             confirmacaoResolvidaRef.current = false;
         }
 
-        if (estado === 'preenchendo' && total === 0) {
+        if (estado === 'preenchendo' && total === 0 && !transicionandoRef.current) {
             transicionar('aberta');
         }
 
-        if (estado === 'confirmacao' && total < max && !confirmacaoResolvidaRef.current) {
+        if (estado === 'confirmacao' && total < max && !confirmacaoResolvidaRef.current && !transicionandoRef.current) {
             confirmacaoResolvidaRef.current = true;
             transicionar('preenchendo');
             setTimer(40);
         }
 
-        if (estado === 'confirmacao' && todosConfirmaram && !confirmacaoResolvidaRef.current) {
+        if (estado === 'confirmacao' && todosConfirmaram && !confirmacaoResolvidaRef.current && !transicionandoRef.current) {
             confirmacaoResolvidaRef.current = true;
             transicionar('aguardando_inicio');
             if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
@@ -254,19 +272,18 @@ export function useSalaSimples(
             }
         }
 
-        if (estado === 'finalizacao' && votos.length === 0) carregarVotos();
+        if (estado === 'finalizacao' && votos.length === 0 && !carregandoVotosRef.current) {
+            carregarVotos();
+        }
     }, [sala?.estado, jogadores]);
 
-    // ── RESETAR NÃO CONFIRMADOS (CORRIGIDO) ───────────
+    // ── RESETAR NÃO CONFIRMADOS ───────────────────────
     async function resetarNaoConfirmados() {
-        // ✅ BUG #2 CORRIGIDO: Trava impede execução paralela
         if (resetandoRef.current) return;
         resetandoRef.current = true;
 
         try {
             const naoConfirmados = jogadores.filter(j => !j.confirmado);
-
-            // ✅ BUG #3 CORRIGIDO: Remove localmente ANTES do banco
             const confirmados = jogadores.filter(j => j.confirmado).map(j => ({ ...j, confirmado: false }));
             setJogadores(confirmados);
 
@@ -301,12 +318,19 @@ export function useSalaSimples(
         await supabase.from('sala_jogadores').update({ vinculado: false }).eq('sala_id', salaId);
     }
 
-    // ── CARREGAR VOTOS ───────────────────────────────
+    // ── CARREGAR VOTOS (COM TRAVA) ────────────────────
     async function carregarVotos() {
-        const dadosVotos = await buscarVotos(salaId);
-        setVotos(dadosVotos);
-        const meu = dadosVotos.find((v: any) => v.user_id === usuarioAtual.id);
-        if (meu) setMeuVoto(meu.opcao);
+        if (carregandoVotosRef.current) return;
+        carregandoVotosRef.current = true;
+        
+        try {
+            const dadosVotos = await buscarVotos(salaId);
+            setVotos(dadosVotos);
+            const meu = dadosVotos.find((v: any) => v.user_id === usuarioAtual.id);
+            if (meu) setMeuVoto(meu.opcao);
+        } finally {
+            setTimeout(() => { carregandoVotosRef.current = false; }, 500);
+        }
     }
 
     // ── AÇÕES ────────────────────────────────────────
@@ -333,10 +357,6 @@ export function useSalaSimples(
                 await sairDaVaga(salaId, usuarioAtual.id);
             }
 
-            console.log(`🟢 [entrar] Passando avatar:`, {
-                nome: usuarioAtual.nome,
-                avatar: usuarioAtual.avatar,
-            });
             const sucesso = await entrarNaVaga(
                 salaId, usuarioAtual.id, usuarioAtual.nome,
                 usuarioAtual.tag, usuarioAtual.elo, role, isTimeA, usuarioAtual.avatar
@@ -386,7 +406,6 @@ export function useSalaSimples(
         }).eq('id', salaId);
     };
 
-    // ── RETORNO ──────────────────────────────────────
     return {
         sala, jogadores, loading, erro,
         timer, codigoPartida,

@@ -1,11 +1,7 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- * 
- * ✅ VERSÃO OTIMIZADA - EQUIPES
- */
+// src/pages/equipes.tsx
+// ✅ VERSÃO OTIMIZADA - SEM N+1 QUERIES
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -17,7 +13,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { usePerfilSafe } from '../contexts/PerfilContext';
 
-// ── Tipos Globais ─────────────────────────────────────────────────────────
+// ── Tipos ─────────────────────────────────────────────────────────────────
 type Role = 'TOP' | 'JG' | 'MID' | 'ADC' | 'SUP' | 'RES';
 type UserRole = 'leader' | 'member' | 'visitor';
 
@@ -37,7 +33,7 @@ interface Team {
   logoUrl?: string;
   gradientFrom: string;
   gradientTo: string;
-  players: Player[];
+  players: Player[];  // ⚠️ SÓ CARREGADO QUANDO CLICA
   pdl: number;
   winrate: number;
   ranking: number;
@@ -45,29 +41,7 @@ interface Team {
   gamesPlayed: number;
   userRole: UserRole;
   donoId?: string;
-}
-
-interface MembroRaw {
-  riot_id: string;
-  role: string;
-  elo: string;
-  is_leader: boolean;
-  user_id: string;
-}
-
-interface TimeRaw {
-  id: string;
-  nome: string;
-  tag: string;
-  logo_url: string | null;
-  gradient_from: string;
-  gradient_to: string;
-  pdl: number;
-  winrate: number;
-  ranking: number;
-  wins: number;
-  games_played: number;
-  dono_id: string;
+  hasPlayersLoaded?: boolean; // ✅ Flag para saber se já carregou membros
 }
 
 // ── Configuração visual ───────────────────────────────────────────────────
@@ -107,26 +81,8 @@ const ELO_COLORS: Record<string, string> = {
 const getEloColor = (elo: string): string => ELO_COLORS[elo.split(' ')[0]] ?? 'text-white/60';
 const formatBRL = (v: number): string => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-// ── Funções de API (otimizadas) ───────────────────────────────────────────
-async function carregarMembrosDoTime(timeId: string | number): Promise<Player[]> {
-  const { data: membros, error } = await supabase
-    .from('time_membros')
-    .select('riot_id, role, elo, is_leader, user_id')
-    .eq('time_id', timeId)
-    .order('is_leader', { ascending: false });
-
-  if (error || !membros) return [];
-
-  return membros.map((m: MembroRaw) => ({
-    name: m.riot_id || 'Jogador',
-    role: (m.role || 'RES') as Role,
-    elo: m.elo || 'Sem Elo',
-    isLeader: m.is_leader || false,
-    userId: m.user_id,
-  }));
-}
-
-async function carregarTimesDoSupabase(
+// ✅ Função para carregar SOMENTE os dados básicos do time (SEM membros)
+async function carregarTimesBasico(
   currentUserId: string | null,
   offset = 0,
   limit = TEAMS_PAGE,
@@ -139,32 +95,31 @@ async function carregarTimesDoSupabase(
 
   if (error || !timesRaw) return { teams: [], temMais: false };
 
-  const teamsComMembros = await Promise.all(
-    timesRaw.map(async (t: TimeRaw) => {
-      const membros = await carregarMembrosDoTime(t.id);
-      const userRole: UserRole = currentUserId
-        ? t.dono_id === currentUserId ? 'leader'
-          : membros.some((m: Player) => m.userId === currentUserId) ? 'member' : 'visitor'
-        : 'visitor';
+  const teamsComMembros: Team[] = timesRaw.map((t: any) => {
+    let userRole: UserRole = 'visitor';
+    if (currentUserId) {
+      if (t.dono_id === currentUserId) userRole = 'leader';
+      // ⚠️ Não sabemos se é member sem os membros! Será verificado depois
+    }
 
-      return {
-        id: t.id,
-        name: t.nome,
-        tag: t.tag,
-        logoUrl: t.logo_url ?? undefined,
-        gradientFrom: t.gradient_from || '#FFB700',
-        gradientTo: t.gradient_to || '#FF6600',
-        players: membros,
-        pdl: t.pdl || 0,
-        winrate: t.winrate || 0,
-        ranking: t.ranking || 999,
-        wins: t.wins || 0,
-        gamesPlayed: t.games_played || 0,
-        userRole,
-        donoId: t.dono_id,
-      };
-    })
-  );
+    return {
+      id: t.id,
+      name: t.nome,
+      tag: t.tag,
+      logoUrl: t.logo_url ?? undefined,
+      gradientFrom: t.gradient_from || '#FFB700',
+      gradientTo: t.gradient_to || '#FF6600',
+      players: [], // ✅ Vazio! Carrega só quando clica
+      hasPlayersLoaded: false,
+      pdl: t.pdl || 0,
+      winrate: t.winrate || 0,
+      ranking: t.ranking || 999,
+      wins: t.wins || 0,
+      gamesPlayed: t.games_played || 0,
+      userRole,
+      donoId: t.dono_id,
+    };
+  });
 
   return {
     teams: teamsComMembros,
@@ -172,6 +127,26 @@ async function carregarTimesDoSupabase(
   };
 }
 
+// ✅ Função para carregar membros de UM time específico (lazy)
+async function carregarMembrosDoTime(timeId: string | number): Promise<Player[]> {
+  const { data: membros, error } = await supabase
+    .from('time_membros')
+    .select('riot_id, role, elo, is_leader, user_id')
+    .eq('time_id', timeId)
+    .order('is_leader', { ascending: false });
+
+  if (error || !membros) return [];
+
+  return membros.map((m: any) => ({
+    name: m.riot_id || 'Jogador',
+    role: (m.role || 'RES') as Role,
+    elo: m.elo || 'Sem Elo',
+    isLeader: m.is_leader || false,
+    userId: m.user_id,
+  }));
+}
+
+// ✅ Função para carregar MEU time (com membros, pois é o time do usuário)
 async function carregarMeuTime(userId: string): Promise<Team | null> {
   const { data: membro } = await supabase
     .from('time_membros')
@@ -200,6 +175,7 @@ async function carregarMeuTime(userId: string): Promise<Team | null> {
     gradientFrom: timeData.gradient_from || '#FFB700',
     gradientTo: timeData.gradient_to || '#FF6600',
     players: membros,
+    hasPlayersLoaded: true,
     pdl: timeData.pdl || 0,
     winrate: timeData.winrate || 0,
     ranking: timeData.ranking || 999,
@@ -210,229 +186,120 @@ async function carregarMeuTime(userId: string): Promise<Team | null> {
   };
 }
 
-// ── Componente PlayerRow ──────────────────────────────────────────────────
-const PlayerRow = ({ player, gradientFrom, labelOverride, showBalance = false, onClick }: any) => {
-  const cfg = ROLE_CONFIG[player.role as Role];
-  return (
-    <div className="flex items-center gap-2.5 py-1 px-1 -mx-1" onClick={() => onClick?.(player)}>
-      <div className="flex items-center gap-1.5 w-[52px] shrink-0">
-        <img src={cfg.img} alt={cfg.label} className="w-4 h-4 object-contain" />
-        <span className={`text-[11px] font-bold ${cfg.color}`}>{labelOverride || cfg.label}</span>
-      </div>
-      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-        <span className="text-white/85 text-sm font-medium truncate">{player.name}</span>
-        {player.isLeader && (
-          <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full shrink-0 border"
-            style={{ color: gradientFrom, borderColor: `${gradientFrom}60`, background: `${gradientFrom}18` }}>
-            CAP
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-3 shrink-0">
-        {showBalance && <span className="text-white/20 text-[10px] font-medium">{formatBRL(player.balance || 0)}</span>}
-        <span className={`text-[11px] font-semibold ${getEloColor(player.elo)}`}>{player.elo}</span>
-      </div>
-    </div>
-  );
-};
-
-// ── Componente RoleRow ────────────────────────────────────────────────────
-const RoleRow = ({ role, player, team, isApplied, showBalance = false, labelOverride, onPlayerClick }: any) => {
-  const cfg = ROLE_CONFIG[role as Role];
-  const displayLabel = labelOverride || role;
-  if (player) {
-    let finalLabel = displayLabel;
-    if (role === 'RES' && !labelOverride) {
-      const resIndex = team.players.filter((pl: any) => pl.role === 'RES').indexOf(player);
-      finalLabel = `R${resIndex + 1}`;
-    }
-    return <PlayerRow player={player} gradientFrom={team.gradientFrom} labelOverride={finalLabel} showBalance={showBalance} onClick={onPlayerClick} />;
-  }
-  return (
-    <div className={`flex items-center gap-2.5 py-1 ${isApplied ? '' : 'opacity-40'}`}>
-      <div className="flex items-center gap-1.5 w-[52px] shrink-0">
-        <img src={cfg.img} alt={cfg.label} className="w-3.5 h-3.5 object-contain" />
-        <span className={`text-[11px] font-bold ${cfg.color}`}>{displayLabel}</span>
-      </div>
-      <div className="flex-1 flex items-center gap-2">
-        <span className={`text-sm font-medium tracking-widest ${isApplied ? 'text-green-400' : 'text-white/20'}`}>
-          {isApplied ? 'SOLICITADO' : '—'}
-        </span>
-      </div>
-      <span className={`text-[10px] font-black uppercase tracking-widest ${isApplied ? 'text-green-400' : 'text-white/10'}`}>
-        {isApplied ? <Check className="w-3 h-3" /> : 'Vaga'}
-      </span>
-    </div>
-  );
-};
-
-// ── Componente TimeCard ───────────────────────────────────────────────────
-const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [], flat = false }: any) => {
+// ── Componente TimeCard (adaptado para lazy-load) ─────────────────────────
+const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [], flat = false, onLoadPlayers }: any) => {
   const { playSound } = useSound();
+  const [loadingPlayers, setLoadingPlayers] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  // ✅ Carrega membros quando expande
+  const handleExpand = async () => {
+    if (team.hasPlayersLoaded) {
+      setExpanded(!expanded);
+      return;
+    }
+    
+    setLoadingPlayers(true);
+    try {
+      const membros = await carregarMembrosDoTime(team.id);
+      team.players = membros;
+      team.hasPlayersLoaded = true;
+      setExpanded(true);
+      if (onLoadPlayers) onLoadPlayers(team.id, membros);
+    } finally {
+      setLoadingPlayers(false);
+    }
+  };
+
   const content = (
     <div className="relative z-10 p-5">
-      {isLarge ? (
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center gap-2 min-w-0">
-                {team.userRole !== 'visitor' && (
-                  <motion.div animate={{ rotate: [0, -10, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }}>
-                    <Crown className="w-5 h-5 shrink-0" style={{ color: team.gradientFrom }} />
-                  </motion.div>
-                )}
-                <h3 className="text-white font-black text-4xl tracking-tight leading-none truncate">{team.name}</h3>
-                <span className="inline-block text-[12px] font-black px-2 py-0.5 rounded-md tracking-widest shrink-0"
-                  style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
-                  #{team.tag}
-                </span>
-              </div>
-              <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest w-fit"
-                style={{ color: team.gradientFrom, background: `${team.gradientFrom}10`, border: `1px solid ${team.gradientFrom}30` }}>
-                RANK #{team.ranking}
-              </span>
-            </div>
-          </div>
+      {/* Header */}
+      <div className="flex flex-col gap-1.5 mb-4">
+        <div className="flex items-start gap-2 min-w-0">
+          {team.userRole !== 'visitor' && (
+            <motion.div animate={{ rotate: [0, -10, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }} className="mt-1 shrink-0">
+              <Crown className="w-4 h-4" style={{ color: team.gradientFrom }} />
+            </motion.div>
+          )}
+          <h3 className="text-white font-black text-2xl tracking-tight leading-tight overflow-hidden">
+            {team.name}
+          </h3>
         </div>
-      ) : (
-        <div className="flex flex-col gap-1.5 mb-4">
-          <div className="flex items-start gap-2 min-w-0">
-            {team.userRole !== 'visitor' && (
-              <motion.div animate={{ rotate: [0, -10, 10, -10, 0] }} transition={{ repeat: Infinity, duration: 4 }} className="mt-1 shrink-0">
-                <Crown className="w-4 h-4" style={{ color: team.gradientFrom }} />
-              </motion.div>
-            )}
-            <h3 className="text-white font-black text-2xl tracking-tight leading-tight overflow-hidden"
-              style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{team.name}</h3>
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
-              style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
-              #{team.tag}
-            </span>
-            <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
-              style={{ color: team.gradientFrom, background: `${team.gradientFrom}10`, border: `1px solid ${team.gradientFrom}30` }}>
-              RANK #{team.ranking}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {isLarge && (
-        <div className="flex flex-col items-center mb-5 sm:hidden">
-          <div className="w-36 h-36 rounded-2xl flex items-center justify-center relative overflow-hidden"
-            style={{ border: `2px solid ${team.gradientFrom}`, background: 'black', boxShadow: `0 8px 20px -8px rgba(0,0,0,0.6)` }}>
-            {team.logoUrl ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
-              : <span className="font-black text-3xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
-          </div>
-          <span className="mt-3 inline-block text-[12px] font-black px-3 py-1 rounded-md tracking-widest"
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
             style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
             #{team.tag}
           </span>
+          <span className="inline-block text-[10px] font-black px-2 py-0.5 rounded-md tracking-widest"
+            style={{ color: team.gradientFrom, background: `${team.gradientFrom}10`, border: `1px solid ${team.gradientFrom}30` }}>
+            RANK #{team.ranking}
+          </span>
         </div>
-      )}
+      </div>
 
-      {isLarge ? (
-        <div className="flex flex-col lg:flex-row gap-8 mb-4 items-start">
-          <div className="flex-1 w-full min-w-0">
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="flex flex-col gap-2 w-full min-w-0">
-                {['TOP', 'JG', 'MID', 'ADC', 'SUP'].map((roleKey) => {
-                  const role = roleKey as Role;
-                  const player = team.players.find((p: Player) => p.role === role);
-                  const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`);
-                  return (
-                    <div key={roleKey} className="transition-all bg-white/[0.03] border border-white/5 rounded-xl px-3 py-1.5">
-                      <RoleRow role={role} player={player} team={team} isApplied={isApplied} />
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="flex flex-col gap-2 w-full min-w-0">
-                {['RES1', 'RES2'].map((roleKey, idx) => {
-                  const player = team.players.filter((p: Player) => p.role === 'RES')[idx];
-                  const isApplied = appliedSlots.includes(`${team.id}-${roleKey}`) || appliedSlots.includes(`${team.id}-RES`);
-                  return (
-                    <div key={roleKey} className="transition-all bg-white/[0.03] border border-white/5 rounded-xl px-3 py-1.5">
-                      <RoleRow role="RES" player={player} team={team} isApplied={isApplied} labelOverride={`R${idx + 1}`} />
-                    </div>
-                  );
-                })}
-              </div>
+      {/* Logo centralizada */}
+      <div className="flex items-center justify-center py-3">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+          className="w-36 h-36 rounded-2xl flex items-center justify-center relative overflow-hidden cursor-pointer"
+          style={{ border: `2px solid ${team.gradientFrom}`, background: 'black', boxShadow: `0 10px 28px -8px ${team.gradientFrom}70` }}
+          onClick={handleExpand}
+        >
+          {team.logoUrl ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            : <span className="font-black text-3xl tracking-widest" style={{ color: team.gradientFrom }}>{team.tag}</span>}
+        </motion.div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2 w-full mt-2">
+        {[
+          { icon: <Flame className="w-3 h-3" style={{ color: team.gradientFrom }} />, label: 'PDL', value: team.pdl.toLocaleString('pt-BR'), color: team.gradientFrom },
+          { icon: <TrendingUp className="w-3 h-3 text-green-400" />, label: 'WIN%', value: `${team.winrate}%`, color: '#4ade80' },
+          { icon: <Trophy className="w-3 h-3 text-white/30" />, label: 'W/L', value: `${team.wins}/${team.gamesPlayed - team.wins}`, color: 'white' },
+        ].map(m => (
+          <div key={m.label} className="bg-[rgba(13,13,13,1)] rounded-xl p-2.5 text-center border border-white/[0.04] flex flex-col justify-center">
+            <div className="flex items-center justify-center gap-1 mb-1">
+              {m.icon}
+              <span className="text-[9px] text-white/35 uppercase tracking-wider">{m.label}</span>
             </div>
-            <div className="relative flex items-center mb-3 pr-8">
-              <div className="grid grid-cols-3 gap-2 flex-1">
-                {[
-                  { icon: <Flame className="w-3 h-3" style={{ color: team.gradientFrom }} />, label: 'PDL', value: team.pdl.toLocaleString('pt-BR'), color: team.gradientFrom },
-                  { icon: <TrendingUp className="w-3 h-3 text-green-400" />, label: 'WIN%', value: `${team.winrate}%`, color: '#4ade80' },
-                  { icon: <Trophy className="w-3 h-3 text-white/30" />, label: 'W/L', value: `${team.wins}/${team.gamesPlayed - team.wins}`, color: 'white' },
-                ].map((m) => (
-                  <div key={m.label} className="bg-[rgba(13,13,13,1)] rounded-xl p-2.5 text-center border border-white/[0.04] flex flex-col justify-center h-full">
-                    <div className="flex items-center justify-center gap-1 mb-1">
-                      {m.icon}
-                      <span className="text-[9px] text-white/35 uppercase tracking-wider">{m.label}</span>
-                    </div>
-                    <span className="font-black text-sm" style={{ color: m.color }}>{m.value}</span>
+            <span className="font-black text-sm" style={{ color: m.color }}>{m.value}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ✅ Membros (expansível) */}
+      <AnimatePresence>
+        {expanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="mt-4 pt-4 border-t border-white/10"
+          >
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-widest mb-2">MEMBROS</p>
+            {loadingPlayers ? (
+              <div className="flex justify-center py-4">
+                <RefreshCw className="w-5 h-5 animate-spin text-primary" />
+              </div>
+            ) : team.players.length === 0 ? (
+              <p className="text-white/20 text-xs text-center py-2">Nenhum membro</p>
+            ) : (
+              <div className="space-y-1">
+                {team.players.map((player: Player, idx: number) => (
+                  <div key={idx} className="flex items-center justify-between py-1 px-2 bg-white/5 rounded-lg">
+                    <span className="text-white/80 text-sm">{player.name}</span>
+                    <span className={`text-xs ${getEloColor(player.elo)}`}>{player.elo}</span>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-          <div className="shrink-0 flex flex-col items-center justify-center hidden sm:flex">
-            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-              className="w-64 h-64 rounded-2xl flex items-center justify-center relative overflow-hidden"
-              style={{ border: `3px solid ${team.gradientFrom}`, background: 'black', boxShadow: `0 12px 30px -10px rgba(0,0,0,0.7)` }}>
-              <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none z-10" />
-              {team.logoUrl ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
-                : <span className="font-black text-3xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
-            </motion.div>
-            <span className="mt-4 inline-block text-[14px] font-black px-4 py-1.5 rounded-lg tracking-widest"
-              style={{ color: team.gradientFrom, background: `${team.gradientFrom}18`, border: `1px solid ${team.gradientFrom}40` }}>
-              #{team.tag}
-            </span>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-center py-3">
-            <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
-              className="w-36 h-36 rounded-2xl flex items-center justify-center relative overflow-hidden"
-              style={{ border: `2px solid ${team.gradientFrom}`, background: 'black', boxShadow: `0 10px 28px -8px ${team.gradientFrom}70` }}>
-              <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none z-10" />
-              {team.logoUrl ? <img src={team.logoUrl} alt={team.name} className="w-full h-full object-cover relative z-10" referrerPolicy="no-referrer" />
-                : <span className="font-black text-3xl tracking-widest relative z-10" style={{ color: team.gradientFrom }}>{team.tag}</span>}
-            </motion.div>
-          </div>
-          <div className="grid grid-cols-3 gap-2 w-full">
-            {[
-              { icon: <Flame className="w-3 h-3" style={{ color: team.gradientFrom }} />, label: 'PDL', value: team.pdl.toLocaleString('pt-BR'), color: team.gradientFrom },
-              { icon: <TrendingUp className="w-3 h-3 text-green-400" />, label: 'WIN%', value: `${team.winrate}%`, color: '#4ade80' },
-              { icon: <Trophy className="w-3 h-3 text-white/30" />, label: 'W/L', value: `${team.wins}/${team.gamesPlayed - team.wins}`, color: 'white' },
-            ].map((m) => (
-              <div key={m.label} className="bg-[rgba(13,13,13,1)] rounded-xl p-2.5 text-center border border-white/[0.04] flex flex-col justify-center">
-                <div className="flex items-center justify-center gap-1 mb-1">
-                  {m.icon}
-                  <span className="text-[9px] text-white/35 uppercase tracking-wider">{m.label}</span>
-                </div>
-                <span className="font-black text-sm" style={{ color: m.color }}>{m.value}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-1.5 group/card">
-            <span className="font-bold text-sm" style={{ color: team.gradientFrom }}>Ver página do time</span>
-            <ChevronRight className="w-4 h-4 transition-transform group-hover/card:translate-x-1" style={{ color: team.gradientFrom }} />
-          </div>
-        </div>
-      )}
-    </div>
-  );
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-  if (flat) return (
-    <div className="w-full cursor-pointer group/flat" onClick={() => { playSound('click'); onClick(team); }}>
-      {content}
-      <div className="mt-4 flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 mt-4 group/card">
         <span className="font-bold text-sm" style={{ color: team.gradientFrom }}>Ver página do time</span>
-        <ChevronRight className="w-4 h-4 transition-transform group-hover/flat:translate-x-1" style={{ color: team.gradientFrom }} />
+        <ChevronRight className="w-4 h-4 transition-transform group-hover/card:translate-x-1" style={{ color: team.gradientFrom }} />
       </div>
     </div>
   );
@@ -446,7 +313,7 @@ const TimeCard = ({ team, onClick, isLarge = false, appliedSlots = [], flat = fa
   );
 };
 
-// ── Componente CreateTeamModal ────────────────────────────────────────────
+// ── Modal Criar Time (simplificado) ───────────────────────────────────────
 const CreateTeamModal = ({ onClose, onCreate, hasRiot }: any) => {
   const { playSound } = useSound();
   const [name, setName] = useState('');
@@ -548,16 +415,17 @@ export default function Equipes() {
   const [searchQuery, setSearchQuery] = useState('');
   const [modalCriar, setModalCriar] = useState(false);
   
-  const arenaOffsetRef = useRef<number>(0);
+  const arenaOffsetRef = useRef(0);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const fetchingRef = useRef<boolean>(false);
-  const temMaisRef = useRef<boolean>(true);
+  const fetchingRef = useRef(false);
+  const temMaisRef = useRef(true);
   const userIdRef = useRef<string | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | undefined>(undefined);
   const [appliedSearch, setAppliedSearch] = useState<string>('');
 
   const hasRiot = !!perfilContext?.contaVinculada;
 
+  // Carregar dados iniciais
   useEffect(() => {
     let isMounted = true;
     const uid = user?.id ?? null;
@@ -568,7 +436,7 @@ export default function Equipes() {
       try {
         const [meuTime, { teams: pagina1, temMais: mais }] = await Promise.all([
           uid ? carregarMeuTime(uid) : Promise.resolve(null),
-          carregarTimesDoSupabase(uid, 0, TEAMS_PAGE),
+          carregarTimesBasico(uid, 0, TEAMS_PAGE),
         ]);
         if (!isMounted) return;
         setMyTeam(meuTime);
@@ -584,35 +452,33 @@ export default function Equipes() {
 
     loadInitialData();
 
-    return () => {
-      isMounted = false;
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
-    };
+    return () => { isMounted = false; };
   }, [user]);
 
+  // Infinite scroll
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
-    const observer = new IntersectionObserver((entries: IntersectionObserverEntry[]) => {
+    const observer = new IntersectionObserver(async (entries) => {
       if (!entries[0].isIntersecting) return;
       if (!temMaisRef.current || fetchingRef.current) return;
       fetchingRef.current = true;
       setCarregandoMais(true);
-      carregarTimesDoSupabase(userIdRef.current, arenaOffsetRef.current, TEAMS_PAGE)
-        .then(({ teams: mais, temMais: ainda }) => {
-          setArenaTeams(prev => [...prev, ...mais]);
-          temMaisRef.current = ainda;
-          arenaOffsetRef.current += mais.length;
-        })
-        .finally(() => {
-          fetchingRef.current = false;
-          setCarregandoMais(false);
-        });
+      try {
+        const { teams: mais, temMais: ainda } = await carregarTimesBasico(userIdRef.current, arenaOffsetRef.current, TEAMS_PAGE);
+        setArenaTeams(prev => [...prev, ...mais]);
+        temMaisRef.current = ainda;
+        arenaOffsetRef.current += mais.length;
+      } finally {
+        fetchingRef.current = false;
+        setCarregandoMais(false);
+      }
     }, { threshold: 0.1 });
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, []);
 
+  // Debounce search
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => {
@@ -621,22 +487,15 @@ export default function Equipes() {
     return () => { if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current); };
   }, [searchQuery]);
 
-  const filteredTeams = useMemo((): Team[] => {
+  const filteredTeams = useMemo(() => {
     if (!appliedSearch) return arenaTeams;
-    return arenaTeams.filter((team: Team) =>
+    return arenaTeams.filter(team =>
       team.name.toLowerCase().includes(appliedSearch.toLowerCase()) ||
       team.tag.toLowerCase().includes(appliedSearch.toLowerCase())
     );
   }, [arenaTeams, appliedSearch]);
 
-  const handleCreateTeam = async (newTeamData: {
-    name: string;
-    tag: string;
-    gradientFrom: string;
-    gradientTo: string;
-    logoUrl?: string;
-    _logoFile?: File;
-  }): Promise<void> => {
+  const handleCreateTeam = async (newTeamData: any) => {
     if (!user) return;
     
     const { data: novoTime, error } = await supabase.from('times').insert({
@@ -676,7 +535,7 @@ export default function Equipes() {
 
     const [meuTime, { teams: pagina1, temMais: mais }] = await Promise.all([
       carregarMeuTime(user.id),
-      carregarTimesDoSupabase(user.id, 0, TEAMS_PAGE),
+      carregarTimesBasico(user.id, 0, TEAMS_PAGE),
     ]);
     setMyTeam(meuTime);
     setArenaTeams(pagina1);
@@ -752,7 +611,7 @@ export default function Equipes() {
             {filteredTeams.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {filteredTeams.map((team: Team) => <TimeCard key={team.id} team={team} onClick={(t: Team) => navigate(`/times/${t.id}`)} isLarge={false} appliedSlots={[]} />)}
+                  {filteredTeams.map(team => <TimeCard key={team.id} team={team} onClick={(t: Team) => navigate(`/times/${t.id}`)} isLarge={false} appliedSlots={[]} />)}
                 </div>
                 <div ref={sentinelRef} className="flex justify-center py-6">
                   {carregandoMais && <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />}
